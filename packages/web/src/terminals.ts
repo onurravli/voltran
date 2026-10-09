@@ -49,7 +49,6 @@ export class TerminalSession {
             fontSize: font.size,
             lineHeight: 1.15,
             scrollback: 10_000,
-            macOptionIsMeta: true,
             minimumContrastRatio: theme.minimumContrastRatio,
             theme: theme.terminal,
         });

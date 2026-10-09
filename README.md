@@ -59,6 +59,10 @@ and as desktop notifications once you turn alerts on.
 Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The one exception is ⌘K
 (⌃⌥K works too), which means nothing to a terminal.
 
+In terminals, Option types the characters of your keyboard layout (such as @ and { on Turkish Q), as in
+iTerm's default. Line editing follows iTerm's Natural Text Editing: ⌘←/⌘→ jump to the start or end of
+the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the word, and ⇧↩ or ⌥↩ adds a new line.
+
 | Keys | Action |
 |---|---|
 | ⌘K | Command palette: every action below, plus the theme and the terminal font family and size |

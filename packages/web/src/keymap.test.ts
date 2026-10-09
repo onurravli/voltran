@@ -18,6 +18,7 @@ describe('translateKey', () => {
         ['⌘⌦', 'Delete', { metaKey: true }, '\x0b'],
         ['⌥⌦', 'Delete', { altKey: true }, '\x1bd'],
         ['⇧↩', 'Enter', { shiftKey: true }, '\x1b\r'],
+        ['⌥↩', 'Enter', { altKey: true }, '\x1b\r'],
     ] as const)('sends the line-editing bytes for %s', (_label, key, modifiers, expected) => {
         expect(press(key, modifiers)).toBe(expected);
     });
@@ -45,7 +46,6 @@ describe('translateKey', () => {
         ['⌃⌫', 'Backspace', { ctrlKey: true }],
         ['plain ⌦', 'Delete', {}],
         ['plain ↩', 'Enter', {}],
-        ['⌥↩', 'Enter', { altKey: true }],
         ['⌘↩', 'Enter', { metaKey: true }],
         ['⌘C', 'c', { metaKey: true }],
         ['⌘V', 'v', { metaKey: true }],
