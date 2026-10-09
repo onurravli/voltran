@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AppState, LayoutDirection, PaneView, Session } from '@voltran/shared';
 import { needsAttention } from '@voltran/shared';
+import { DEFAULT_FONT, parseFont, type TerminalFont } from './fonts.ts';
 
 export type Connection = 'connecting' | 'online' | 'offline' | 'unauthenticated';
 
@@ -8,6 +9,7 @@ export type Dialog =
     | { kind: 'project' }
     | { kind: 'session'; projectId?: string }
     | { kind: 'shortcuts' }
+    | { kind: 'palette' }
     | { kind: 'confirm'; title: string; body: string; action: string; onConfirm: () => void | Promise<void> };
 
 export interface PaneMenuTarget {
@@ -31,6 +33,7 @@ interface UiState {
     maximizedPaneId: string | null;
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
+    terminalFont: TerminalFont;
     dialog: Dialog | null;
     paneMenu: PaneMenuTarget | null;
     toast: Toast | null;
@@ -41,6 +44,7 @@ interface UiState {
     toggleMaximize: (id: string) => void;
     toggleProject: (id: string) => void;
     setShowArchived: (value: boolean) => void;
+    setTerminalFont: (font: TerminalFont) => void;
     openDialog: (dialog: Dialog | null) => void;
     openPaneMenu: (target: PaneMenuTarget | null) => void;
     showToast: (message: string, tone?: Toast['tone']) => void;
@@ -52,6 +56,7 @@ interface Persisted {
     selectedSessionId: string | null;
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
+    terminalFont: TerminalFont;
 }
 
 function readPersisted(): Persisted {
@@ -63,12 +68,13 @@ function readPersisted(): Persisted {
                 selectedSessionId: typeof parsed.selectedSessionId === 'string' ? parsed.selectedSessionId : null,
                 collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
                 showArchived: parsed.showArchived === true,
+                terminalFont: parseFont(parsed.terminalFont),
             };
         }
     } catch {
         localStorage.removeItem(STORAGE_KEY);
     }
-    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false };
+    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, terminalFont: DEFAULT_FONT };
 }
 
 let toastId = 0;
@@ -100,6 +106,7 @@ export const useUi = create<UiState>((set, get) => ({
     toggleMaximize: (id) => set({ maximizedPaneId: get().maximizedPaneId === id ? null : id }),
     toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
     setShowArchived: (value) => set({ showArchived: value }),
+    setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
     openDialog: (dialog) => set({ dialog, paneMenu: null }),
     openPaneMenu: (paneMenu) => set({ paneMenu }),
     showToast: (message, tone = 'info') => {
@@ -119,6 +126,7 @@ useUi.subscribe((state) => {
         selectedSessionId: state.selectedSessionId,
         collapsedProjects: state.collapsedProjects,
         showArchived: state.showArchived,
+        terminalFont: state.terminalFont,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 });

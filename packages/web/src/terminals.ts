@@ -5,7 +5,9 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { PaneServerMessage } from '@voltran/shared';
 import { wsUrl } from './api.ts';
+import { fontStack, type TerminalFont } from './fonts.ts';
 import { isAppShortcut } from './shortcuts.ts';
+import { useUi } from './store.ts';
 
 export type LinkState = 'connecting' | 'open' | 'reconnecting' | 'gone';
 
@@ -66,11 +68,12 @@ export class TerminalSession {
         this.paneId = paneId;
         this.host = document.createElement('div');
         this.host.className = 'terminal-host';
+        const font = useUi.getState().terminalFont;
         this.term = new Terminal({
             allowProposedApi: true,
             cursorBlink: true,
-            fontFamily: '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
-            fontSize: 13,
+            fontFamily: fontStack(font.family),
+            fontSize: font.size,
             lineHeight: 1.15,
             scrollback: 10_000,
             macOptionIsMeta: true,
@@ -114,6 +117,12 @@ export class TerminalSession {
 
     focus(): void {
         this.term.focus();
+    }
+
+    applyFont(font: TerminalFont): void {
+        this.term.options.fontFamily = fontStack(font.family);
+        this.term.options.fontSize = font.size;
+        this.refit();
     }
 
     onLinkState(listener: (state: LinkState) => void): () => void {
@@ -288,6 +297,12 @@ export class TerminalSession {
 }
 
 const sessions = new Map<string, TerminalSession>();
+
+useUi.subscribe((state, previous) => {
+    if (state.terminalFont !== previous.terminalFont) {
+        sessions.forEach((session) => session.applyFont(state.terminalFont));
+    }
+});
 
 export function terminalFor(paneId: string): TerminalSession {
     let session = sessions.get(paneId);

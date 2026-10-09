@@ -51,6 +51,11 @@ function splitFocused(direction: 'horizontal' | 'vertical'): void {
         .catch(reportError);
 }
 
+export function togglePalette(): void {
+    const { dialog, openDialog } = useUi.getState();
+    openDialog(dialog?.kind === 'palette' ? null : { kind: 'palette' });
+}
+
 function closeFocused(): void {
     const { focusedPaneId, app, openDialog } = useUi.getState();
     const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
@@ -67,6 +72,7 @@ function closeFocused(): void {
 }
 
 export const SHORTCUTS: Shortcut[] = [
+    { code: 'KeyK', keys: '⌘K', label: 'Open the command palette', run: togglePalette },
     { code: 'KeyJ', keys: '⌃⌥J', label: 'Jump to the next pane that needs you', run: jumpToAttention },
     { code: 'KeyN', keys: '⌃⌥N', label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
     { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous session', run: () => stepSession(-1) },
@@ -90,8 +96,12 @@ export const SHORTCUTS: Shortcut[] = [
 
 const BY_CODE = new Map(SHORTCUTS.map((shortcut) => [shortcut.code, shortcut]));
 
+function isPaletteKey(event: KeyboardEvent): boolean {
+    return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyK';
+}
+
 export function isAppShortcut(event: KeyboardEvent): boolean {
-    return event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code);
+    return isPaletteKey(event) || (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code));
 }
 
 export function installShortcuts(): () => void {

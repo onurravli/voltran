@@ -3,6 +3,7 @@ import type { AdapterId, AdapterInfo, PaneSpec } from '@voltran/shared';
 import { api } from '../api.ts';
 import { SHORTCUTS } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
+import { CommandPalette } from './CommandPalette.tsx';
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
     const ref = useRef<HTMLDivElement>(null);
@@ -248,6 +249,8 @@ export function Dialogs() {
             return <ConfirmDialog dialog={dialog} onClose={close} />;
         case 'shortcuts':
             return <ShortcutsDialog onClose={close} />;
+        case 'palette':
+            return <CommandPalette onClose={close} />;
     }
 }
 

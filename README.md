@@ -56,10 +56,12 @@ and as desktop notifications once you turn alerts on.
 
 ### Shortcuts
 
-All shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
+Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The one exception is ⌘K
+(⌃⌥K works too), which means nothing to a terminal.
 
 | Keys | Action |
 |---|---|
+| ⌘K | Command palette: every action below, plus the terminal font family and size |
 | ⌃⌥J | Jump to the next pane that needs you |
 | ⌃⌥N | Start a new session |
 | ⌃⌥↑ / ⌃⌥↓ | Previous / next session |
