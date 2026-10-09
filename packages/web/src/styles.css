@@ -273,8 +273,12 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
     .lamp--needs-input,
     .lamp--working,
-    .lamp--starting {
+    .lamp--starting,
+    .session-header--working {
         animation: none;
+    }
+    .session-header--working::before {
+        display: none;
     }
     .lamp--working {
         border-color: var(--working);
@@ -633,6 +637,40 @@ kbd {
     border-top: 3px solid var(--project-color);
     border-bottom: 1px solid var(--rivet-soft);
     background: var(--bay);
+}
+
+.session-header--working {
+    position: relative;
+    border-top-color: color-mix(in srgb, var(--project-color) 45%, transparent);
+    animation: header-breathe 2.4s ease-in-out infinite;
+}
+
+.session-header--working::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    right: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--project-color) 35%, var(--project-color) 65%, transparent) no-repeat;
+    background-size: 18% 100%;
+    filter: drop-shadow(0 0 4px var(--project-color));
+    animation: header-scan 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes header-breathe {
+    50% {
+        border-top-color: color-mix(in srgb, var(--project-color) 20%, transparent);
+    }
+}
+
+@keyframes header-scan {
+    from {
+        background-position: 0% 0;
+    }
+    to {
+        background-position: 100% 0;
+    }
 }
 
 .session-header__main {

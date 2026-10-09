@@ -257,6 +257,12 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     const openDialog = useUi((state) => state.openDialog);
     const sidebarHidden = useUi((state) => state.sidebarHidden);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
+    const projectWorking = useUi((state) => {
+        const sessionIds = new Set(state.app?.sessions
+            .filter((entry) => entry.projectId === session.projectId && !entry.archived)
+            .map((entry) => entry.id));
+        return state.app?.panes.some((pane) => pane.status === 'working' && sessionIds.has(pane.sessionId)) ?? false;
+    });
     const [editingLink, setEditingLink] = useState(false);
     const [linkDraft, setLinkDraft] = useState(session.link ?? '');
 
@@ -279,7 +285,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     };
 
     return (
-        <header className="session-header" style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}>
+        <header className={`session-header${projectWorking ? ' session-header--working' : ''}`} style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}>
             <button
                 type="button"
                 className="icon-button"

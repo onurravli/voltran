@@ -52,7 +52,7 @@ window. Closing the window stops nothing; run `voltran up` again to reopen it.
 | Red | Exited with an error |
 
 Panes that need you collect in the **Needs you** tray at the bottom of the sidebar, in the tab title,
-and as desktop notifications once you turn alerts on.
+and as desktop notifications once you turn alerts on. The coloured line above a session breathes while any agent in its project is working.
 
 ### Shortcuts
 
