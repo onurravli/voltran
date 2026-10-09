@@ -94,6 +94,16 @@ kbd {
     height: 100%;
 }
 
+.app.app--no-sidebar {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.app--no-sidebar .sidebar,
+.app--zen .session-header {
+    display: none;
+}
+
 /* ---------- buttons ---------- */
 
 .button {

@@ -67,6 +67,8 @@ the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the word,
 |---|---|
 | ⌘K | Command palette: every action below, plus the theme and the terminal font family and size |
 | ⌃⌥J | Jump to the next pane that needs you |
+| ⌃⌥B | Show or hide the sidebar |
+| ⌃⌥Z | Zen mode: the focused pane alone, full screen. Esc still reaches the terminal; hold Esc or press ⌃⌥Z to leave |
 | ⌃⌥N | Start a new session |
 | ⌃⌥↑ / ⌃⌥↓ | Previous / next session |
 | ⌃⌥\ / ⌃⌥- | Split the focused pane right / down with a shell |

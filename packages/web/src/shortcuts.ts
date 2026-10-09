@@ -56,6 +56,44 @@ export function togglePalette(): void {
     openDialog(dialog?.kind === 'palette' ? null : { kind: 'palette' });
 }
 
+interface KeyboardLock {
+    lock(codes?: string[]): Promise<void>;
+    unlock(): void;
+}
+
+const keyboardLock = (): KeyboardLock | undefined => (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
+
+let maximizedBeforeZen: string | null = null;
+
+function leaveZen(): void {
+    keyboardLock()?.unlock();
+    useUi.getState().setZen(false, maximizedBeforeZen);
+    maximizedBeforeZen = null;
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => undefined);
+    }
+}
+
+export function toggleZen(): void {
+    const { zen, app, focusedPaneId, maximizedPaneId, selectedSessionId, setZen, showToast } = useUi.getState();
+    if (zen) {
+        leaveZen();
+        return;
+    }
+    if (!selectedSessionId) {
+        showToast('Open a session to use zen mode');
+        return;
+    }
+    const sessionPanes = app?.panes.filter((pane) => pane.sessionId === selectedSessionId) ?? [];
+    const target = sessionPanes.find((pane) => pane.id === focusedPaneId) ?? sessionPanes[0];
+    maximizedBeforeZen = maximizedPaneId;
+    setZen(true, target?.id ?? maximizedPaneId);
+    document.documentElement.requestFullscreen()
+        .then(() => keyboardLock()?.lock(['Escape']))
+        .catch(() => undefined);
+    showToast('Zen mode. ⌃⌥Z to leave');
+}
+
 function closeFocused(): void {
     const { focusedPaneId, app, openDialog } = useUi.getState();
     const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
@@ -74,6 +112,8 @@ function closeFocused(): void {
 export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyK', keys: '⌘K', label: 'Open the command palette', run: togglePalette },
     { code: 'KeyJ', keys: '⌃⌥J', label: 'Jump to the next pane that needs you', run: jumpToAttention },
+    { code: 'KeyB', keys: '⌃⌥B', label: 'Show or hide the sidebar', run: () => useUi.getState().toggleSidebar() },
+    { code: 'KeyZ', keys: '⌃⌥Z', label: 'Zen mode: the focused pane, full screen, nothing else', run: toggleZen },
     { code: 'KeyN', keys: '⌃⌥N', label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
     { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous session', run: () => stepSession(-1) },
     { code: 'ArrowDown', keys: '⌃⌥↓', label: 'Next session', run: () => stepSession(1) },
@@ -113,6 +153,15 @@ export function installShortcuts(): () => void {
         event.stopPropagation();
         BY_CODE.get(event.code)?.run();
     };
+    const onFullscreenChange = (): void => {
+        if (!document.fullscreenElement && useUi.getState().zen) {
+            leaveZen();
+        }
+    };
     window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+        window.removeEventListener('keydown', onKeyDown, true);
+        document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
 }

@@ -51,7 +51,10 @@ export function App() {
     const connection = useUi((state) => state.connection);
     const app = useUi((state) => state.app);
     const selectedSessionId = useUi((state) => state.selectedSessionId);
+    const sidebarHidden = useUi((state) => state.sidebarHidden);
+    const zen = useUi((state) => state.zen);
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
+    const hideSidebar = Boolean(session) && (sidebarHidden || zen);
 
     useEffect(() => {
         const stopEvents = connectEvents();
@@ -75,7 +78,7 @@ export function App() {
     }
 
     return (
-        <div className="app">
+        <div className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && session ? ' app--zen' : ''}`}>
             <Sidebar />
             <main className="main">
                 {!app ? <div className="loading">Connecting to Voltran…</div> : session ? <SessionView key={session.id} session={session} /> : <Welcome />}

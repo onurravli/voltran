@@ -23,6 +23,7 @@ function Icon({ size = 16, children, ...props }: IconProps & { children: ReactNo
 
 export const PlusIcon = (props: IconProps) => <Icon {...props}><path d="M8 3.5v9M3.5 8h9" /></Icon>;
 export const SplitRightIcon = (props: IconProps) => <Icon {...props}><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M8 3v10" /></Icon>;
+export const SidebarIcon = (props: IconProps) => <Icon {...props}><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M6.5 3v10" /></Icon>;
 export const SplitDownIcon = (props: IconProps) => <Icon {...props}><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M2.5 8h11" /></Icon>;
 export const MaximizeIcon = (props: IconProps) => <Icon {...props}><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" /></Icon>;
 export const RestoreIcon = (props: IconProps) => <Icon {...props}><path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5 14 2M6.5 9.5 2 14" /></Icon>;

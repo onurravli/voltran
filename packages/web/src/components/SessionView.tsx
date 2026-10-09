@@ -13,6 +13,7 @@ import {
     PlusIcon,
     RestartIcon,
     RestoreIcon,
+    SidebarIcon,
     SplitDownIcon,
     SplitRightIcon,
     StopIcon,
@@ -254,6 +255,8 @@ function LayoutNode({ node, path, session, panes, onSizes }: {
 function SessionHeader({ session, project }: { session: Session; project: Project | undefined }) {
     const openPaneMenu = useUi((state) => state.openPaneMenu);
     const openDialog = useUi((state) => state.openDialog);
+    const sidebarHidden = useUi((state) => state.sidebarHidden);
+    const toggleSidebar = useUi((state) => state.toggleSidebar);
     const [editingLink, setEditingLink] = useState(false);
     const [linkDraft, setLinkDraft] = useState(session.link ?? '');
 
@@ -277,6 +280,15 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
 
     return (
         <header className="session-header" style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}>
+            <button
+                type="button"
+                className="icon-button"
+                title={sidebarHidden ? 'Show the sidebar (⌃⌥B)' : 'Hide the sidebar (⌃⌥B)'}
+                aria-pressed={!sidebarHidden}
+                onClick={toggleSidebar}
+            >
+                <SidebarIcon size={15} />
+            </button>
             <div className="session-header__main">
                 <InlineEdit
                     className="session-header__title"

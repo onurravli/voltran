@@ -34,6 +34,8 @@ interface UiState {
     maximizedPaneId: string | null;
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
+    sidebarHidden: boolean;
+    zen: boolean;
     terminalFont: TerminalFont;
     themeId: string;
     dialog: Dialog | null;
@@ -46,6 +48,8 @@ interface UiState {
     toggleMaximize: (id: string) => void;
     toggleProject: (id: string) => void;
     setShowArchived: (value: boolean) => void;
+    toggleSidebar: () => void;
+    setZen: (zen: boolean, maximizedPaneId: string | null) => void;
     setTerminalFont: (font: TerminalFont) => void;
     setTheme: (id: string) => void;
     openDialog: (dialog: Dialog | null) => void;
@@ -59,6 +63,7 @@ interface Persisted {
     selectedSessionId: string | null;
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
+    sidebarHidden: boolean;
     terminalFont: TerminalFont;
     themeId: string;
 }
@@ -72,6 +77,7 @@ function readPersisted(): Persisted {
                 selectedSessionId: typeof parsed.selectedSessionId === 'string' ? parsed.selectedSessionId : null,
                 collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
                 showArchived: parsed.showArchived === true,
+                sidebarHidden: parsed.sidebarHidden === true,
                 terminalFont: parseFont(parsed.terminalFont),
                 themeId: parseThemeId(parsed.themeId),
             };
@@ -79,7 +85,7 @@ function readPersisted(): Persisted {
     } catch {
         localStorage.removeItem(STORAGE_KEY);
     }
-    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, terminalFont: DEFAULT_FONT, themeId: DEFAULT_THEME_ID };
+    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, sidebarHidden: false, terminalFont: DEFAULT_FONT, themeId: DEFAULT_THEME_ID };
 }
 
 let toastId = 0;
@@ -90,6 +96,7 @@ export const useUi = create<UiState>((set, get) => ({
     ...readPersisted(),
     focusedPaneId: null,
     maximizedPaneId: null,
+    zen: false,
     dialog: null,
     paneMenu: null,
     toast: null,
@@ -111,6 +118,8 @@ export const useUi = create<UiState>((set, get) => ({
     toggleMaximize: (id) => set({ maximizedPaneId: get().maximizedPaneId === id ? null : id }),
     toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
     setShowArchived: (value) => set({ showArchived: value }),
+    toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),
+    setZen: (zen, maximizedPaneId) => set({ zen, maximizedPaneId }),
     setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
     setTheme: (id) => set({ themeId: parseThemeId(id) }),
     openDialog: (dialog) => set({ dialog, paneMenu: null }),
@@ -132,6 +141,7 @@ useUi.subscribe((state) => {
         selectedSessionId: state.selectedSessionId,
         collapsedProjects: state.collapsedProjects,
         showArchived: state.showArchived,
+        sidebarHidden: state.sidebarHidden,
         terminalFont: state.terminalFont,
         themeId: state.themeId,
     };
