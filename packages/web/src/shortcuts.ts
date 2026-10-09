@@ -1,4 +1,5 @@
 import type { AppState, Session } from '@voltran/shared';
+import { paneIds } from '@voltran/shared';
 import { api } from './api.ts';
 import { revealPane } from './notify.ts';
 import { attentionPanes, reportError, useUi } from './store.ts';
@@ -27,6 +28,21 @@ function stepSession(delta: number): void {
     const index = sessions.findIndex((session) => session.id === selectedSessionId);
     const next = sessions[(index + delta + sessions.length) % sessions.length];
     selectSession(next.id);
+}
+
+function stepPane(delta: number): void {
+    const { app, selectedSessionId, focusedPaneId, maximizedPaneId, focusPane, toggleMaximize } = useUi.getState();
+    const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
+    const ids = paneIds(session?.layout ?? null);
+    if (ids.length < 2) {
+        return;
+    }
+    const index = focusedPaneId ? ids.indexOf(focusedPaneId) : -1;
+    const next = index < 0 ? ids[delta > 0 ? 0 : ids.length - 1] : ids[(index + delta + ids.length) % ids.length];
+    if (maximizedPaneId && maximizedPaneId !== next) {
+        toggleMaximize(next);
+    }
+    focusPane(next);
 }
 
 function jumpToAttention(): void {
@@ -117,6 +133,8 @@ export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyN', keys: '⌃⌥N', label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
     { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous session', run: () => stepSession(-1) },
     { code: 'ArrowDown', keys: '⌃⌥↓', label: 'Next session', run: () => stepSession(1) },
+    { code: 'ArrowLeft', keys: '⌃⌥←', label: 'Previous pane in this session', run: () => stepPane(-1) },
+    { code: 'ArrowRight', keys: '⌃⌥→', label: 'Next pane in this session', run: () => stepPane(1) },
     { code: 'Backslash', keys: '⌃⌥\\', label: 'Split the focused pane to the right with a shell', run: () => splitFocused('horizontal') },
     { code: 'Minus', keys: '⌃⌥-', label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
     {

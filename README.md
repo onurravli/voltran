@@ -71,6 +71,7 @@ the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the word,
 | ⌃⌥Z | Zen mode: the focused pane alone, full screen. Esc still reaches the terminal; hold Esc or press ⌃⌥Z to leave |
 | ⌃⌥N | Start a new session |
 | ⌃⌥↑ / ⌃⌥↓ | Previous / next session |
+| ⌃⌥← / ⌃⌥→ | Previous / next pane in the session (moves the maximized view along when a pane is maximized) |
 | ⌃⌥\ / ⌃⌥- | Split the focused pane right / down with a shell |
 | ⌃⌥↩ | Maximize or restore the focused pane |
 | ⌃⌥W | Close the focused pane |
