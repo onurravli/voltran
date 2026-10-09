@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -178,6 +178,36 @@ describe('PaneManager', () => {
 
         manager.hook(pane.id, 'per-spawn-secret', 'SubagentStop', { agent_id: 'a1' });
         expect(view(manager, pane.id).subagents).toEqual([]);
+    });
+
+    it('runs a subagent pane that follows the transcript and marks the end when the subagent stops', async () => {
+        const { manager, dir } = setup();
+        const sessionId = '4b09873e-72c8-471c-bbb2-f748e22f70d8';
+        const parentTranscript = join(dir, 'projects', `${sessionId}.jsonl`);
+        const subagents = join(dir, 'projects', sessionId, 'subagents');
+        mkdirSync(subagents, { recursive: true });
+        const transcript = join(subagents, 'agent-a1.jsonl');
+        writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { content: 'Find the Jokers.' } })}\n`);
+
+        const claude = makePane({ adapter: 'claude', command: null });
+        manager.add(claude);
+        (manager as unknown as Internals).runtimes.get(claude.id)!.hookSecret = 'per-spawn-secret';
+        manager.hook(claude.id, 'per-spawn-secret', 'SubagentStart', { agent_id: 'a1', agent_type: 'general-purpose', transcript_path: parentTranscript, session_id: sessionId });
+        expect(manager.subagent(claude.id, 'a1')).toMatchObject({ path: transcript, finished: false });
+
+        const viewer = makePane({ adapter: 'subagent', command: transcript });
+        manager.add(viewer);
+        const client = new FakeClient();
+        manager.attach(viewer.id, client);
+        manager.resize(viewer.id, 80, 24);
+        await until(() => client.output.includes('Find the Jokers.'));
+
+        appendFileSync(transcript, `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'WebSearch', input: { query: 'jokers cast' } }] } })}\n`);
+        await until(() => client.output.includes('WebSearch'));
+
+        manager.hook(claude.id, 'per-spawn-secret', 'SubagentStop', { agent_id: 'a1' });
+        expect(view(manager, viewer.id)).toMatchObject({ status: 'running', detail: 'Subagent finished' });
+        await until(() => client.output.includes('subagent finished'));
     });
 
     it('does not treat terminal focus reports as the user reading a finished pane', async () => {

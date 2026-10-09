@@ -54,7 +54,8 @@ window. Closing the window stops nothing; run `voltran up` again to reopen it.
 Panes that need you collect in the **Needs you** tray at the bottom of the sidebar, in the tab title,
 and as desktop notifications once you turn alerts on. The coloured line above a session breathes while any agent in its project is working, and the
 subagents a Claude Code pane is running (including background ones) are listed under its session in
-the sidebar.
+the sidebar. Click one to open it in a pane next to its Claude pane, laid out
+like Claude Code's own view of a subagent and following it live.
 
 ### Shortcuts
 

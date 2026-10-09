@@ -1,4 +1,4 @@
-export type AdapterId = 'claude' | 'codex' | 'gemini' | 'shell' | 'command';
+export type AdapterId = 'claude' | 'codex' | 'gemini' | 'shell' | 'command' | 'subagent';
 
 export type PaneKind = 'agent' | 'shell' | 'process';
 
@@ -69,6 +69,18 @@ export interface SubagentView {
     description: string;
     background: boolean;
     startedAt: number;
+}
+
+export type TranscriptEntry =
+    | { kind: 'prompt'; text: string; at: number | null }
+    | { kind: 'text'; text: string; at: number | null }
+    | { kind: 'tool'; id: string; name: string; summary: string; at: number | null }
+    | { kind: 'result'; toolUseId: string; text: string; error: boolean; at: number | null };
+
+export interface TranscriptChunk {
+    entries: TranscriptEntry[];
+    next: number;
+    skipped: number;
 }
 
 export interface PaneRuntimeState {

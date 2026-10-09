@@ -68,6 +68,9 @@ function InlineEdit({ value, onSave, className, label }: { value: string; onSave
 }
 
 function paneSummary(pane: PaneView, kind: 'agent' | 'shell' | 'process' | undefined): string {
+    if (pane.adapter === 'subagent' && pane.status === 'running') {
+        return pane.detail ?? 'Following the subagent live';
+    }
     if (kind !== 'agent') {
         if (pane.status === 'exited') {
             return pane.exitCode === null ? 'Not running' : `Exited with code ${pane.exitCode}`;

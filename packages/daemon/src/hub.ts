@@ -309,6 +309,26 @@ export class Hub {
         this.panes.markSeen(id);
     }
 
+    viewSubagent(paneId: string, agentId: string): Pane {
+        const parent = this.mustGetPane(paneId);
+        const subagent = this.panes.subagent(paneId, agentId);
+        if (!subagent) {
+            throw new HttpError(404, 'This subagent is not running and finished too long ago to show.');
+        }
+        if (!subagent.path) {
+            throw new HttpError(404, 'Claude did not report where this subagent writes its transcript.');
+        }
+        const existing = this.store.panesOfSession(parent.sessionId).find((pane) => pane.adapter === 'subagent' && pane.command === subagent.path);
+        if (existing) {
+            return existing;
+        }
+        const session = this.mustGetSession(parent.sessionId);
+        const pane = this.insertPaneRecord(session, { adapter: 'subagent', title: subagent.description.slice(0, MAX_TITLE), command: subagent.path });
+        this.store.updateSession(session.id, { layout: insertPane(session.layout, pane.id, paneId, 'horizontal') });
+        this.scheduleBroadcast();
+        return pane;
+    }
+
     hook(paneId: string, event: string, secret: string, payload: unknown): boolean {
         if (!isClaudeHookEvent(event) || !payload || typeof payload !== 'object') {
             return false;
@@ -320,6 +340,9 @@ export class Hub {
         if (!isAdapterId(spec.adapter)) {
             throw new HttpError(400, `unknown adapter "${String(spec.adapter)}"`);
         }
+        if (spec.adapter === 'subagent') {
+            throw new HttpError(400, 'subagent panes open from a subagent in the sidebar');
+        }
         if (spec.adapter === 'command') {
             requireString(spec.command, 'command', MAX_COMMAND);
         }
@@ -330,7 +353,7 @@ export class Hub {
 
     private insertPaneRecord(session: Session, spec: PaneSpec): Pane {
         const adapter = adapterFor(spec.adapter);
-        const command = spec.adapter === 'command' ? String(spec.command).trim() : null;
+        const command = spec.adapter === 'command' || spec.adapter === 'subagent' ? String(spec.command).trim() : null;
         const pane: Pane = {
             id: randomUUID(),
             sessionId: session.id,

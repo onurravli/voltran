@@ -39,6 +39,11 @@ function leadPane(panes: PaneView[]): PaneView | null {
 
 function SubagentList({ session, agents }: { session: Session; agents: { agent: SubagentView; paneId: string }[] }) {
     const now = useNow(15_000);
+    const open = (agent: SubagentView, paneId: string): void => {
+        api.viewSubagent(paneId, agent.id)
+            .then((pane) => revealPane(session.id, pane.id))
+            .catch(reportError);
+    };
     return (
         <ul className="subagents" aria-label="Running subagents">
             {agents.map(({ agent, paneId }) => (
@@ -46,8 +51,8 @@ function SubagentList({ session, agents }: { session: Session; agents: { agent: 
                     <button
                         type="button"
                         className="subagent-row"
-                        title={`${agent.description} · ${agent.type}${agent.background ? ' · in the background' : ''}`}
-                        onClick={() => revealPane(session.id, paneId)}
+                        title={`${agent.description} · ${agent.type}${agent.background ? ' · in the background' : ''} · open in a pane`}
+                        onClick={() => open(agent, paneId)}
                     >
                         <StatusLamp status="working" size="sm" />
                         <span className="subagent-row__label">{agent.description}</span>

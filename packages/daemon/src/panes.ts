@@ -8,7 +8,8 @@ import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneSt
 import { adapterFor, childEnv, resolveBinary, type ClaudeHookEvent } from './adapters.ts';
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, type StatusChange } from './status.ts';
-import { SubagentTracker } from './subagents.ts';
+import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
+import { readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
 
 export interface PaneClient {
     sendText(text: string): void;
@@ -60,6 +61,7 @@ const PERSIST_LINES = 2000;
 const PERSIST_INTERVAL_MS = 20_000;
 const MAINTENANCE_INTERVAL_MS = 2000;
 const KILL_GRACE_MS = 3000;
+const VIEWER_SIGNAL_DELAY_MS = 750;
 const ECHO_WINDOW_MS = 400;
 
 const RESET_MODES = '\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[0m';
@@ -238,9 +240,11 @@ export class PaneManager {
             this.updateRecord(runtime, { agentResumable: true });
         }
 
+        const before = runtime.subagents.runningTranscripts();
         const subagentsChanged = runtime.subagents.handle(event, payload, Date.now());
         if (subagentsChanged) {
             runtime.state.subagents = runtime.subagents.list();
+            this.notifyViewers(runtime, before);
         }
         const change = claudeTransition(event, payload);
         if (change) {
@@ -250,6 +254,10 @@ export class PaneManager {
             this.options.onChange();
         }
         return true;
+    }
+
+    subagent(id: string, agentId: string): SubagentTranscript | null {
+        return this.runtimes.get(id)?.subagents.transcript(agentId, Date.now()) ?? null;
     }
 
     remove(id: string): void {
@@ -312,7 +320,7 @@ export class PaneManager {
             },
             attachments: new Set(),
             tracker: null,
-            subagents: new SubagentTracker(),
+            subagents: new SubagentTracker(locateSubagent),
             cols: 120,
             rows: 32,
             lastOutputAt: 0,
@@ -340,7 +348,8 @@ export class PaneManager {
         const extraEnv: Record<string, string> = secret
             ? { VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_URL: this.options.url }
             : {};
-        const spec = adapter.launch({ pane, shell: this.options.shell, claudeSettingsFile: this.options.claudeSettingsFile });
+        const subagentRunning = pane.adapter === 'subagent' && this.isFollowedTranscript(pane.command);
+        const spec = adapter.launch({ pane, shell: this.options.shell, claudeSettingsFile: this.options.claudeSettingsFile, subagentRunning });
 
         let pty: nodePty.IPty;
         try {
@@ -371,7 +380,10 @@ export class PaneManager {
         runtime.state.exitCode = null;
         runtime.state.foreground = null;
         runtime.tracker?.reset('starting');
-        this.setStatus(runtime, { status: adapter.kind === 'agent' ? 'starting' : 'running', detail: null });
+        this.setStatus(runtime, {
+            status: adapter.kind === 'agent' ? 'starting' : 'running',
+            detail: pane.adapter === 'subagent' && !subagentRunning ? 'Subagent finished' : null,
+        });
 
         pty.onData((data) => {
             if (generation !== runtime.generation) {
@@ -423,9 +435,38 @@ export class PaneManager {
     }
 
     private clearSubagents(runtime: Runtime): void {
+        const before = runtime.subagents.runningTranscripts();
         if (runtime.subagents.clear()) {
             runtime.state.subagents = [];
+            this.notifyViewers(runtime, before);
             this.options.onChange();
+        }
+    }
+
+    private isFollowedTranscript(transcriptPath: string | null): boolean {
+        return transcriptPath !== null && [...this.runtimes.values()].some((runtime) => runtime.subagents.isFollowing(transcriptPath));
+    }
+
+    // Tells the panes viewing a subagent that stopped to read the rest of its transcript and mark it
+    // finished. The delay lets the viewer finish starting up and Claude flush the last lines.
+    private notifyViewers(parent: Runtime, before: Map<string, string>): void {
+        const still = parent.subagents.runningTranscripts();
+        for (const [agentId, transcriptPath] of before) {
+            if (still.has(agentId)) {
+                continue;
+            }
+            for (const viewer of this.runtimes.values()) {
+                if (viewer.pane.adapter !== 'subagent' || viewer.pane.command !== transcriptPath || !viewer.pty) {
+                    continue;
+                }
+                const pty = viewer.pty;
+                setTimeout(() => {
+                    if (viewer.pty === pty) {
+                        pty.kill('SIGUSR2');
+                    }
+                }, VIEWER_SIGNAL_DELAY_MS);
+                this.setStatus(viewer, { status: viewer.state.status, detail: 'Subagent finished' });
+            }
         }
     }
 
@@ -532,6 +573,15 @@ const FOCUS_REPORT = /\x1b\[[IO]/g;
 
 function isUserInput(data: string): boolean {
     return data.replace(FOCUS_REPORT, '').length > 0;
+}
+
+function locateSubagent(payload: Record<string, unknown>, agentId: string): SubagentLocation | null {
+    const transcriptPath = subagentTranscriptPath(payload.transcript_path, payload.session_id, agentId);
+    if (!transcriptPath) {
+        return null;
+    }
+    const meta = readSubagentMeta(transcriptPath);
+    return { transcriptPath, description: meta?.description ?? null, type: meta?.type ?? null };
 }
 
 function isAttention(status: PaneStatus): status is 'needs-input' | 'done' {

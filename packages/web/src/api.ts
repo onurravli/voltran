@@ -63,6 +63,8 @@ export const api = {
     restartPane: (id: string) => request<void>('POST', `/api/panes/${id}/restart`),
     killPane: (id: string) => request<void>('POST', `/api/panes/${id}/kill`),
     seenPane: (id: string) => request<void>('POST', `/api/panes/${id}/seen`),
+    viewSubagent: (paneId: string, agentId: string) =>
+        request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };
 
 export function wsUrl(path: string): string {

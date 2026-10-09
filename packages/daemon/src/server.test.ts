@@ -147,6 +147,20 @@ describe('validation', () => {
         expect(status).toBe(409);
         await api('DELETE', `/api/sessions/${session.id}`);
     });
+
+    it('opens subagent panes only for signed-in clients and only for agents a pane reported', async () => {
+        expect((await fetch(`${base}/api/panes/any/subagents/any/view`, { method: 'POST' })).status).toBe(401);
+        expect((await api('POST', '/api/panes/unknown/subagents/a1/view')).status).toBe(404);
+
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const projectId = state.projects[0].id;
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId, title: 'subagents', panes: [{ adapter: 'shell' }] });
+        const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+        expect((await api('POST', `/api/panes/${paneId}/subagents/never-started/view`)).status).toBe(404);
+        expect((await api('POST', `/api/sessions/${session.id}/panes`, { adapter: 'subagent', command: '/etc/passwd' })).status).toBe(400);
+        expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'subagent', command: '/etc/passwd' }] })).status).toBe(400);
+        await api('DELETE', `/api/sessions/${session.id}`);
+    });
 });
 
 describe('agent panes', () => {

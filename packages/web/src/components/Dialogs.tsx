@@ -90,7 +90,7 @@ const DEFAULT_PICKS: AdapterId[] = ['claude', 'shell'];
 function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: () => void }) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
-    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.id !== 'command');
+    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent');
     const currentProjectId = useUi((state) => state.app?.sessions.find((session) => session.id === state.selectedSessionId)?.projectId);
     const [project, setProject] = useState(projectId ?? currentProjectId ?? projects[0]?.id ?? '');
     const [title, setTitle] = useState('');
@@ -304,7 +304,7 @@ export function PaneMenu() {
 
     return (
         <div className="menu" ref={ref} style={{ left, top, width }} role="menu">
-            {adapters.filter((adapter) => adapter.id !== 'command').map((adapter) => (
+            {adapters.filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent').map((adapter) => (
                 <button
                     key={adapter.id}
                     type="button"

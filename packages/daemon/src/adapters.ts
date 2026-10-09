@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { accessSync, constants, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
 
 export interface LaunchSpec {
@@ -12,7 +13,10 @@ export interface LaunchContext {
     pane: Pane;
     shell: string;
     claudeSettingsFile: string;
+    subagentRunning: boolean;
 }
+
+const SUBAGENT_VIEWER = fileURLToPath(new URL('./subagent-view.ts', import.meta.url));
 
 interface AdapterDefinition {
     id: AdapterId;
@@ -77,6 +81,18 @@ const DEFINITIONS: AdapterDefinition[] = [
         resumable: false,
         binary: null,
         launch: ({ pane, shell }) => ({ file: shell, args: ['-l', '-c', pane.command ?? ''] }),
+    },
+    {
+        id: 'subagent',
+        label: 'Subagent',
+        kind: 'process',
+        statusSource: 'process',
+        resumable: false,
+        binary: null,
+        launch: ({ pane, subagentRunning }) => ({
+            file: process.execPath,
+            args: [SUBAGENT_VIEWER, pane.command ?? '', subagentRunning ? '--follow' : '--once'],
+        }),
     },
 ];
 

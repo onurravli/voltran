@@ -138,6 +138,7 @@ export function createVoltranServer(options: ServerOptions): Server {
         hub.killPane(id);
         sendJson(res, 200, { ok: true });
     });
+    route('POST', '/api/panes/:id/subagents/:agent/view', (_req, res, [id, agent]) => sendJson(res, 200, hub.viewSubagent(id, agent)));
     route('POST', '/api/panes/:id/seen', (_req, res, [id]) => {
         hub.seenPane(id);
         sendJson(res, 200, { ok: true });
