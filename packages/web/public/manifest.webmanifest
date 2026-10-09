@@ -1,0 +1,9 @@
+{
+  "name": "Voltran",
+  "short_name": "Voltran",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#12151d",
+  "theme_color": "#12151d",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

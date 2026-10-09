@@ -1,0 +1,34 @@
+{
+  "name": "voltran",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local multi-agent session and terminal orchestrator",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "workspaces": [
+    "packages/shared",
+    "packages/daemon",
+    "packages/web"
+  ],
+  "bin": {
+    "voltran": "bin/voltran.mjs"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
+    "up": "node bin/voltran.mjs up",
+    "build": "npm run build -w @voltran/web",
+    "dev:daemon": "VOLTRAN_DEV=1 node --watch packages/daemon/src/main.ts",
+    "dev:web": "npm run dev -w @voltran/web",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/daemon && tsc -p packages/web"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright-core": "^1.64.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

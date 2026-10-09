@@ -1,0 +1,415 @@
+import { randomUUID } from 'node:crypto';
+import { statSync } from 'node:fs';
+import { basename, isAbsolute, resolve } from 'node:path';
+import {
+    insertPane,
+    isValidLayout,
+    removePane,
+    samePanes,
+    type AdapterInfo,
+    type AppState,
+    type AttentionStatus,
+    type CreatePaneBody,
+    type CreateProjectBody,
+    type CreateSessionBody,
+    type Layout,
+    type Pane,
+    type PaneSpec,
+    type Project,
+    type ServerEvent,
+    type Session,
+    type UpdatePaneBody,
+    type UpdateProjectBody,
+    type UpdateSessionBody,
+} from '@voltran/shared';
+import { adapterFor, isAdapterId, isClaudeHookEvent } from './adapters.ts';
+import { PaneManager } from './panes.ts';
+import type { Store } from './store.ts';
+
+export class HttpError extends Error {
+    readonly status: number;
+
+    constructor(status: number, message: string) {
+        super(message);
+        this.status = status;
+    }
+}
+
+export interface HubOptions {
+    store: Store;
+    adapters: AdapterInfo[];
+    scrollbackDir: string;
+    claudeSettingsFile: string;
+    url: string;
+    shell: string;
+    path: string;
+    baseEnv: NodeJS.ProcessEnv;
+}
+
+type Listener = (event: ServerEvent) => void;
+
+const PROJECT_COLORS = ['#7aa2f7', '#f7768e', '#9ece6a', '#e0af68', '#bb9af7', '#7dcfff', '#ff9e64', '#73daca'];
+const BROADCAST_DELAY_MS = 30;
+const MAX_TITLE = 200;
+const MAX_COMMAND = 4000;
+
+const requireString = (value: unknown, field: string, max: number): string => {
+    if (typeof value !== 'string' || !value.trim()) {
+        throw new HttpError(400, `${field} is required`);
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > max) {
+        throw new HttpError(400, `${field} must be at most ${max} characters`);
+    }
+    return trimmed;
+};
+
+const optionalLink = (value: unknown): string | null => {
+    if (value === undefined || value === null || value === '') {
+        return null;
+    }
+    if (typeof value !== 'string') {
+        throw new HttpError(400, 'link must be a string');
+    }
+    let url: URL;
+    try {
+        url = new URL(value.trim());
+    } catch {
+        throw new HttpError(400, 'link must be a valid URL');
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        throw new HttpError(400, 'link must be an http(s) URL');
+    }
+    return url.toString();
+};
+
+export class Hub {
+    readonly panes: PaneManager;
+    private readonly store: Store;
+    private readonly adapters: AdapterInfo[];
+    private listeners = new Set<Listener>();
+    private broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+
+    constructor(options: HubOptions) {
+        this.store = options.store;
+        this.adapters = options.adapters;
+        this.panes = new PaneManager({
+            scrollbackDir: options.scrollbackDir,
+            claudeSettingsFile: options.claudeSettingsFile,
+            url: options.url,
+            shell: options.shell,
+            path: options.path,
+            baseEnv: options.baseEnv,
+            onChange: () => this.scheduleBroadcast(),
+            onPaneRecord: (pane) => this.store.updatePane(pane.id, pane),
+            onAttention: (pane, status, body) => this.attention(pane, status, body),
+        });
+        for (const pane of this.store.listPanes()) {
+            this.panes.load(pane);
+        }
+    }
+
+    state(): AppState {
+        return {
+            projects: this.store.listProjects(),
+            sessions: this.store.listSessions(),
+            panes: this.panes.views(),
+            adapters: this.adapters,
+        };
+    }
+
+    subscribe(listener: Listener): () => void {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
+    shutdown(): void {
+        if (this.broadcastTimer) {
+            clearTimeout(this.broadcastTimer);
+            this.broadcastTimer = null;
+        }
+        this.panes.shutdown();
+        this.listeners.clear();
+    }
+
+    createProject(body: CreateProjectBody): Project {
+        const rawPath = requireString(body.path, 'path', 4096).replace(/^~(?=$|\/)/, process.env.HOME ?? '~');
+        if (!isAbsolute(rawPath)) {
+            throw new HttpError(400, 'path must be absolute');
+        }
+        const path = resolve(rawPath);
+        let isDirectory = false;
+        try {
+            isDirectory = statSync(path).isDirectory();
+        } catch {
+            throw new HttpError(400, `path does not exist: ${path}`);
+        }
+        if (!isDirectory) {
+            throw new HttpError(400, `path is not a directory: ${path}`);
+        }
+        const existing = this.store.listProjects();
+        if (existing.some((project) => project.path === path)) {
+            throw new HttpError(409, `a project already points at ${path}`);
+        }
+        const project: Project = {
+            id: randomUUID(),
+            name: body.name ? requireString(body.name, 'name', MAX_TITLE) : basename(path) || path,
+            path,
+            color: typeof body.color === 'string' && /^#[0-9a-f]{6}$/i.test(body.color)
+                ? body.color
+                : PROJECT_COLORS[existing.length % PROJECT_COLORS.length],
+            createdAt: Date.now(),
+        };
+        this.store.insertProject(project);
+        this.scheduleBroadcast();
+        return project;
+    }
+
+    updateProject(id: string, body: UpdateProjectBody): Project {
+        this.mustGetProject(id);
+        const patch: Partial<Pick<Project, 'name' | 'color'>> = {};
+        if (body.name !== undefined) {
+            patch.name = requireString(body.name, 'name', MAX_TITLE);
+        }
+        if (body.color !== undefined) {
+            if (typeof body.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(body.color)) {
+                throw new HttpError(400, 'color must be a #rrggbb hex value');
+            }
+            patch.color = body.color;
+        }
+        this.store.updateProject(id, patch);
+        this.scheduleBroadcast();
+        return this.mustGetProject(id);
+    }
+
+    deleteProject(id: string): void {
+        this.mustGetProject(id);
+        for (const session of this.store.sessionsOfProject(id)) {
+            this.removeSessionPanes(session.id);
+        }
+        this.store.deleteProject(id);
+        this.scheduleBroadcast();
+    }
+
+    createSession(body: CreateSessionBody): Session {
+        const project = this.mustGetProject(body.projectId);
+        const specs = Array.isArray(body.panes) && body.panes.length > 0 ? body.panes : [{ adapter: 'shell' as const }];
+        if (specs.length > 8) {
+            throw new HttpError(400, 'a session starts with at most 8 panes');
+        }
+        specs.forEach((spec) => this.validatePaneSpec(spec));
+
+        const now = Date.now();
+        const session: Session = {
+            id: randomUUID(),
+            projectId: project.id,
+            title: requireString(body.title, 'title', MAX_TITLE),
+            link: optionalLink(body.link),
+            cwd: project.path,
+            layout: null,
+            archived: false,
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.store.insertSession(session);
+
+        let layout: Layout | null = null;
+        let previous: string | undefined;
+        specs.forEach((spec, index) => {
+            const pane = this.insertPaneRecord(session, spec);
+            layout = insertPane(layout, pane.id, previous, index <= 1 ? 'horizontal' : 'vertical');
+            previous = pane.id;
+        });
+        this.store.updateSession(session.id, { layout });
+        this.scheduleBroadcast();
+        return this.mustGetSession(session.id);
+    }
+
+    updateSession(id: string, body: UpdateSessionBody): Session {
+        const session = this.mustGetSession(id);
+        const patch: Partial<Pick<Session, 'title' | 'link' | 'archived' | 'layout'>> = {};
+        if (body.title !== undefined) {
+            patch.title = requireString(body.title, 'title', MAX_TITLE);
+        }
+        if (body.link !== undefined) {
+            patch.link = optionalLink(body.link);
+        }
+        if (body.layout !== undefined) {
+            if (body.layout !== null && !isValidLayout(body.layout)) {
+                throw new HttpError(400, 'layout is malformed');
+            }
+            if (!samePanes(body.layout, session.layout)) {
+                throw new HttpError(409, 'layout does not match the session panes');
+            }
+            patch.layout = body.layout;
+        }
+        if (body.archived !== undefined) {
+            patch.archived = Boolean(body.archived);
+            if (patch.archived && !session.archived) {
+                for (const pane of this.store.panesOfSession(id)) {
+                    this.panes.suspend(pane.id);
+                }
+            }
+        }
+        this.store.updateSession(id, patch);
+        this.scheduleBroadcast();
+        return this.mustGetSession(id);
+    }
+
+    deleteSession(id: string): void {
+        this.mustGetSession(id);
+        this.removeSessionPanes(id);
+        this.store.deleteSession(id);
+        this.scheduleBroadcast();
+    }
+
+    createPane(sessionId: string, body: CreatePaneBody): Pane {
+        const session = this.mustGetSession(sessionId);
+        this.validatePaneSpec(body);
+        const direction = body.direction === 'vertical' ? 'vertical' : 'horizontal';
+        const pane = this.insertPaneRecord(session, body);
+        this.store.updateSession(session.id, { layout: insertPane(session.layout, pane.id, body.splitFrom, direction) });
+        this.scheduleBroadcast();
+        return pane;
+    }
+
+    updatePane(id: string, body: UpdatePaneBody): Pane {
+        this.mustGetPane(id);
+        if (body.title !== undefined) {
+            const title = requireString(body.title, 'title', MAX_TITLE);
+            this.store.updatePane(id, { title });
+            this.panes.updatePane(id, { title });
+        }
+        return this.mustGetPane(id);
+    }
+
+    deletePane(id: string): void {
+        const pane = this.mustGetPane(id);
+        const session = this.store.getSession(pane.sessionId);
+        this.panes.remove(id);
+        this.store.deletePane(id);
+        if (session) {
+            this.store.updateSession(session.id, { layout: removePane(session.layout, id) });
+        }
+        this.scheduleBroadcast();
+    }
+
+    restartPane(id: string): void {
+        this.mustGetPane(id);
+        this.panes.restart(id);
+    }
+
+    killPane(id: string): void {
+        this.mustGetPane(id);
+        this.panes.kill(id);
+    }
+
+    seenPane(id: string): void {
+        this.mustGetPane(id);
+        this.panes.markSeen(id);
+    }
+
+    hook(paneId: string, event: string, secret: string, payload: unknown): boolean {
+        if (!isClaudeHookEvent(event) || !payload || typeof payload !== 'object') {
+            return false;
+        }
+        return this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
+    }
+
+    private validatePaneSpec(spec: PaneSpec): void {
+        if (!isAdapterId(spec.adapter)) {
+            throw new HttpError(400, `unknown adapter "${String(spec.adapter)}"`);
+        }
+        if (spec.adapter === 'command') {
+            requireString(spec.command, 'command', MAX_COMMAND);
+        }
+        if (spec.title !== undefined) {
+            requireString(spec.title, 'title', MAX_TITLE);
+        }
+    }
+
+    private insertPaneRecord(session: Session, spec: PaneSpec): Pane {
+        const adapter = adapterFor(spec.adapter);
+        const command = spec.adapter === 'command' ? String(spec.command).trim() : null;
+        const pane: Pane = {
+            id: randomUUID(),
+            sessionId: session.id,
+            adapter: spec.adapter,
+            title: spec.title?.trim() || (command ? command.slice(0, 40) : adapter.label),
+            command,
+            cwd: session.cwd,
+            agentSessionId: spec.adapter === 'claude' ? randomUUID() : null,
+            agentResumable: false,
+            ended: false,
+            createdAt: Date.now(),
+        };
+        this.store.insertPane(pane);
+        this.panes.add(pane);
+        return pane;
+    }
+
+    private removeSessionPanes(sessionId: string): void {
+        for (const pane of this.store.panesOfSession(sessionId)) {
+            this.panes.remove(pane.id);
+        }
+    }
+
+    private attention(pane: Pane, status: AttentionStatus, body: string): void {
+        const session = this.store.getSession(pane.sessionId);
+        if (!session) {
+            return;
+        }
+        this.emit({
+            type: 'attention',
+            paneId: pane.id,
+            sessionId: session.id,
+            status,
+            title: session.title,
+            body: body ? `${pane.title}: ${body}` : pane.title,
+        });
+    }
+
+    private scheduleBroadcast(): void {
+        if (this.broadcastTimer) {
+            return;
+        }
+        this.broadcastTimer = setTimeout(() => {
+            this.broadcastTimer = null;
+            this.emit({ type: 'state', state: this.state() });
+        }, BROADCAST_DELAY_MS);
+    }
+
+    private emit(event: ServerEvent): void {
+        for (const listener of this.listeners) {
+            try {
+                listener(event);
+            } catch (error) {
+                console.error('[voltran] event listener failed:', error);
+            }
+        }
+    }
+
+    private mustGetProject(id: string): Project {
+        const project = this.store.getProject(id);
+        if (!project) {
+            throw new HttpError(404, 'project not found');
+        }
+        return project;
+    }
+
+    private mustGetSession(id: string): Session {
+        const session = this.store.getSession(id);
+        if (!session) {
+            throw new HttpError(404, 'session not found');
+        }
+        return session;
+    }
+
+    private mustGetPane(id: string): Pane {
+        const pane = this.store.getPane(id);
+        if (!pane) {
+            throw new HttpError(404, 'pane not found');
+        }
+        return pane;
+    }
+}
