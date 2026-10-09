@@ -37,6 +37,12 @@ const MIN_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 5000;
 const RESIZE_DEBOUNCE_MS = 60;
 const RECONNECT_NOTICE_MS = 1000;
+// Meta+Enter (what Option+Enter sends with macOptionIsMeta): agent CLIs read it as "insert newline".
+const NEWLINE_SEQUENCE = '\x1b\r';
+
+function isShiftEnter(event: KeyboardEvent): boolean {
+    return event.key === 'Enter' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+}
 
 export class TerminalSession {
     readonly paneId: string;
@@ -74,7 +80,7 @@ export class TerminalSession {
         this.term.loadAddon(new WebLinksAddon((_event, uri) => window.open(uri, '_blank', 'noopener')));
         this.term.loadAddon(new Unicode11Addon());
         this.term.unicode.activeVersion = '11';
-        this.term.attachCustomKeyEventHandler((event) => !isAppShortcut(event));
+        this.term.attachCustomKeyEventHandler((event) => this.handleKey(event));
         this.term.onData((data) => this.send({ type: 'input', data }));
         this.term.onBinary((data) => this.send({ type: 'input', data }));
         this.term.onResize(() => this.scheduleResize());
@@ -138,6 +144,20 @@ export class TerminalSession {
         this.linkListeners.clear();
         this.focusListeners.clear();
         this.term.dispose();
+    }
+
+    private handleKey(event: KeyboardEvent): boolean {
+        if (isAppShortcut(event)) {
+            return false;
+        }
+        if (isShiftEnter(event)) {
+            if (event.type === 'keydown') {
+                event.preventDefault();
+                this.term.input(NEWLINE_SEQUENCE);
+            }
+            return false;
+        }
+        return true;
     }
 
     private refit(): void {
