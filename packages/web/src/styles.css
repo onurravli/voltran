@@ -811,6 +811,17 @@ kbd {
     background: var(--bay);
 }
 
+.pane__header > .lamp,
+.pane__title,
+.pane__summary {
+    align-self: baseline;
+}
+
+.pane__title:not(.inline-edit),
+.pane__summary {
+    line-height: 29px;
+}
+
 .pane__title {
     flex: none;
     max-width: 40%;
