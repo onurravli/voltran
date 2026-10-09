@@ -107,7 +107,7 @@ export function toggleZen(): void {
     document.documentElement.requestFullscreen()
         .then(() => keyboardLock()?.lock(['Escape']))
         .catch(() => undefined);
-    showToast('Zen mode. ⌃⌥Z to leave');
+    showToast('Zen mode. ⇧Esc or ⌃⌥Z to leave');
 }
 
 function closeFocused(): void {
@@ -129,7 +129,7 @@ export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyK', keys: '⌘K', label: 'Open the command palette', run: togglePalette },
     { code: 'KeyJ', keys: '⌃⌥J', label: 'Jump to the next pane that needs you', run: jumpToAttention },
     { code: 'KeyB', keys: '⌃⌥B', label: 'Show or hide the sidebar', run: () => useUi.getState().toggleSidebar() },
-    { code: 'KeyZ', keys: '⌃⌥Z', label: 'Zen mode: the focused pane, full screen, nothing else', run: toggleZen },
+    { code: 'KeyZ', keys: '⌃⌥Z', label: 'Zen mode: the focused pane, full screen, nothing else (⇧Esc leaves)', run: toggleZen },
     { code: 'KeyN', keys: '⌃⌥N', label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
     { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous session', run: () => stepSession(-1) },
     { code: 'ArrowDown', keys: '⌃⌥↓', label: 'Next session', run: () => stepSession(1) },
@@ -158,8 +158,12 @@ function isPaletteKey(event: KeyboardEvent): boolean {
     return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyK';
 }
 
+function isZenExitKey(event: KeyboardEvent): boolean {
+    return event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && useUi.getState().zen;
+}
+
 export function isAppShortcut(event: KeyboardEvent): boolean {
-    return isPaletteKey(event) || (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code));
+    return isPaletteKey(event) || isZenExitKey(event) || (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code));
 }
 
 export function installShortcuts(): () => void {
@@ -169,6 +173,10 @@ export function installShortcuts(): () => void {
         }
         event.preventDefault();
         event.stopPropagation();
+        if (isZenExitKey(event)) {
+            leaveZen();
+            return;
+        }
         BY_CODE.get(event.code)?.run();
     };
     const onFullscreenChange = (): void => {
