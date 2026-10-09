@@ -1,4 +1,4 @@
-import { Terminal, type ITheme } from '@xterm/xterm';
+import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -9,32 +9,9 @@ import { fontStack, type TerminalFont } from './fonts.ts';
 import { translateKey } from './keymap.ts';
 import { isAppShortcut } from './shortcuts.ts';
 import { useUi } from './store.ts';
+import { themeById } from './themes.ts';
 
 export type LinkState = 'connecting' | 'open' | 'reconnecting' | 'gone';
-
-const THEME: ITheme = {
-    background: '#12151d',
-    foreground: '#d8dce6',
-    cursor: '#d8dce6',
-    cursorAccent: '#12151d',
-    selectionBackground: '#3a4565',
-    black: '#1d2130',
-    red: '#ff6b6b',
-    green: '#8fd18b',
-    yellow: '#ffcb6b',
-    blue: '#7aa2f7',
-    magenta: '#c49cf7',
-    cyan: '#6cc4ff',
-    white: '#c3c8d4',
-    brightBlack: '#5b6378',
-    brightRed: '#ff8f8f',
-    brightGreen: '#a8e2a4',
-    brightYellow: '#ffd98f',
-    brightBlue: '#9bbaff',
-    brightMagenta: '#d7b8ff',
-    brightCyan: '#94d6ff',
-    brightWhite: '#eef0f5',
-};
 
 const MIN_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 5000;
@@ -64,6 +41,7 @@ export class TerminalSession {
         this.host = document.createElement('div');
         this.host.className = 'terminal-host';
         const font = useUi.getState().terminalFont;
+        const theme = themeById(useUi.getState().themeId);
         this.term = new Terminal({
             allowProposedApi: true,
             cursorBlink: true,
@@ -72,7 +50,8 @@ export class TerminalSession {
             lineHeight: 1.15,
             scrollback: 10_000,
             macOptionIsMeta: true,
-            theme: THEME,
+            minimumContrastRatio: theme.minimumContrastRatio,
+            theme: theme.terminal,
         });
         this.term.loadAddon(this.fit);
         this.term.loadAddon(new WebLinksAddon((_event, uri) => window.open(uri, '_blank', 'noopener')));
@@ -297,6 +276,13 @@ const sessions = new Map<string, TerminalSession>();
 useUi.subscribe((state, previous) => {
     if (state.terminalFont !== previous.terminalFont) {
         sessions.forEach((session) => session.applyFont(state.terminalFont));
+    }
+    if (state.themeId !== previous.themeId) {
+        const theme = themeById(state.themeId);
+        sessions.forEach((session) => {
+            session.term.options.minimumContrastRatio = theme.minimumContrastRatio;
+            session.term.options.theme = theme.terminal;
+        });
     }
 });
 

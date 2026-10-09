@@ -3,6 +3,7 @@ import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFon
 import { filterItems } from '../palette.ts';
 import { SHORTCUTS, togglePalette } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
+import { THEMES, themeById, type Theme } from '../themes.ts';
 
 interface Item {
     id: string;
@@ -10,24 +11,60 @@ interface Item {
     hint?: string;
     keys?: string;
     family?: string;
+    themeId?: string;
     keepOpen?: boolean;
     run: () => void;
 }
 
-type Mode = 'commands' | 'fonts';
+type Mode = 'commands' | 'fonts' | 'themes';
+
+const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
+    commands: { placeholder: 'Type a command', empty: 'No matching commands' },
+    fonts: { title: 'Font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
+    themes: { title: 'Theme', placeholder: 'Pick a theme', empty: 'No matching themes' },
+};
+
+interface Committed {
+    font: TerminalFont;
+    themeId: string;
+}
 
 function sameFamily(a: string, b: string): boolean {
     return a.toLowerCase() === b.toLowerCase();
 }
 
+function restore(committed: Committed | null): void {
+    if (!committed) {
+        return;
+    }
+    const state = useUi.getState();
+    if (state.terminalFont !== committed.font) {
+        state.setTerminalFont(committed.font);
+    }
+    if (state.themeId !== committed.themeId) {
+        state.setTheme(committed.themeId);
+    }
+}
+
+function ThemeSwatch({ theme }: { theme: Theme }) {
+    const { background, red, yellow, green, blue, magenta } = theme.terminal;
+    return (
+        <span className="palette__swatch" style={{ background }} aria-hidden="true">
+            {[red, yellow, green, blue, magenta].map((color, index) => <i key={index} style={{ background: color }} />)}
+        </span>
+    );
+}
+
 export function CommandPalette({ onClose }: { onClose: () => void }) {
     const font = useUi((state) => state.terminalFont);
     const setTerminalFont = useUi((state) => state.setTerminalFont);
+    const themeId = useUi((state) => state.themeId);
+    const setTheme = useUi((state) => state.setTheme);
     const [mode, setMode] = useState<Mode>('commands');
     const [families, setFamilies] = useState<string[]>([]);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(0);
-    const fontBeforePreview = useRef<TerminalFont | null>(null);
+    const committed = useRef<Committed | null>(null);
     const input = useRef<HTMLInputElement>(null);
     const list = useRef<HTMLUListElement>(null);
 
@@ -35,36 +72,44 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         const previous = document.activeElement as HTMLElement | null;
         input.current?.focus();
         return () => {
-            if (fontBeforePreview.current) {
-                useUi.getState().setTerminalFont(fontBeforePreview.current);
-                fontBeforePreview.current = null;
-            }
+            restore(committed.current);
+            committed.current = null;
             previous?.focus?.();
         };
     }, []);
 
-    const enterFonts = (): void => {
-        const choices = fontChoices(font.family);
-        fontBeforePreview.current = font;
-        setFamilies(choices);
-        setMode('fonts');
+    const enterList = (next: Exclude<Mode, 'commands'>, index: number): void => {
+        committed.current = { font, themeId };
+        setMode(next);
         setQuery('');
-        setActive(Math.max(0, choices.findIndex((family) => sameFamily(family, font.family))));
+        setActive(Math.max(0, index));
     };
 
-    const leaveFonts = (): void => {
-        if (fontBeforePreview.current) {
-            setTerminalFont(fontBeforePreview.current);
-            fontBeforePreview.current = null;
-        }
+    const enterFonts = (): void => {
+        const choices = fontChoices(font.family);
+        setFamilies(choices);
+        enterList('fonts', choices.findIndex((family) => sameFamily(family, font.family)));
+    };
+
+    const enterThemes = (): void => enterList('themes', THEMES.findIndex((theme) => theme.id === themeId));
+
+    const leaveList = (): void => {
+        restore(committed.current);
+        committed.current = null;
         setMode('commands');
         setQuery('');
         setActive(0);
     };
 
     const chooseFamily = (family: string): void => {
-        fontBeforePreview.current = null;
+        committed.current = null;
         setTerminalFont({ ...font, family });
+        onClose();
+    };
+
+    const chooseTheme = (id: string): void => {
+        committed.current = null;
+        setTheme(id);
         onClose();
     };
 
@@ -73,6 +118,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     let items: Item[];
     if (mode === 'commands') {
         items = filterItems<Item>([
+            { id: 'theme', label: 'Theme…', hint: themeById(themeId).name, keepOpen: true, run: enterThemes },
             { id: 'font-family', label: 'Font family…', hint: font.family, keepOpen: true, run: enterFonts },
             { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
             { id: 'font-smaller', label: 'Font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
@@ -81,8 +127,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 .filter((shortcut) => shortcut.run !== togglePalette)
                 .map((shortcut) => ({ id: shortcut.code, label: shortcut.label, keys: shortcut.keys, run: shortcut.run })),
         ], query);
+    } else if (mode === 'themes') {
+        const current = committed.current?.themeId ?? themeId;
+        items = filterItems<Item>(THEMES.map((theme) => ({
+            id: `theme:${theme.id}`,
+            label: theme.name,
+            themeId: theme.id,
+            hint: theme.id === current ? 'current' : undefined,
+            run: () => chooseTheme(theme.id),
+        })), query);
     } else {
-        const current = fontBeforePreview.current?.family ?? font.family;
+        const current = committed.current?.font.family ?? font.family;
         items = filterItems<Item>(families.map((family) => ({
             id: `family:${family}`,
             label: family,
@@ -103,6 +158,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     const selected = Math.min(active, Math.max(0, items.length - 1));
     const preview = mode === 'fonts' ? items[selected]?.family : undefined;
+    const previewTheme = mode === 'themes' ? items[selected]?.themeId : undefined;
 
     useEffect(() => {
         if (!preview) {
@@ -113,6 +169,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             useUi.getState().setTerminalFont({ ...current, family: preview });
         }
     }, [preview]);
+
+    useEffect(() => {
+        if (previewTheme) {
+            useUi.getState().setTheme(previewTheme);
+        }
+    }, [previewTheme]);
 
     useEffect(() => {
         list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
@@ -146,16 +208,16 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             case 'Escape':
                 event.preventDefault();
                 event.stopPropagation();
-                if (mode === 'fonts') {
-                    leaveFonts();
+                if (mode !== 'commands') {
+                    leaveList();
                 } else {
                     onClose();
                 }
                 break;
             case 'Backspace':
-                if (mode === 'fonts' && query === '') {
+                if (mode !== 'commands' && query === '') {
                     event.preventDefault();
-                    leaveFonts();
+                    leaveList();
                 }
                 break;
         }
@@ -164,7 +226,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     return (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
             <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
-                {mode === 'fonts' && <div className="palette__crumb">Font family <span>Esc to go back</span></div>}
+                {COPY[mode].title && <div className="palette__crumb">{COPY[mode].title} <span>Esc to go back</span></div>}
                 <input
                     ref={input}
                     className="palette__input"
@@ -174,7 +236,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                         setActive(0);
                     }}
                     onKeyDown={onKeyDown}
-                    placeholder={mode === 'fonts' ? 'Pick a font, or type the name of any installed font' : 'Type a command'}
+                    placeholder={COPY[mode].placeholder}
                     spellCheck={false}
                     autoComplete="off"
                     role="combobox"
@@ -183,7 +245,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     aria-activedescendant={items.length ? `palette-item-${selected}` : undefined}
                 />
                 {items.length === 0 ? (
-                    <p className="palette__empty">{mode === 'fonts' ? 'No matching fonts' : 'No matching commands'}</p>
+                    <p className="palette__empty">{COPY[mode].empty}</p>
                 ) : (
                     <ul className="palette__list" id="palette-list" role="listbox" ref={list}>
                         {items.map((item, index) => (
@@ -197,6 +259,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => run(item)}
                             >
+                                {item.themeId && <ThemeSwatch theme={themeById(item.themeId)} />}
                                 <span className="palette__label" style={item.family ? { fontFamily: fontStack(item.family) } : undefined}>{item.label}</span>
                                 {item.keys ? <kbd>{item.keys}</kbd> : item.hint && <span className="palette__hint">{item.hint}</span>}
                             </li>

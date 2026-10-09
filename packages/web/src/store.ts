@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AppState, LayoutDirection, PaneView, Session } from '@voltran/shared';
 import { needsAttention } from '@voltran/shared';
 import { DEFAULT_FONT, parseFont, type TerminalFont } from './fonts.ts';
+import { DEFAULT_THEME_ID, parseThemeId } from './themes.ts';
 
 export type Connection = 'connecting' | 'online' | 'offline' | 'unauthenticated';
 
@@ -34,6 +35,7 @@ interface UiState {
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
     terminalFont: TerminalFont;
+    themeId: string;
     dialog: Dialog | null;
     paneMenu: PaneMenuTarget | null;
     toast: Toast | null;
@@ -45,6 +47,7 @@ interface UiState {
     toggleProject: (id: string) => void;
     setShowArchived: (value: boolean) => void;
     setTerminalFont: (font: TerminalFont) => void;
+    setTheme: (id: string) => void;
     openDialog: (dialog: Dialog | null) => void;
     openPaneMenu: (target: PaneMenuTarget | null) => void;
     showToast: (message: string, tone?: Toast['tone']) => void;
@@ -57,6 +60,7 @@ interface Persisted {
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
     terminalFont: TerminalFont;
+    themeId: string;
 }
 
 function readPersisted(): Persisted {
@@ -69,12 +73,13 @@ function readPersisted(): Persisted {
                 collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
                 showArchived: parsed.showArchived === true,
                 terminalFont: parseFont(parsed.terminalFont),
+                themeId: parseThemeId(parsed.themeId),
             };
         }
     } catch {
         localStorage.removeItem(STORAGE_KEY);
     }
-    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, terminalFont: DEFAULT_FONT };
+    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, terminalFont: DEFAULT_FONT, themeId: DEFAULT_THEME_ID };
 }
 
 let toastId = 0;
@@ -107,6 +112,7 @@ export const useUi = create<UiState>((set, get) => ({
     toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
     setShowArchived: (value) => set({ showArchived: value }),
     setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
+    setTheme: (id) => set({ themeId: parseThemeId(id) }),
     openDialog: (dialog) => set({ dialog, paneMenu: null }),
     openPaneMenu: (paneMenu) => set({ paneMenu }),
     showToast: (message, tone = 'info') => {
@@ -127,6 +133,7 @@ useUi.subscribe((state) => {
         collapsedProjects: state.collapsedProjects,
         showArchived: state.showArchived,
         terminalFont: state.terminalFont,
+        themeId: state.themeId,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 });

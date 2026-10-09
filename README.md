@@ -61,7 +61,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 
 | Keys | Action |
 |---|---|
-| ⌘K | Command palette: every action below, plus the terminal font family and size |
+| ⌘K | Command palette: every action below, plus the theme and the terminal font family and size |
 | ⌃⌥J | Jump to the next pane that needs you |
 | ⌃⌥N | Start a new session |
 | ⌃⌥↑ / ⌃⌥↓ | Previous / next session |
@@ -69,6 +69,14 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 | ⌃⌥↩ | Maximize or restore the focused pane |
 | ⌃⌥W | Close the focused pane |
 | ⌃⌥/ | Show all shortcuts |
+
+### Themes
+
+⌘K → **Theme…** colours the whole app and every terminal. Voltran is the default; the others are
+Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, One Dark, Rosé Pine, and the light
+Catppuccin Latte, Solarized Light and GitHub Light. Moving through the list previews each theme, ↩
+keeps it and Esc goes back. Status lamps take their colours from the theme, so the hues above can
+differ, and the choice is remembered in the browser.
 
 ## How it works
 

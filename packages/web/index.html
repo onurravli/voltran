@@ -7,6 +7,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="favicon" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Voltran</title>
+    <!-- Paints the last theme before the app loads; main.tsx keeps voltran.theme current. -->
+    <script>
+      try {
+        const properties = JSON.parse(localStorage.getItem('voltran.theme') ?? '{}');
+        for (const [name, value] of Object.entries(properties)) {
+          document.documentElement.style.setProperty(name, String(value));
+        }
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
