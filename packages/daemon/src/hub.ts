@@ -128,13 +128,13 @@ export class Hub {
         return () => this.listeners.delete(listener);
     }
 
-    shutdown(): void {
+    shutdown(): Promise<void> {
         if (this.broadcastTimer) {
             clearTimeout(this.broadcastTimer);
             this.broadcastTimer = null;
         }
-        this.panes.shutdown();
         this.listeners.clear();
+        return this.panes.shutdown();
     }
 
     createProject(body: CreateProjectBody): Project {

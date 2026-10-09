@@ -39,11 +39,11 @@ type Internals = {
     write(runtime: unknown, data: string): void;
 };
 
-const cleanups: (() => void)[] = [];
+const cleanups: (() => void | Promise<void>)[] = [];
 
-afterEach(() => {
+afterEach(async () => {
     while (cleanups.length > 0) {
-        cleanups.pop()?.();
+        await cleanups.pop()?.();
     }
 });
 
@@ -253,7 +253,7 @@ describe('PaneManager', () => {
         first.manager.attach(pane.id, new FakeClient());
         first.manager.resize(pane.id, 80, 24);
         await until(() => view(first.manager, pane.id).status === 'exited');
-        first.manager.shutdown();
+        await first.manager.shutdown();
 
         const second = setup(first.dir);
         second.manager.load({ ...pane, ended: true });
@@ -263,6 +263,22 @@ describe('PaneManager', () => {
         expect(client.snapshot()).toContain('persisted-output');
         expect(client.snapshot()).toContain('restored');
         expect(view(second.manager, pane.id).status).toBe('exited');
+    });
+
+    it('saves output that arrived just before shutdown', async () => {
+        const first = setup();
+        const pane = makePane({ ended: true });
+        first.manager.add(pane);
+        const internals = first.manager as unknown as Internals;
+        internals.write(internals.runtimes.get(pane.id), 'last words before shutdown');
+        await first.manager.shutdown();
+
+        const second = setup(first.dir);
+        second.manager.load(pane);
+        const client = new FakeClient();
+        second.manager.attach(pane.id, client);
+        await until(() => client.texts.length > 0);
+        expect(client.snapshot()).toContain('last words before shutdown');
     });
 
     it('reports a pane that cannot start instead of throwing', () => {

@@ -70,8 +70,8 @@ beforeAll(async () => {
     await new Promise<void>((resolveListen) => daemon.server.listen(port, '127.0.0.1', resolveListen));
 });
 
-afterAll(() => {
-    daemon.shutdown();
+afterAll(async () => {
+    await daemon.shutdown();
     rmSync(home, { recursive: true, force: true });
 });
 

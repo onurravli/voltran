@@ -62,6 +62,7 @@ const PERSIST_INTERVAL_MS = 20_000;
 const MAINTENANCE_INTERVAL_MS = 2000;
 const KILL_GRACE_MS = 3000;
 const VIEWER_SIGNAL_DELAY_MS = 750;
+const SHUTDOWN_FLUSH_MS = 1000;
 const ECHO_WINDOW_MS = 400;
 
 const RESET_MODES = '\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[0m';
@@ -277,17 +278,26 @@ export class PaneManager {
         this.options.onChange();
     }
 
-    shutdown(): void {
+    // The headless terminal parses writes asynchronously, so scrollback is saved only once each one has
+    // caught up with the output it was given; otherwise the last output before a shutdown is lost.
+    async shutdown(): Promise<void> {
+        if (this.shuttingDown) {
+            return;
+        }
         this.shuttingDown = true;
         clearInterval(this.persistTimer);
         clearInterval(this.maintenanceTimer);
-        for (const runtime of this.runtimes.values()) {
-            this.persist(runtime);
+        const runtimes = [...this.runtimes.values()];
+        for (const runtime of runtimes) {
             this.stopProcess(runtime);
             runtime.tracker?.dispose();
             for (const attachment of runtime.attachments) {
                 attachment.client.close(1012, 'daemon restarting');
             }
+        }
+        await Promise.all(runtimes.map((runtime) => parsed(runtime.term, SHUTDOWN_FLUSH_MS)));
+        for (const runtime of runtimes) {
+            this.persist(runtime);
             runtime.term.dispose();
         }
     }
@@ -573,6 +583,16 @@ const FOCUS_REPORT = /\x1b\[[IO]/g;
 
 function isUserInput(data: string): boolean {
     return data.replace(FOCUS_REPORT, '').length > 0;
+}
+
+function parsed(term: headless.Terminal, timeoutMs: number): Promise<void> {
+    return new Promise((resolveParsed) => {
+        const timer = setTimeout(resolveParsed, timeoutMs);
+        term.write('', () => {
+            clearTimeout(timer);
+            resolveParsed();
+        });
+    });
 }
 
 function locateSubagent(payload: Record<string, unknown>, agentId: string): SubagentLocation | null {

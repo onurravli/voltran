@@ -20,7 +20,7 @@ export interface Daemon {
     token: string;
     hub: Hub;
     server: Server;
-    shutdown: () => void;
+    shutdown: () => Promise<void>;
 }
 
 function readPreviousWindows(file: string): number {
@@ -56,7 +56,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     const previousWindows = readPreviousWindows(config.windowsFile);
 
     let stopped = false;
-    const shutdown = (): void => {
+    const shutdown = async (): Promise<void> => {
         if (stopped) {
             return;
         }
@@ -66,12 +66,15 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         } catch {
             // only a hint for the next start
         }
-        hub.shutdown();
-        store.close();
-        rmSync(config.pidFile, { force: true });
-        server.close();
-        server.closeAllConnections();
-        options.onShutdown?.();
+        try {
+            await hub.shutdown();
+        } finally {
+            store.close();
+            rmSync(config.pidFile, { force: true });
+            server.close();
+            server.closeAllConnections();
+            options.onShutdown?.();
+        }
     };
 
     const server = createVoltranServer({ config, hub, guard, previousWindows, onShutdown: shutdown });
