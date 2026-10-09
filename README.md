@@ -26,7 +26,7 @@ window. Closing the window stops nothing; run `voltran up` again to reopen it.
 
 | Command | What it does |
 |---|---|
-| `voltran up [--browser] [--no-open]` | Start the daemon if needed and open the UI |
+| `voltran up [--browser] [--no-open] [--new]` | Start the daemon if needed and open the UI, unless a Voltran window is already open (`--new` opens another anyway) |
 | `voltran add [path] [--name <name>]` | Register a folder as a project (defaults to the current folder) |
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |

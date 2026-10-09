@@ -1,4 +1,4 @@
-import { realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { describeAdapters, resolveShellPath, writeClaudeSettings } from './adapters.ts';
@@ -23,6 +23,16 @@ export interface Daemon {
     shutdown: () => void;
 }
 
+function readPreviousWindows(file: string): number {
+    try {
+        const count = Number(readFileSync(file, 'utf8'));
+        rmSync(file, { force: true });
+        return Number.isSafeInteger(count) && count > 0 ? count : 0;
+    } catch {
+        return 0;
+    }
+}
+
 export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     ensureHome(config);
     const token = readOrCreateToken(config);
@@ -41,12 +51,21 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     });
     const guard = new Guard(config, token);
 
+    // Remembers how many windows were open so the next `voltran up` can wait for them to reconnect
+    // instead of opening another one.
+    const previousWindows = readPreviousWindows(config.windowsFile);
+
     let stopped = false;
     const shutdown = (): void => {
         if (stopped) {
             return;
         }
         stopped = true;
+        try {
+            writeFileSync(config.windowsFile, String(hub.openWindows()), { mode: 0o600 });
+        } catch {
+            // only a hint for the next start
+        }
         hub.shutdown();
         store.close();
         rmSync(config.pidFile, { force: true });
@@ -55,7 +74,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         options.onShutdown?.();
     };
 
-    const server = createVoltranServer({ config, hub, guard, onShutdown: shutdown });
+    const server = createVoltranServer({ config, hub, guard, previousWindows, onShutdown: shutdown });
     return { config, token, hub, server, shutdown };
 }
 

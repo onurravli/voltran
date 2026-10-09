@@ -37,6 +37,7 @@ export interface ServerOptions {
     config: Config;
     hub: Hub;
     guard: Guard;
+    previousWindows: number;
     onShutdown: () => void;
 }
 
@@ -105,6 +106,7 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('GET', '/api/health', (_req, res) => sendJson(res, 200, { ok: true, pid: process.pid, version: '0.1.0' }));
     route('GET', '/api/state', (_req, res) => sendJson(res, 200, hub.state()));
     route('POST', '/api/login-code', (_req, res) => sendJson(res, 200, { code: guard.issueLoginCode() }));
+    route('GET', '/api/windows', (_req, res) => sendJson(res, 200, { open: hub.openWindows(), previous: options.previousWindows }));
     route('POST', '/api/shutdown', (_req, res) => {
         sendJson(res, 202, { ok: true });
         setImmediate(options.onShutdown);

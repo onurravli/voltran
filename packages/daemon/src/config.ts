@@ -14,6 +14,7 @@ export interface Config {
     logFile: string;
     scrollbackDir: string;
     claudeSettingsFile: string;
+    windowsFile: string;
     webDist: string;
     dev: boolean;
     allowedHosts: Set<string>;
@@ -47,6 +48,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         logFile: join(home, 'daemon.log'),
         scrollbackDir: join(home, 'scrollback'),
         claudeSettingsFile: join(home, 'claude-settings.json'),
+        windowsFile: join(home, 'windows'),
         webDist: resolve(here, '../../web/dist'),
         dev,
         allowedHosts,

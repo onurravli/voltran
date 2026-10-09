@@ -105,6 +105,17 @@ describe('access control', () => {
         expect(outcome).toContain('403');
     });
 
+    it('counts the open windows for the CLI, for signed-in callers only', async () => {
+        expect((await fetch(`${base}/api/windows`)).status).toBe(401);
+        const before = (await api<{ open: number; previous: number }>('GET', '/api/windows')).body;
+        expect(before.previous).toBe(0);
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        await new Promise((resolveMessage) => socket.once('message', resolveMessage));
+        expect((await api<{ open: number }>('GET', '/api/windows')).body.open).toBe(before.open + 1);
+        socket.close();
+        await until(async () => (await api<{ open: number }>('GET', '/api/windows')).body.open === before.open);
+    });
+
     it('signs a browser in with a one-time code', async () => {
         const { body } = await api<{ code: string }>('POST', '/api/login-code');
         const first = await fetch(`${base}/auth?code=${body.code}`, { redirect: 'manual' });

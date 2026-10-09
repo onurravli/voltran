@@ -119,6 +119,10 @@ export class Hub {
         };
     }
 
+    openWindows(): number {
+        return this.listeners.size;
+    }
+
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);

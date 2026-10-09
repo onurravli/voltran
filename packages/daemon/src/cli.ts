@@ -13,7 +13,7 @@ const CHROME = '/Applications/Google Chrome.app';
 const HELP = `voltran — local multi-agent session and terminal orchestrator
 
 Usage:
-  voltran up [--browser] [--no-open]   start the daemon if needed and open the UI
+  voltran up [--browser] [--no-open] [--new]   start the daemon if needed and open the UI
   voltran add [path] [--name <name>]   register a folder as a project (default: current dir)
   voltran status                       show daemon and attention summary
   voltran down                         stop the daemon (agents resume on next open)
@@ -21,6 +21,7 @@ Usage:
 Options:
   --browser   open in the default browser instead of a Chrome app window
   --no-open   do not open any window
+  --new       open a window even if Voltran is already open in one
 
 Environment:
   VOLTRAN_PORT  (default 4747)   VOLTRAN_HOME  (default ~/.voltran)`;
@@ -106,10 +107,32 @@ function openWindow(url: string, preferBrowser: boolean): void {
     spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
 }
 
+async function openWindows(api: Client): Promise<{ open: number; previous: number }> {
+    try {
+        return await api.request<{ open: number; previous: number }>('GET', '/api/windows');
+    } catch {
+        return { open: 0, previous: 0 };
+    }
+}
+
+// Windows left open across `voltran down` reconnect on their own, with a backoff of up to ~6s.
+async function waitForWindows(api: Client, timeoutMs: number): Promise<number> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const { open } = await openWindows(api);
+        if (open > 0) {
+            return open;
+        }
+        await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+    }
+    return 0;
+}
+
 async function up(args: string[]): Promise<void> {
     const api = client();
     ensureUiBuilt(api.config);
 
+    let started = false;
     if (await isRunning(api)) {
         console.log(`Voltran is running on ${api.config.url}`);
     } else {
@@ -118,11 +141,23 @@ async function up(args: string[]): Promise<void> {
             console.error(`Voltran did not start. See ${api.config.logFile}`);
             process.exit(1);
         }
+        started = true;
         console.log(`Voltran started on ${api.config.url}`);
     }
 
     if (args.includes('--no-open')) {
         return;
+    }
+    if (!args.includes('--new')) {
+        let { open, previous } = await openWindows(api);
+        if (open === 0 && started && previous > 0) {
+            console.log(`Waiting for the open Voltran ${previous === 1 ? 'window' : 'windows'} to reconnect…`);
+            open = await waitForWindows(api, 8000);
+        }
+        if (open > 0) {
+            console.log(`Voltran is already open in ${open === 1 ? 'a window' : `${open} windows`}. Use \`voltran up --new\` to open another.`);
+            return;
+        }
     }
     const { code } = await api.request<{ code: string }>('POST', '/api/login-code');
     const base = api.config.dev ? 'http://localhost:5173' : api.config.url;
