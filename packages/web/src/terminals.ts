@@ -258,7 +258,16 @@ export class TerminalSession {
         }, RESIZE_DEBOUNCE_MS);
     }
 
+    // Every window attached to a pane would otherwise push its own size and the last one would win,
+    // so only the focused window sizes the process; regaining focus re-sends what it shows.
+    resendSize(): void {
+        this.sendSize();
+    }
+
     private sendSize(): void {
+        if (!this.opened || !this.host.isConnected || !document.hasFocus()) {
+            return;
+        }
         this.send({ type: 'resize', cols: this.term.cols, rows: this.term.rows });
     }
 
@@ -271,6 +280,10 @@ export class TerminalSession {
 }
 
 const sessions = new Map<string, TerminalSession>();
+
+const resendSizes = (): void => sessions.forEach((session) => session.resendSize());
+window.addEventListener('focus', resendSizes);
+document.addEventListener('visibilitychange', resendSizes);
 
 useUi.subscribe((state, previous) => {
     if (state.terminalFont !== previous.terminalFont) {
