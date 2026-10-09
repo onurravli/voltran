@@ -8,6 +8,7 @@ import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneSt
 import { adapterFor, childEnv, resolveBinary, type ClaudeHookEvent } from './adapters.ts';
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, type StatusChange } from './status.ts';
+import { SubagentTracker } from './subagents.ts';
 
 export interface PaneClient {
     sendText(text: string): void;
@@ -31,6 +32,7 @@ interface Runtime {
     state: PaneRuntimeState;
     attachments: Set<Attachment>;
     tracker: ActivityTracker | null;
+    subagents: SubagentTracker;
     cols: number;
     rows: number;
     lastOutputAt: number;
@@ -236,10 +238,15 @@ export class PaneManager {
             this.updateRecord(runtime, { agentResumable: true });
         }
 
+        const subagentsChanged = runtime.subagents.handle(event, payload, Date.now());
+        if (subagentsChanged) {
+            runtime.state.subagents = runtime.subagents.list();
+        }
         const change = claudeTransition(event, payload);
         if (change) {
             this.setStatus(runtime, change);
-        } else {
+        }
+        if (!change || subagentsChanged) {
             this.options.onChange();
         }
         return true;
@@ -301,9 +308,11 @@ export class PaneManager {
                 exitCode: null,
                 pid: null,
                 foreground: null,
+                subagents: [],
             },
             attachments: new Set(),
             tracker: null,
+            subagents: new SubagentTracker(),
             cols: 120,
             rows: 32,
             lastOutputAt: 0,
@@ -385,6 +394,7 @@ export class PaneManager {
             runtime.state.exitCode = exitCode;
             runtime.state.pid = null;
             runtime.state.foreground = null;
+            this.clearSubagents(runtime);
             this.write(runtime, notice(`exited with code ${exitCode}`, exitCode === 0 ? 'dim' : 'error'));
             for (const attachment of runtime.attachments) {
                 this.sendMessage(attachment.client, { type: 'exit', code: exitCode });
@@ -409,6 +419,14 @@ export class PaneManager {
             runtime.pty = null;
         }
         runtime.state.pid = null;
+        this.clearSubagents(runtime);
+    }
+
+    private clearSubagents(runtime: Runtime): void {
+        if (runtime.subagents.clear()) {
+            runtime.state.subagents = [];
+            this.options.onChange();
+        }
     }
 
     private clearKillTimer(runtime: Runtime): void {

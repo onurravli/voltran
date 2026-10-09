@@ -35,6 +35,8 @@ export function claudeTransition(event: ClaudeHookEvent, payload: Record<string,
         }
         case 'Stop':
             return { status: 'done', detail: oneLine(payload.last_assistant_message, 280) };
+        case 'SubagentStart':
+        case 'SubagentStop':
         case 'SessionEnd':
             return null;
     }

@@ -63,6 +63,14 @@ export interface Pane {
     createdAt: number;
 }
 
+export interface SubagentView {
+    id: string;
+    type: string;
+    description: string;
+    background: boolean;
+    startedAt: number;
+}
+
 export interface PaneRuntimeState {
     status: PaneStatus;
     statusAt: number;
@@ -70,6 +78,7 @@ export interface PaneRuntimeState {
     exitCode: number | null;
     pid: number | null;
     foreground: string | null;
+    subagents: SubagentView[];
 }
 
 export type PaneView = Pane & PaneRuntimeState;

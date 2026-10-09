@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { PaneView, Project, Session } from '@voltran/shared';
+import type { PaneView, Project, Session, SubagentView } from '@voltran/shared';
 import { aggregateStatus, needsAttention } from '@voltran/shared';
 import { api } from '../api.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
@@ -37,12 +37,35 @@ function leadPane(panes: PaneView[]): PaneView | null {
     return panes.find((pane) => pane.status === status) ?? null;
 }
 
+function SubagentList({ session, agents }: { session: Session; agents: { agent: SubagentView; paneId: string }[] }) {
+    const now = useNow(15_000);
+    return (
+        <ul className="subagents" aria-label="Running subagents">
+            {agents.map(({ agent, paneId }) => (
+                <li key={agent.id}>
+                    <button
+                        type="button"
+                        className="subagent-row"
+                        title={`${agent.description} · ${agent.type}${agent.background ? ' · in the background' : ''}`}
+                        onClick={() => revealPane(session.id, paneId)}
+                    >
+                        <StatusLamp status="working" size="sm" />
+                        <span className="subagent-row__label">{agent.description}</span>
+                        <span className="subagent-row__age">{relativeTime(agent.startedAt, now)}</span>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 function SessionRow({ session, panes }: { session: Session; panes: PaneView[] }) {
     const selected = useUi((state) => state.selectedSessionId === session.id);
     const selectSession = useUi((state) => state.selectSession);
     const lead = leadPane(panes);
     const status = lead?.status ?? null;
     const showDetail = lead && (needsAttention(lead.status) || lead.status === 'working') && lead.detail;
+    const agents = panes.flatMap((pane) => (pane.subagents ?? []).map((agent) => ({ agent, paneId: pane.id })));
 
     return (
         <li>
@@ -59,6 +82,7 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 </span>
                 {session.link ? <LinkIcon size={13} className="session-row__link" /> : null}
             </button>
+            {agents.length > 0 ? <SubagentList session={session} agents={agents} /> : null}
         </li>
     );
 }

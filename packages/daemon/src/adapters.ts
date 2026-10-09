@@ -199,6 +199,8 @@ export const CLAUDE_HOOK_EVENTS = [
     'PostToolUse',
     'Notification',
     'Stop',
+    'SubagentStart',
+    'SubagentStop',
     'SessionEnd',
 ] as const;
 
