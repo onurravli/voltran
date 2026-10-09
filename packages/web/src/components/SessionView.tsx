@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import type { Layout, PaneView, Project, Session } from '@voltran/shared';
-import { STATUS_LABEL, paneIds } from '@voltran/shared';
+import type { DropEdge, Layout, PaneView, Project, Session } from '@voltran/shared';
+import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
+import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
 import {
@@ -91,7 +92,17 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     const openPaneMenu = useUi((state) => state.openPaneMenu);
     const openDialog = useUi((state) => state.openDialog);
     const adapter = useUi((state) => state.app?.adapters.find((entry) => entry.id === pane.adapter));
+    const dragging = useUi((state) => state.draggingPaneId);
     const [link, setLink] = useState<LinkState>('connecting');
+    const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
+    const pressedOn = useRef<Element | null>(null);
+    const canDrop = dragging !== null && dragging !== pane.id && !maximized && !session.archived;
+
+    useEffect(() => {
+        if (!canDrop) {
+            setDropEdge(null);
+        }
+    }, [canDrop]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -143,9 +154,45 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     const running = pane.pid !== null;
     const failed = pane.status === 'exited' && pane.exitCode !== null && pane.exitCode !== 0;
 
+    const edgeOf = (event: React.DragEvent<HTMLElement>): DropEdge => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        return dropEdgeAt(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
+    };
+
+    const drop = (event: React.DragEvent<HTMLElement>): void => {
+        event.preventDefault();
+        const moving = event.dataTransfer.getData(PANE_DRAG_TYPE) || dragging;
+        const edge = edgeOf(event);
+        setDropEdge(null);
+        useUi.getState().setDraggingPane(null);
+        if (!moving) {
+            return;
+        }
+        const next = movePane(session.layout, moving, pane.id, edge);
+        if (next !== session.layout) {
+            api.updateSession(session.id, { layout: next }).catch(reportError);
+        }
+    };
+
     return (
-        <div className={`pane${focused ? ' is-focused' : ''} pane--${pane.status}`} onMouseDown={() => useUi.getState().focusPane(pane.id)}>
-            <div className="pane__header">
+        <div className={`pane${focused ? ' is-focused' : ''}${dragging === pane.id ? ' is-dragging' : ''} pane--${pane.status}`} onMouseDown={() => useUi.getState().focusPane(pane.id)}>
+            <div
+                className="pane__header"
+                draggable={!maximized}
+                onMouseDown={(event) => {
+                    pressedOn.current = event.target as Element;
+                }}
+                onDragStart={(event) => {
+                    if (pressedOn.current?.closest('button, input')) {
+                        event.preventDefault();
+                        return;
+                    }
+                    event.dataTransfer.setData(PANE_DRAG_TYPE, pane.id);
+                    event.dataTransfer.effectAllowed = 'move';
+                    useUi.getState().setDraggingPane(pane.id);
+                }}
+                onDragEnd={() => useUi.getState().setDraggingPane(null)}
+            >
                 <StatusLamp status={pane.status} failed={failed} size="sm" />
                 <InlineEdit
                     className="pane__title"
@@ -188,6 +235,24 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                 ) : (
                     <div className="pane__terminal" ref={containerRef} />
                 )}
+                {canDrop ? (
+                    <div
+                        className="pane__drop"
+                        onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
+                            setDropEdge(edgeOf(event));
+                        }}
+                        onDragLeave={() => setDropEdge(null)}
+                        onDrop={drop}
+                    >
+                        {dropEdge ? (
+                            <div className={`pane__drop-zone pane__drop-zone--${dropEdge}`}>
+                                <span>{dropEdge === 'swap' ? 'Swap panes' : `Place ${dropEdge === 'top' ? 'above' : dropEdge === 'bottom' ? 'below' : `on the ${dropEdge}`}`}</span>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
                 {link === 'reconnecting' && !session.archived ? <div className="pane__chip">Reconnecting…</div> : null}
                 {link === 'gone' ? <div className="pane__chip">This pane was removed</div> : null}
                 {pane.status === 'exited' && !session.archived ? (

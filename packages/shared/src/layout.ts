@@ -33,25 +33,49 @@ export function insertPane(
     return { type: 'split', direction, children: [layout, leaf(paneId)], sizes: [50, 50] };
 }
 
-function insertNextTo(node: Layout, paneId: string, targetId: string, direction: LayoutDirection): Layout {
+function insertNextTo(node: Layout, paneId: string, targetId: string, direction: LayoutDirection, before = false): Layout {
     if (node.type === 'pane') {
         if (node.paneId !== targetId) {
             return node;
         }
-        return { type: 'split', direction, children: [node, leaf(paneId)], sizes: [50, 50] };
+        return { type: 'split', direction, children: before ? [leaf(paneId), node] : [node, leaf(paneId)], sizes: [50, 50] };
     }
 
     const index = node.children.findIndex((child) => child.type === 'pane' && child.paneId === targetId);
     if (index >= 0 && node.direction === direction) {
         const children = [...node.children];
-        children.splice(index + 1, 0, leaf(paneId));
+        children.splice(before ? index : index + 1, 0, leaf(paneId));
         const sizes = [...node.sizes];
         const half = sizes[index] / 2;
         sizes.splice(index, 1, half, half);
         return { ...node, children, sizes };
     }
 
-    return { ...node, children: node.children.map((child) => insertNextTo(child, paneId, targetId, direction)) };
+    return { ...node, children: node.children.map((child) => insertNextTo(child, paneId, targetId, direction, before)) };
+}
+
+export type DropEdge = 'left' | 'right' | 'top' | 'bottom' | 'swap';
+
+function swapLeaves(node: Layout, a: string, b: string): Layout {
+    if (node.type === 'pane') {
+        return node.paneId === a ? leaf(b) : node.paneId === b ? leaf(a) : node;
+    }
+    return { ...node, children: node.children.map((child) => swapLeaves(child, a, b)) };
+}
+
+// Moves a pane next to another pane of the same layout, or swaps the two. Returns the layout
+// unchanged when either pane is missing or they are the same pane.
+export function movePane(layout: Layout | null, paneId: string, targetId: string, edge: DropEdge): Layout | null {
+    const ids = paneIds(layout);
+    if (!layout || paneId === targetId || !ids.includes(paneId) || !ids.includes(targetId)) {
+        return layout;
+    }
+    if (edge === 'swap') {
+        return swapLeaves(layout, paneId, targetId);
+    }
+    const rest = removePane(layout, paneId);
+    const direction: LayoutDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical';
+    return rest ? insertNextTo(rest, paneId, targetId, direction, edge === 'left' || edge === 'top') : layout;
 }
 
 export function removePane(layout: Layout | null, paneId: string): Layout | null {

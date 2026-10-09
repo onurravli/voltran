@@ -37,7 +37,9 @@ window. Closing the window stops nothing; run `voltran up` again to reopen it.
 - **Session**: one piece of work inside a project, such as a ticket, a branch or an investigation.
   It can carry a link to its ticket or pull request.
 - **Pane**: a terminal inside a session, which runs an agent (Claude Code, Codex, Gemini CLI), a
-  shell, or a command such as `npm run dev`. Panes split right or down and resize freely.
+  shell, or a command such as `npm run dev`. Panes split right or down and resize freely. Drag a pane
+  by its title bar onto an edge of another pane to move it there, onto its middle to swap the two, or
+  onto another session of the same project in the sidebar to move it into that session.
 
 ### Status
 

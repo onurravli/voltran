@@ -32,6 +32,7 @@ interface UiState {
     selectedSessionId: string | null;
     focusedPaneId: string | null;
     maximizedPaneId: string | null;
+    draggingPaneId: string | null;
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
     sidebarHidden: boolean;
@@ -46,6 +47,7 @@ interface UiState {
     selectSession: (id: string | null) => void;
     focusPane: (id: string | null) => void;
     toggleMaximize: (id: string) => void;
+    setDraggingPane: (id: string | null) => void;
     toggleProject: (id: string) => void;
     setShowArchived: (value: boolean) => void;
     toggleSidebar: () => void;
@@ -96,6 +98,7 @@ export const useUi = create<UiState>((set, get) => ({
     ...readPersisted(),
     focusedPaneId: null,
     maximizedPaneId: null,
+    draggingPaneId: null,
     zen: false,
     dialog: null,
     paneMenu: null,
@@ -116,6 +119,7 @@ export const useUi = create<UiState>((set, get) => ({
     selectSession: (id) => set({ selectedSessionId: id, maximizedPaneId: null }),
     focusPane: (id) => set({ focusedPaneId: id }),
     toggleMaximize: (id) => set({ maximizedPaneId: get().maximizedPaneId === id ? null : id }),
+    setDraggingPane: (draggingPaneId) => set({ draggingPaneId }),
     toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
     setShowArchived: (value) => set({ showArchived: value }),
     toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { insertPane, isValidLayout, normalizeSizes, paneIds, removePane, samePanes } from './layout.ts';
-import type { Layout } from './types.ts';
+import { insertPane, isValidLayout, movePane, normalizeSizes, paneIds, removePane, samePanes } from './layout.ts';
+import type { Layout, LayoutSplit } from './types.ts';
 
 describe('insertPane', () => {
     it('starts a layout with a single leaf', () => {
@@ -93,5 +93,68 @@ describe('validation helpers', () => {
         const b = insertPane(insertPane(null, 'y'), 'x', 'y', 'vertical');
         expect(samePanes(a, b)).toBe(true);
         expect(samePanes(a, insertPane(null, 'x'))).toBe(false);
+    });
+});
+
+describe('movePane', () => {
+    const row = (...ids: string[]): LayoutSplit => ({ type: 'split', direction: 'horizontal', children: ids.map((paneId) => ({ type: 'pane', paneId })), sizes: ids.map(() => 100 / ids.length) });
+
+    it('places a pane on the left or right of another pane in the same row', () => {
+        expect(paneIds(movePane(row('a', 'b', 'c'), 'c', 'a', 'left'))).toEqual(['c', 'a', 'b']);
+        expect(paneIds(movePane(row('a', 'b', 'c'), 'a', 'b', 'right'))).toEqual(['b', 'a', 'c']);
+    });
+
+    it('splits the target the other way for a top or bottom drop', () => {
+        const next = movePane(row('a', 'b', 'c'), 'c', 'a', 'top');
+        expect(next).toMatchObject({
+            type: 'split',
+            direction: 'horizontal',
+            children: [
+                { type: 'split', direction: 'vertical', children: [{ paneId: 'c' }, { paneId: 'a' }], sizes: [50, 50] },
+                { type: 'pane', paneId: 'b' },
+            ],
+        });
+        expect(next?.type === 'split' && next.sizes).toEqual([50, 50]);
+        expect(paneIds(movePane(row('a', 'b'), 'a', 'b', 'bottom'))).toEqual(['b', 'a']);
+    });
+
+    it('moves a pane out of a nested split and collapses what it leaves behind', () => {
+        const nested: Layout = {
+            type: 'split',
+            direction: 'horizontal',
+            children: [
+                { type: 'pane', paneId: 'a' },
+                { type: 'split', direction: 'vertical', children: [{ type: 'pane', paneId: 'b' }, { type: 'pane', paneId: 'c' }], sizes: [40, 60] },
+            ],
+            sizes: [30, 70],
+        };
+        expect(movePane(nested, 'c', 'a', 'left')).toEqual({
+            type: 'split',
+            direction: 'horizontal',
+            children: [{ type: 'pane', paneId: 'c' }, { type: 'pane', paneId: 'a' }, { type: 'pane', paneId: 'b' }],
+            sizes: [15, 15, 70],
+        });
+    });
+
+    it('swaps two panes and keeps their slots and sizes', () => {
+        const layout: Layout = { ...row('a', 'b', 'c'), sizes: [20, 30, 50] };
+        expect(movePane(layout, 'a', 'c', 'swap')).toEqual({ ...row('c', 'b', 'a'), sizes: [20, 30, 50] });
+    });
+
+    it('leaves the layout alone for a pane dropped on itself or panes that are not in it', () => {
+        const layout = row('a', 'b');
+        expect(movePane(layout, 'a', 'a', 'left')).toBe(layout);
+        expect(movePane(layout, 'x', 'a', 'left')).toBe(layout);
+        expect(movePane(layout, 'a', 'x', 'swap')).toBe(layout);
+        expect(movePane(null, 'a', 'b', 'left')).toBeNull();
+    });
+
+    it('always keeps the same set of panes', () => {
+        const layout = row('a', 'b', 'c');
+        for (const edge of ['left', 'right', 'top', 'bottom', 'swap'] as const) {
+            const next = movePane(layout, 'b', 'c', edge);
+            expect(samePanes(next, layout)).toBe(true);
+            expect(isValidLayout(next)).toBe(true);
+        }
     });
 });

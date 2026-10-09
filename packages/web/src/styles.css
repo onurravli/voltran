@@ -442,6 +442,15 @@ kbd {
     box-shadow: inset 0 0 0 1px var(--rivet);
 }
 
+.session-row.is-drop-candidate {
+    box-shadow: inset 0 0 0 1px var(--rivet);
+}
+
+.session-row.is-drop-target {
+    background: color-mix(in srgb, var(--focus) 16%, transparent);
+    box-shadow: inset 0 0 0 1px var(--focus);
+}
+
 .session-row.is-archived {
     opacity: 0.55;
 }
@@ -988,6 +997,58 @@ kbd {
     background: var(--bay);
     color: var(--text-muted);
     font-size: 12px;
+}
+
+.pane__header[draggable='true'] {
+    cursor: grab;
+}
+
+.pane.is-dragging {
+    opacity: 0.55;
+}
+
+.pane__drop {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+}
+
+.pane__drop-zone {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--focus);
+    border-radius: var(--radius-m);
+    background: color-mix(in srgb, var(--focus) 16%, transparent);
+    pointer-events: none;
+}
+
+.pane__drop-zone span {
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--bay);
+    color: var(--text);
+    font-size: 12px;
+}
+
+.pane__drop-zone--left {
+    inset: 6px 50% 6px 6px;
+}
+
+.pane__drop-zone--right {
+    inset: 6px 6px 6px 50%;
+}
+
+.pane__drop-zone--top {
+    inset: 6px 6px 50% 6px;
+}
+
+.pane__drop-zone--bottom {
+    inset: 50% 6px 6px 6px;
+}
+
+.pane__drop-zone--swap {
+    inset: 22%;
 }
 
 .pane__exit {

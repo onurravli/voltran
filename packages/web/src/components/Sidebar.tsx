@@ -67,6 +67,12 @@ function SubagentList({ session, agents }: { session: Session; agents: { agent: 
 function SessionRow({ session, panes }: { session: Session; panes: PaneView[] }) {
     const selected = useUi((state) => state.selectedSessionId === session.id);
     const selectSession = useUi((state) => state.selectSession);
+    const accepts = useUi((state) => {
+        const moving = state.draggingPaneId ? state.app?.panes.find((pane) => pane.id === state.draggingPaneId) : undefined;
+        const from = moving ? state.app?.sessions.find((entry) => entry.id === moving.sessionId) : undefined;
+        return Boolean(moving && from && moving.sessionId !== session.id && !session.archived && from.projectId === session.projectId);
+    });
+    const [over, setOver] = useState(false);
     const lead = leadPane(panes);
     const status = lead?.status ?? null;
     const showDetail = lead && (needsAttention(lead.status) || lead.status === 'working') && lead.detail;
@@ -76,8 +82,28 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         <li>
             <button
                 type="button"
-                className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}`}
+                className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
                 onClick={() => selectSession(session.id)}
+                onDragOver={(event) => {
+                    if (accepts) {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                        setOver(true);
+                    }
+                }}
+                onDragLeave={() => setOver(false)}
+                onDrop={(event) => {
+                    const moving = useUi.getState().draggingPaneId;
+                    setOver(false);
+                    if (!accepts || !moving) {
+                        return;
+                    }
+                    event.preventDefault();
+                    useUi.getState().setDraggingPane(null);
+                    api.movePane(moving, { sessionId: session.id })
+                        .then(() => useUi.getState().showToast(`Moved to ${session.title}`))
+                        .catch(reportError);
+                }}
                 aria-current={selected ? 'true' : undefined}
             >
                 <StatusLamp status={status} failed={status === 'exited' && lead?.exitCode !== 0 && lead?.exitCode !== null} />

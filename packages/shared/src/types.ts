@@ -151,6 +151,10 @@ export interface UpdatePaneBody {
     title?: string;
 }
 
+export interface MovePaneBody {
+    sessionId: string;
+}
+
 export type AttentionStatus = 'needs-input' | 'done' | 'exited';
 
 export type ServerEvent =

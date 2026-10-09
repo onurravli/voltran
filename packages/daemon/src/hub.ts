@@ -13,6 +13,7 @@ import {
     type CreateProjectBody,
     type CreateSessionBody,
     type Layout,
+    type MovePaneBody,
     type Pane,
     type PaneSpec,
     type Project,
@@ -280,6 +281,27 @@ export class Hub {
             this.store.updatePane(id, { title });
             this.panes.updatePane(id, { title });
         }
+        return this.mustGetPane(id);
+    }
+
+    movePane(id: string, body: MovePaneBody): Pane {
+        const pane = this.mustGetPane(id);
+        const from = this.mustGetSession(pane.sessionId);
+        const to = this.mustGetSession(requireString(body?.sessionId, 'sessionId', 64));
+        if (to.id === from.id) {
+            return pane;
+        }
+        if (to.projectId !== from.projectId) {
+            throw new HttpError(400, 'a pane can only move to another session of the same project');
+        }
+        if (to.archived) {
+            throw new HttpError(409, 'restore the session before moving panes into it');
+        }
+        this.store.updatePane(id, { sessionId: to.id });
+        this.panes.updatePane(id, { sessionId: to.id });
+        this.store.updateSession(from.id, { layout: removePane(from.layout, id) });
+        this.store.updateSession(to.id, { layout: insertPane(to.layout, id) });
+        this.scheduleBroadcast();
         return this.mustGetPane(id);
     }
 

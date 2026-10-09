@@ -187,14 +187,14 @@ export class Store {
             );
     }
 
-    updatePane(id: string, patch: Partial<Pick<Pane, 'title' | 'agentSessionId' | 'agentResumable' | 'ended'>>): void {
+    updatePane(id: string, patch: Partial<Pick<Pane, 'sessionId' | 'title' | 'agentSessionId' | 'agentResumable' | 'ended'>>): void {
         const current = this.getPane(id);
         if (!current) {
             return;
         }
         const next = { ...current, ...patch };
-        this.db.prepare('update panes set title = ?, agent_session_id = ?, agent_resumable = ?, ended = ? where id = ?')
-            .run(next.title, next.agentSessionId, next.agentResumable ? 1 : 0, next.ended ? 1 : 0, id);
+        this.db.prepare('update panes set session_id = ?, title = ?, agent_session_id = ?, agent_resumable = ?, ended = ? where id = ?')
+            .run(next.sessionId, next.title, next.agentSessionId, next.agentResumable ? 1 : 0, next.ended ? 1 : 0, id);
     }
 
     deletePane(id: string): void {

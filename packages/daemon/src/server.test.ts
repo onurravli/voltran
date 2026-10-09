@@ -163,6 +163,59 @@ describe('validation', () => {
     });
 });
 
+describe('moving panes', () => {
+    it('moves a running pane to another session of the same project without restarting it', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const projectId = state.projects[0].id;
+        const { body: from } = await api<Session>('POST', '/api/sessions', { projectId, title: 'from', panes: [{ adapter: 'shell' }, { adapter: 'shell' }] });
+        const { body: to } = await api<Session>('POST', '/api/sessions', { projectId, title: 'to', panes: [{ adapter: 'shell' }] });
+        const [moving, staying] = from.layout?.type === 'split' ? from.layout.children.map((child) => (child.type === 'pane' ? child.paneId : '')) : [];
+        const pane = async (id: string): Promise<PaneView | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((entry) => entry.id === id);
+
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${moving}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 80, rows: 24 }));
+        await until(async () => (await pane(moving))?.pid !== null);
+        const pid = (await pane(moving))?.pid;
+
+        const { status, body: moved } = await api<PaneView>('POST', `/api/panes/${moving}/move`, { sessionId: to.id });
+        expect(status).toBe(200);
+        expect(moved.sessionId).toBe(to.id);
+        const { body: after } = await api<AppState>('GET', '/api/state');
+        expect(after.sessions.find((entry) => entry.id === from.id)?.layout).toEqual({ type: 'pane', paneId: staying });
+        const target = after.sessions.find((entry) => entry.id === to.id)?.layout;
+        expect(target?.type === 'split' && target.children.map((child) => (child.type === 'pane' ? child.paneId : ''))).toContain(moving);
+        expect((await pane(moving))?.pid).toBe(pid);
+
+        expect((await api('POST', `/api/panes/${moving}/move`, { sessionId: to.id })).status).toBe(200);
+        socket.close();
+        await api('DELETE', `/api/sessions/${from.id}`);
+        await api('DELETE', `/api/sessions/${to.id}`);
+    });
+
+    it('refuses other projects, archived sessions and unknown ids', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const projectId = state.projects[0].id;
+        const { body: source } = await api<Session>('POST', '/api/sessions', { projectId, title: 'source', panes: [{ adapter: 'shell' }] });
+        const paneId = source.layout?.type === 'pane' ? source.layout.paneId : '';
+        const { body: other } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'other-project-')) });
+        const { body: elsewhere } = await api<Session>('POST', '/api/sessions', { projectId: other.id, title: 'elsewhere' });
+        const { body: archived } = await api<Session>('POST', '/api/sessions', { projectId, title: 'archived' });
+        await api('PATCH', `/api/sessions/${archived.id}`, { archived: true });
+
+        expect((await api('POST', `/api/panes/${paneId}/move`, { sessionId: elsewhere.id })).status).toBe(400);
+        expect((await api('POST', `/api/panes/${paneId}/move`, { sessionId: archived.id })).status).toBe(409);
+        expect((await api('POST', `/api/panes/${paneId}/move`, { sessionId: 'unknown' })).status).toBe(404);
+        expect((await api('POST', '/api/panes/unknown/move', { sessionId: source.id })).status).toBe(404);
+        expect((await api('POST', `/api/panes/${paneId}/move`, {})).status).toBe(400);
+        expect((await fetch(`${base}/api/panes/${paneId}/move`, { method: 'POST', body: JSON.stringify({ sessionId: source.id }) })).status).toBe(401);
+
+        for (const id of [source.id, elsewhere.id, archived.id]) {
+            await api('DELETE', `/api/sessions/${id}`);
+        }
+    });
+});
+
 describe('agent panes', () => {
     it('track Claude status through hooks that carry a per-pane secret', async () => {
         const { body: state } = await api<AppState>('GET', '/api/state');
