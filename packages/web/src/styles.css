@@ -856,6 +856,7 @@ kbd {
 .pane__terminal {
     position: absolute;
     inset: 6px 4px 4px 10px;
+    isolation: isolate;
 }
 
 .terminal-host {
