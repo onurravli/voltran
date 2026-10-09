@@ -6,6 +6,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import type { PaneServerMessage } from '@voltran/shared';
 import { wsUrl } from './api.ts';
 import { fontStack, type TerminalFont } from './fonts.ts';
+import { translateKey } from './keymap.ts';
 import { isAppShortcut } from './shortcuts.ts';
 import { useUi } from './store.ts';
 
@@ -39,12 +40,6 @@ const MIN_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 5000;
 const RESIZE_DEBOUNCE_MS = 60;
 const RECONNECT_NOTICE_MS = 1000;
-// Meta+Enter (what Option+Enter sends with macOptionIsMeta): agent CLIs read it as "insert newline".
-const NEWLINE_SEQUENCE = '\x1b\r';
-
-function isShiftEnter(event: KeyboardEvent): boolean {
-    return event.key === 'Enter' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
-}
 
 export class TerminalSession {
     readonly paneId: string;
@@ -159,10 +154,11 @@ export class TerminalSession {
         if (isAppShortcut(event)) {
             return false;
         }
-        if (isShiftEnter(event)) {
+        const sequence = translateKey(event);
+        if (sequence !== null) {
             if (event.type === 'keydown') {
                 event.preventDefault();
-                this.term.input(NEWLINE_SEQUENCE);
+                this.term.input(sequence);
             }
             return false;
         }
