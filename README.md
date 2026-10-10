@@ -63,7 +63,7 @@ full screen.
 
 Panes that need you collect in the **Needs you** tray at the bottom of the sidebar, in the tab title,
 and as desktop notifications once you turn alerts on. While any agent in a project is working, a
-light sweeps across the coloured line above its sessions.
+light sweeps along the line in the project's colour under the session's title bar.
 
 ### Subagents
 

@@ -42,7 +42,7 @@ describe('THEMES', () => {
             }
             expect(Object.keys(theme.ui).sort(), theme.id).toEqual([...UI_VARIABLES].sort());
             for (const name of UI_VARIABLES) {
-                expect(theme.ui[name], `${theme.id} ${name}`).toMatch(name === '--project-text-mix' ? /^\d+%$/ : COLOR);
+                expect(theme.ui[name], `${theme.id} ${name}`).toMatch(COLOR);
             }
             expect(['dark', 'light']).toContain(theme.scheme);
             expect(theme.minimumContrastRatio, theme.id).toBeGreaterThanOrEqual(1);

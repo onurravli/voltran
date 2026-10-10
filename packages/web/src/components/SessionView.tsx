@@ -4,13 +4,14 @@ import type { DropEdge, Layout, PaneView, Project, Session } from '@voltran/shar
 import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
+import { linkLabel, shortPath } from '../labels.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
 import {
-    ArchiveIcon,
     CloseIcon,
     LinkIcon,
     MaximizeIcon,
+    MoreIcon,
     PlusIcon,
     RestartIcon,
     RestoreIcon,
@@ -18,12 +19,20 @@ import {
     SplitDownIcon,
     SplitRightIcon,
     StopIcon,
-    TrashIcon,
 } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
-function InlineEdit({ value, onSave, className, label }: { value: string; onSave: (next: string) => Promise<unknown>; className: string; label: string }) {
-    const [editing, setEditing] = useState(false);
+function InlineEdit({ value, onSave, className, label, editing: requested, onEditingChange }: {
+    value: string;
+    onSave: (next: string) => Promise<unknown>;
+    className: string;
+    label: string;
+    editing?: boolean;
+    onEditingChange?: (editing: boolean) => void;
+}) {
+    const [own, setOwn] = useState(false);
+    const editing = requested ?? own;
+    const setEditing = onEditingChange ?? setOwn;
     const [draft, setDraft] = useState(value);
 
     useEffect(() => {
@@ -320,6 +329,93 @@ function LayoutNode({ node, path, session, panes, onSizes }: {
     );
 }
 
+interface MenuItem {
+    label: string;
+    note?: string;
+    danger?: boolean;
+    separated?: boolean;
+    onSelect: () => void;
+}
+
+function MoreMenu({ label, items }: { label: string; items: MenuItem[] }) {
+    const [open, setOpen] = useState(false);
+    const root = useRef<HTMLDivElement>(null);
+    const trigger = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+        const entries = (): HTMLButtonElement[] => [...(root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+        const dismiss = (): void => setOpen(false);
+        const onPointer = (event: MouseEvent): void => {
+            if (!root.current?.contains(event.target as Node)) {
+                dismiss();
+            }
+        };
+        const onKey = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape') {
+                event.stopPropagation();
+                dismiss();
+                trigger.current?.focus();
+            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const list = entries();
+                const index = list.indexOf(document.activeElement as HTMLButtonElement);
+                const step = event.key === 'ArrowDown' ? 1 : -1;
+                list[index < 0 ? 0 : (index + step + list.length) % list.length]?.focus();
+            }
+        };
+        window.addEventListener('mousedown', onPointer);
+        window.addEventListener('keydown', onKey, true);
+        window.addEventListener('resize', dismiss);
+        window.addEventListener('blur', dismiss);
+        entries()[0]?.focus();
+        return () => {
+            window.removeEventListener('mousedown', onPointer);
+            window.removeEventListener('keydown', onKey, true);
+            window.removeEventListener('resize', dismiss);
+            window.removeEventListener('blur', dismiss);
+        };
+    }, [open]);
+
+    return (
+        <div className="more" ref={root}>
+            <button
+                ref={trigger}
+                type="button"
+                className="icon-button icon-button--bar"
+                aria-label={label}
+                title={label}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                onClick={() => setOpen(!open)}
+            >
+                <MoreIcon size={16} />
+            </button>
+            {open ? (
+                <div className="menu menu--anchored" role="menu" aria-label={label}>
+                    {items.map((item) => (
+                        <button
+                            key={item.label}
+                            type="button"
+                            role="menuitem"
+                            className={`menu__item${item.danger ? ' menu__item--danger' : ''}${item.separated ? ' menu__item--separated' : ''}`}
+                            onClick={() => {
+                                setOpen(false);
+                                item.onSelect();
+                            }}
+                        >
+                            <span>{item.label}</span>
+                            {item.note ? <span className="menu__note">{item.note}</span> : null}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 function SessionHeader({ session, project }: { session: Session; project: Project | undefined }) {
     const openPaneMenu = useUi((state) => state.openPaneMenu);
     const openDialog = useUi((state) => state.openDialog);
@@ -331,6 +427,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
             .map((entry) => entry.id));
         return state.app?.panes.some((pane) => pane.status === 'working' && sessionIds.has(pane.sessionId)) ?? false;
     });
+    const [renaming, setRenaming] = useState(false);
     const [editingLink, setEditingLink] = useState(false);
     const [linkDraft, setLinkDraft] = useState(session.link ?? '');
 
@@ -340,6 +437,12 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
         if (next !== (session.link ?? '')) {
             api.updateSession(session.id, { link: next || null }).catch(reportError);
         }
+    };
+
+    const copyPath = (): void => {
+        navigator.clipboard.writeText(session.cwd)
+            .then(() => useUi.getState().showToast('Copied the folder path'))
+            .catch(reportError);
     };
 
     const remove = (): void => {
@@ -352,59 +455,76 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
         });
     };
 
+    const menu: MenuItem[] = [
+        { label: 'Rename', onSelect: () => setRenaming(true) },
+        {
+            label: session.link ? 'Edit link' : 'Add link',
+            onSelect: () => {
+                setLinkDraft(session.link ?? '');
+                setEditingLink(true);
+            },
+        },
+        { label: 'Copy folder path', onSelect: copyPath },
+        session.archived
+            ? { label: 'Restore session', separated: true, onSelect: () => api.updateSession(session.id, { archived: false }).catch(reportError) }
+            : { label: 'Archive session', note: 'stops its processes', separated: true, onSelect: () => api.updateSession(session.id, { archived: true }).catch(reportError) },
+        { label: 'Delete session…', danger: true, onSelect: remove },
+    ];
+
     return (
         <header className={`session-header${projectWorking ? ' session-header--working' : ''}`} style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}>
             <button
                 type="button"
-                className="icon-button"
+                className="icon-button icon-button--bar"
                 title={sidebarHidden ? 'Show the sidebar (⌃⌥B)' : 'Hide the sidebar (⌃⌥B)'}
+                aria-label={sidebarHidden ? 'Show the sidebar' : 'Hide the sidebar'}
                 aria-pressed={!sidebarHidden}
                 onClick={toggleSidebar}
             >
-                <SidebarIcon size={15} />
+                <SidebarIcon size={16} />
             </button>
-            <div className="session-header__main">
+            <div className="session-header__crumb">
+                <span className="session-header__project" title={project?.path}>{project?.name}</span>
+                <span className="session-header__slash" aria-hidden="true">/</span>
                 <InlineEdit
                     className="session-header__title"
                     label="Session name"
                     value={session.title}
+                    editing={renaming}
+                    onEditingChange={setRenaming}
                     onSave={(title) => api.updateSession(session.id, { title })}
                 />
-                <div className="session-header__meta">
-                    <span className="session-header__project">{project?.name}</span>
-                    <code className="session-header__path" title={session.cwd}>{session.cwd}</code>
-                    {editingLink ? (
-                        <input
-                            className="session-header__link-input"
-                            aria-label="Session link"
-                            placeholder="https://…"
-                            value={linkDraft}
-                            autoFocus
-                            onChange={(event) => setLinkDraft(event.target.value)}
-                            onBlur={saveLink}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                    saveLink();
-                                } else if (event.key === 'Escape') {
-                                    setEditingLink(false);
-                                }
-                            }}
-                        />
-                    ) : session.link ? (
-                        <a className="session-header__link" href={session.link} target="_blank" rel="noreferrer noopener" onDoubleClick={(event) => { event.preventDefault(); setLinkDraft(session.link ?? ''); setEditingLink(true); }} title="Double-click to edit">
-                            <LinkIcon size={13} /> {new URL(session.link).hostname}{new URL(session.link).pathname.replace(/\/$/, '')}
-                        </a>
-                    ) : (
-                        <button type="button" className="text-button" onClick={() => { setLinkDraft(''); setEditingLink(true); }}>
-                            <LinkIcon size={13} /> Add link
-                        </button>
-                    )}
-                </div>
             </div>
+            <button type="button" className="session-header__path" title={`${session.cwd}\nClick to copy`} onClick={copyPath}>
+                {shortPath(session.cwd)}
+            </button>
+            {editingLink ? (
+                <input
+                    className="session-header__link-input"
+                    aria-label="Session link"
+                    placeholder="Ticket or PR URL"
+                    value={linkDraft}
+                    autoFocus
+                    onChange={(event) => setLinkDraft(event.target.value)}
+                    onBlur={saveLink}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            saveLink();
+                        } else if (event.key === 'Escape') {
+                            setEditingLink(false);
+                        }
+                    }}
+                />
+            ) : session.link ? (
+                <a className="session-header__link" href={session.link} target="_blank" rel="noreferrer noopener" title={session.link}>
+                    <LinkIcon size={13} />
+                    <span>{linkLabel(session.link)}</span>
+                </a>
+            ) : null}
             <div className="session-header__actions">
                 <button
                     type="button"
-                    className="button"
+                    className="button button--bar"
                     onClick={(event) => {
                         const rect = event.currentTarget.getBoundingClientRect();
                         openPaneMenu({ sessionId: session.id, anchor: { x: rect.right, y: rect.bottom + 4 } });
@@ -412,17 +532,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                 >
                     <PlusIcon size={13} /> Add pane
                 </button>
-                <button
-                    type="button"
-                    className="icon-button"
-                    title={session.archived ? 'Restore session' : 'Archive session (stops its processes)'}
-                    onClick={() => api.updateSession(session.id, { archived: !session.archived }).catch(reportError)}
-                >
-                    <ArchiveIcon size={15} />
-                </button>
-                <button type="button" className="icon-button" title="Delete session" onClick={remove}>
-                    <TrashIcon size={15} />
-                </button>
+                <MoreMenu label="Session actions" items={menu} />
             </div>
         </header>
     );

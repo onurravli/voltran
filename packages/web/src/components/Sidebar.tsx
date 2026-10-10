@@ -258,7 +258,7 @@ export function Sidebar() {
                 </div>
                 <button
                     type="button"
-                    className="button button--small"
+                    className="button button--bar"
                     onClick={() => openDialog({ kind: projects.length === 0 ? 'project' : 'session' })}
                     title="Start a new session (⌃⌥N)"
                 >
