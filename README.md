@@ -75,12 +75,13 @@ has finished.
 
 ### Shortcuts
 
-Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The one exception is ⌘K
-(⌃⌥K works too), which means nothing to a terminal.
+Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The exceptions are ⌘K
+(⌃⌥K works too) and ⌘F, which mean nothing to a terminal.
 
 | Keys | Action |
 |---|---|
 | ⌘K | Command palette: every action below, plus the theme and the terminal font family and size. Type a session or pane name to jump to it |
+| ⌘F | Find in the focused terminal's scrollback. ↩ / ⇧↩ or ⌘G / ⇧⌘G step through the matches, Esc closes. A capital letter makes it case-sensitive |
 | ⌃⌥J | Jump to the next pane that needs you |
 | ⌃⌥B | Show or hide the sidebar |
 | ⌃⌥Z | Zen mode: the focused pane alone, full screen. Esc still reaches the terminal; ⇧Esc or ⌃⌥Z leaves |

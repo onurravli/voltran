@@ -8,6 +8,8 @@ import { linkLabel, shortPath } from '../labels.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
 import {
+    ChevronDownIcon,
+    ChevronUpIcon,
     CloseIcon,
     LinkIcon,
     MaximizeIcon,
@@ -38,6 +40,89 @@ function paneSummary(pane: PaneView, kind: 'agent' | 'shell' | 'process' | undef
     return pane.detail ? `${STATUS_LABEL[pane.status]}: ${pane.detail}` : STATUS_LABEL[pane.status];
 }
 
+function FindBar({ paneId }: { paneId: string }) {
+    const token = useUi((state) => state.findToken);
+    const step = useUi((state) => state.findStep);
+    const closeFind = useUi((state) => state.closeFind);
+    const terminal = peekTerminal(paneId);
+    const [query, setQuery] = useState(() => terminal?.lastSearch ?? '');
+    const [results, setResults] = useState<{ resultIndex: number; resultCount: number } | null>(null);
+    const input = useRef<HTMLInputElement>(null);
+    const handledStep = useRef(step?.token);
+
+    useEffect(() => {
+        input.current?.focus();
+        input.current?.select();
+    }, [token]);
+
+    useEffect(() => {
+        if (!terminal) {
+            return;
+        }
+        const off = terminal.onSearchResults(setResults);
+        return () => {
+            off();
+            terminal.clearSearch();
+        };
+    }, [terminal]);
+
+    useEffect(() => {
+        terminal?.find(query, 'next', true);
+        if (!query) {
+            setResults(null);
+        }
+    }, [terminal, query]);
+
+    useEffect(() => {
+        if (step && step.token !== handledStep.current) {
+            handledStep.current = step.token;
+            terminal?.find(query, step.direction);
+        }
+    }, [step, terminal, query]);
+
+    const move = (direction: 'next' | 'previous'): void => terminal?.find(query, direction);
+    const close = (): void => {
+        closeFind();
+        terminal?.focus();
+    };
+
+    const count = results?.resultCount ?? 0;
+    const status = !query ? '' : count === 0 ? 'No matches' : results && results.resultIndex >= 0 ? `${results.resultIndex + 1} of ${count}` : `${count} matches`;
+
+    return (
+        <div className="find" role="search">
+            <input
+                ref={input}
+                className="find__input"
+                aria-label="Find in terminal"
+                placeholder="Find"
+                value={query}
+                spellCheck={false}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        move(event.shiftKey ? 'previous' : 'next');
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        close();
+                    }
+                }}
+            />
+            <span className="find__count" aria-live="polite">{status}</span>
+            <button type="button" className="icon-button" aria-label="Previous match (⇧⌘G)" title="Previous match (⇧⌘G)" disabled={count === 0} onClick={() => move('previous')}>
+                <ChevronUpIcon size={14} />
+            </button>
+            <button type="button" className="icon-button" aria-label="Next match (⌘G)" title="Next match (⌘G)" disabled={count === 0} onClick={() => move('next')}>
+                <ChevronDownIcon size={14} />
+            </button>
+            <button type="button" className="icon-button" aria-label="Close (Esc)" title="Close (Esc)" onClick={close}>
+                <CloseIcon size={14} />
+            </button>
+        </div>
+    );
+}
+
 function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const focused = useUi((state) => state.focusedPaneId === pane.id);
@@ -47,6 +132,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     const openDialog = useUi((state) => state.openDialog);
     const adapter = useUi((state) => state.app?.adapters.find((entry) => entry.id === pane.adapter));
     const dragging = useUi((state) => state.draggingPaneId);
+    const finding = useUi((state) => state.findPaneId === pane.id);
     const [link, setLink] = useState<LinkState>('connecting');
     const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
     const pressedOn = useRef<Element | null>(null);
@@ -189,6 +275,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                 ) : (
                     <div className="pane__terminal" ref={containerRef} />
                 )}
+                {finding && !session.archived ? <FindBar paneId={pane.id} /> : null}
                 {canDrop ? (
                     <div
                         className="pane__drop"

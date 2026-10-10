@@ -1111,6 +1111,50 @@ kbd {
     font-size: 12px;
 }
 
+.find {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 4px 4px 6px;
+    border: 1px solid var(--rivet);
+    border-radius: var(--radius-m);
+    background: var(--bay);
+    box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.35);
+}
+
+.find__input {
+    width: 200px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--rivet);
+    border-radius: var(--radius-s);
+    background: var(--hull);
+    font-size: 12px;
+}
+
+.find__input:focus {
+    border-color: var(--focus);
+    outline: none;
+}
+
+.find__count {
+    min-width: 72px;
+    padding: 0 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.find .icon-button:disabled {
+    opacity: 0.4;
+}
+
 .pane__header[draggable='true'] {
     cursor: grab;
 }
@@ -1374,7 +1418,7 @@ kbd {
 
 .shortcuts__row {
     display: grid;
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 92px 1fr;
     gap: 12px;
     align-items: baseline;
 }

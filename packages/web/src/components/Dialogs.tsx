@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { AdapterId, AdapterInfo, PaneSpec } from '@voltran/shared';
 import { api } from '../api.ts';
-import { SHORTCUTS } from '../shortcuts.ts';
+import { FIND_KEYS, SHORTCUTS } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
 import { CommandPalette } from './CommandPalette.tsx';
 
@@ -220,8 +220,8 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     return (
         <Modal title="Keyboard shortcuts" onClose={onClose}>
             <dl className="shortcuts">
-                {SHORTCUTS.map((shortcut) => (
-                    <div key={shortcut.code} className="shortcuts__row">
+                {[...SHORTCUTS, ...FIND_KEYS].map((shortcut) => (
+                    <div key={shortcut.keys} className="shortcuts__row">
                         <dt><kbd>{shortcut.keys}</kbd></dt>
                         <dd>{shortcut.label}</dd>
                     </div>

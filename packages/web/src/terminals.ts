@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon, type ISearchOptions, type ISearchResultChangeEvent } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -9,7 +10,7 @@ import { fontStack, type TerminalFont } from './fonts.ts';
 import { translateKey } from './keymap.ts';
 import { isAppShortcut } from './shortcuts.ts';
 import { useUi } from './store.ts';
-import { themeById } from './themes.ts';
+import { mix, themeById } from './themes.ts';
 
 export type LinkState = 'connecting' | 'open' | 'reconnecting' | 'gone';
 
@@ -22,6 +23,8 @@ export class TerminalSession {
     readonly paneId: string;
     readonly term: Terminal;
     private readonly fit = new FitAddon();
+    private readonly search = new SearchAddon({ highlightLimit: 1000 });
+    private searchQuery = '';
     private readonly host: HTMLDivElement;
     private opened = false;
     private webgl: WebglAddon | null = null;
@@ -53,6 +56,7 @@ export class TerminalSession {
             theme: theme.terminal,
         });
         this.term.loadAddon(this.fit);
+        this.term.loadAddon(this.search);
         this.term.loadAddon(new WebLinksAddon((_event, uri) => window.open(uri, '_blank', 'noopener')));
         this.term.loadAddon(new Unicode11Addon());
         this.term.unicode.activeVersion = '11';
@@ -95,6 +99,33 @@ export class TerminalSession {
         this.term.options.fontFamily = fontStack(font.family);
         this.term.options.fontSize = font.size;
         this.refit();
+    }
+
+    get lastSearch(): string {
+        return this.searchQuery;
+    }
+
+    find(query: string, direction: 'next' | 'previous', incremental = false): void {
+        this.searchQuery = query;
+        if (!query) {
+            this.search.clearDecorations();
+            return;
+        }
+        const options = searchOptions(query, incremental);
+        if (direction === 'next') {
+            this.search.findNext(query, options);
+        } else {
+            this.search.findPrevious(query, options);
+        }
+    }
+
+    clearSearch(): void {
+        this.search.clearDecorations();
+    }
+
+    onSearchResults(listener: (results: ISearchResultChangeEvent) => void): () => void {
+        const subscription = this.search.onDidChangeResults(listener);
+        return () => subscription.dispose();
     }
 
     onLinkState(listener: (state: LinkState) => void): () => void {
@@ -293,6 +324,21 @@ export class TerminalSession {
             socket.send(JSON.stringify(message));
         }
     }
+}
+
+function searchOptions(query: string, incremental: boolean): ISearchOptions {
+    const { background, yellow } = themeById(useUi.getState().themeId).terminal;
+    return {
+        caseSensitive: query !== query.toLowerCase(),
+        incremental,
+        decorations: {
+            matchBackground: mix(background, yellow, 0.3),
+            matchOverviewRuler: yellow,
+            activeMatchBackground: mix(background, yellow, 0.6),
+            activeMatchBorder: yellow,
+            activeMatchColorOverviewRuler: yellow,
+        },
+    };
 }
 
 const sessions = new Map<string, TerminalSession>();

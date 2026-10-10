@@ -3,7 +3,7 @@ import type { PaneStatus } from '@voltran/shared';
 import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFontInstalled, type TerminalFont } from '../fonts.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
-import { SHORTCUTS, togglePalette } from '../shortcuts.ts';
+import { FIND_SHORTCUT, SHORTCUTS, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { THEMES, themeById, type Theme } from '../themes.ts';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -131,8 +131,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             hint: place.keywords,
             run: () => (place.paneId ? revealPane(place.sessionId, place.paneId) : useUi.getState().selectSession(place.sessionId)),
         })) : [];
+        const findIn = visibleFocusedPane();
         items = filterItems<Item>([
             ...places,
+            ...(findIn ? [{ id: 'find', ...FIND_SHORTCUT, run: () => useUi.getState().openFind(findIn) }] : []),
             { id: 'theme', label: 'Theme…', hint: themeById(themeId).name, keepOpen: true, run: enterThemes },
             { id: 'font-family', label: 'Font family…', hint: font.family, keepOpen: true, run: enterFonts },
             { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },

@@ -158,12 +158,35 @@ function isPaletteKey(event: KeyboardEvent): boolean {
     return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyK';
 }
 
+export function visibleFocusedPane(): string | null {
+    const { app, focusedPaneId, selectedSessionId } = useUi.getState();
+    const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
+    return pane && pane.sessionId === selectedSessionId ? pane.id : null;
+}
+
+function findablePane(): string | null {
+    return useUi.getState().dialog ? null : visibleFocusedPane();
+}
+
+function isFindKey(event: KeyboardEvent): boolean {
+    return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyF' && findablePane() !== null;
+}
+
+function isFindStepKey(event: KeyboardEvent): boolean {
+    return event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'KeyG' && useUi.getState().findPaneId !== null;
+}
+
+export const FIND_SHORTCUT = { keys: '⌘F', label: 'Find in the focused terminal' };
+
+export const FIND_KEYS = [FIND_SHORTCUT, { keys: '⌘G / ⇧⌘G', label: 'Next / previous match' }];
+
 function isZenExitKey(event: KeyboardEvent): boolean {
     return event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && useUi.getState().zen;
 }
 
 export function isAppShortcut(event: KeyboardEvent): boolean {
-    return isPaletteKey(event) || isZenExitKey(event) || (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code));
+    return isPaletteKey(event) || isFindKey(event) || isFindStepKey(event) || isZenExitKey(event)
+        || (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code));
 }
 
 export function installShortcuts(): () => void {
@@ -175,6 +198,16 @@ export function installShortcuts(): () => void {
         event.stopPropagation();
         if (isZenExitKey(event)) {
             leaveZen();
+            return;
+        }
+        const ui = useUi.getState();
+        const findable = isFindKey(event) ? findablePane() : null;
+        if (findable) {
+            ui.openFind(findable);
+            return;
+        }
+        if (isFindStepKey(event)) {
+            ui.stepFind(event.shiftKey ? 'previous' : 'next');
             return;
         }
         BY_CODE.get(event.code)?.run();
