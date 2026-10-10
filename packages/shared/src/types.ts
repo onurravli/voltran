@@ -169,7 +169,8 @@ export type ServerEvent =
     };
 
 export type PaneServerMessage =
-    | { type: 'snapshot'; data: string }
+    | { type: 'snapshot'; data: string; cols: number; rows: number }
+    | { type: 'resize'; cols: number; rows: number }
     | { type: 'exit'; code: number | null };
 
 export type PaneClientMessage =

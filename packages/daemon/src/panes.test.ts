@@ -14,14 +14,17 @@ interface Recorded {
 class FakeClient implements PaneClient {
     texts: string[] = [];
     output = '';
+    stream: unknown[] = [];
     closed: { code: number; reason: string } | null = null;
 
     sendText(text: string): void {
         this.texts.push(text);
+        this.stream.push(JSON.parse(text));
     }
 
     sendBinary(data: Buffer): void {
         this.output += data.toString('utf8');
+        this.stream.push(data.toString('utf8'));
     }
 
     close(code: number, reason: string): void {
@@ -37,6 +40,13 @@ class FakeClient implements PaneClient {
 type Internals = {
     runtimes: Map<string, { hookSecret: string | null }>;
     write(runtime: unknown, data: string): void;
+};
+
+type Mirror = {
+    term: {
+        write(data: string, done: () => void): void;
+        buffer: { active: { getLine(y: number): { translateToString(trim: boolean): string } | undefined } };
+    };
 };
 
 const cleanups: (() => void | Promise<void>)[] = [];
@@ -130,6 +140,46 @@ describe('PaneManager', () => {
         expect(client.snapshot()).toContain('first line');
         expect(client.snapshot()).not.toContain('second line');
         expect(client.output).toBe('second line\r\n');
+    });
+
+    it('puts each resize into the output stream, after the output that came before it', async () => {
+        const { manager } = setup();
+        const pane = makePane({ ended: true });
+        manager.add(pane);
+        const internals = manager as unknown as Internals;
+        const runtime = internals.runtimes.get(pane.id) as unknown as Mirror;
+        const client = new FakeClient();
+        manager.attach(pane.id, client);
+        await until(() => client.texts.length > 0);
+        expect(client.stream[0]).toMatchObject({ type: 'snapshot', cols: 120, rows: 32 });
+
+        internals.write(runtime, '\x1b[1;100H*\r\n');
+        manager.resize(pane.id, 40, 10);
+        internals.write(runtime, 'after');
+        manager.resize(pane.id, 40, 10);
+
+        expect(client.stream.slice(1)).toEqual(['\x1b[1;100H*\r\n', { type: 'resize', cols: 40, rows: 10 }, 'after']);
+        const lines = await new Promise<string[]>((resolve) => {
+            runtime.term.write('', () => resolve([0, 1, 2, 3].map((y) => runtime.term.buffer.active.getLine(y)?.translateToString(true) ?? '')));
+        });
+        expect(lines).toEqual(['', '', `${' '.repeat(19)}*`, 'after']);
+    });
+
+    it('sizes a snapshot to its content and queues a resize that comes before the snapshot is sent', async () => {
+        const { manager } = setup();
+        const pane = makePane({ ended: true });
+        manager.add(pane);
+        manager.resize(pane.id, 50, 12);
+
+        const client = new FakeClient();
+        manager.attach(pane.id, client);
+        manager.resize(pane.id, 60, 14);
+        await until(() => client.stream.length >= 2);
+
+        expect(client.stream).toEqual([
+            expect.objectContaining({ type: 'snapshot', cols: 50, rows: 12 }),
+            { type: 'resize', cols: 60, rows: 14 },
+        ]);
     });
 
     it('accepts hook reports only with the secret of the current process', () => {

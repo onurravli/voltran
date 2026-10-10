@@ -124,9 +124,13 @@ packages/
   start, panes come back asleep with their scrollback and start when you open them. Claude Code
   panes come back with `claude --resume <session>`, so the conversation continues. Open windows
   reconnect on their own.
-- **Several windows.** Every window shows the same panes, but only the focused one sets their
-  terminal size, and a window re-sends its sizes when it regains focus. A background window can look
-  garbled until you switch to it.
+- **Terminal sizes.** A window never resizes a terminal by itself: it asks the daemon for the size
+  that fits, and the daemon resizes the process and its own copy and marks the resize in the output
+  stream. Every window applies it at that mark, so all copies of a terminal stay identical however
+  fast panes are opened, closed or zoomed.
+- **Several windows.** Every window shows the same panes. Only the focused one asks for sizes, and a
+  window asks again when it regains focus, so a background window of a different size shows its
+  terminals cut off or with empty space until you switch to it.
 - **Claude Code status.** Voltran launches Claude with `--settings <file>` that adds hooks for
   `SessionStart`, `UserPromptSubmit`, `Pre/PostToolUse`, `Notification`, `Stop`, `SubagentStart`,
   `SubagentStop` and `SessionEnd`. The hooks `curl` the daemon with a secret that is unique to that

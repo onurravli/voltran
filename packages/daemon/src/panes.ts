@@ -20,7 +20,7 @@ export interface PaneClient {
 interface Attachment {
     client: PaneClient;
     live: boolean;
-    queue: string[];
+    queue: (string | PaneServerMessage)[];
 }
 
 interface Runtime {
@@ -134,9 +134,13 @@ export class PaneManager {
                 return;
             }
             const snapshot = runtime.serializer.serialize({ scrollback: SCROLLBACK_LINES });
-            this.sendMessage(client, { type: 'snapshot', data: snapshot });
-            for (const chunk of attachment.queue) {
-                client.sendBinary(Buffer.from(chunk, 'utf8'));
+            this.sendMessage(client, { type: 'snapshot', data: snapshot, cols: runtime.term.cols, rows: runtime.term.rows });
+            for (const entry of attachment.queue) {
+                if (typeof entry === 'string') {
+                    client.sendBinary(Buffer.from(entry, 'utf8'));
+                } else {
+                    this.sendMessage(client, entry);
+                }
             }
             attachment.queue = [];
             attachment.live = true;
@@ -167,12 +171,18 @@ export class PaneManager {
         if (!runtime || !Number.isFinite(cols) || !Number.isFinite(rows)) {
             return;
         }
-        runtime.cols = clamp(cols, 2, 1000);
-        runtime.rows = clamp(rows, 2, 500);
-        runtime.term.resize(runtime.cols, runtime.rows);
-        if (runtime.pty) {
-            runtime.pty.resize(runtime.cols, runtime.rows);
-        } else if (!runtime.pane.ended) {
+        const nextCols = clamp(cols, 2, 1000);
+        const nextRows = clamp(rows, 2, 500);
+        if (nextCols !== runtime.cols || nextRows !== runtime.rows) {
+            runtime.cols = nextCols;
+            runtime.rows = nextRows;
+            // Clients resize their terminals at this marker and the mirror after the output already
+            // written, so every copy sees the same output at the same size as the process did.
+            runtime.term.write('', () => runtime.term.resize(nextCols, nextRows));
+            runtime.pty?.resize(nextCols, nextRows);
+            this.broadcast(runtime, { type: 'resize', cols: nextCols, rows: nextRows });
+        }
+        if (!runtime.pty && !runtime.pane.ended) {
             this.spawn(runtime);
         }
     }
@@ -495,6 +505,16 @@ export class PaneManager {
                 attachment.client.sendBinary(Buffer.from(data, 'utf8'));
             } else {
                 attachment.queue.push(data);
+            }
+        }
+    }
+
+    private broadcast(runtime: Runtime, message: PaneServerMessage): void {
+        for (const attachment of runtime.attachments) {
+            if (attachment.live) {
+                this.sendMessage(attachment.client, message);
+            } else {
+                attachment.queue.push(message);
             }
         }
     }

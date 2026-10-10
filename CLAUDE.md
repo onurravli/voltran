@@ -43,8 +43,13 @@ are easy to get wrong here:
 - Headless `term.write()` is asynchronous. Anything that needs the terminal's current content must
   wait with `term.write('', callback)`: attaching takes its snapshot in that callback (so snapshot plus
   queued chunks neither lose nor repeat bytes), and shutdown waits for it before saving scrollback.
-- Only the focused browser window sends terminal sizes (`web/src/terminals.ts`); otherwise every
-  attached window would push its own size and the last one would win.
+- The browser never resizes its terminal itself (`web/src/terminals.ts`). It asks the daemon for the
+  size that fits; the daemon resizes the process and the mirror and sends a `resize` message in the
+  output stream, and each client resizes at that point inside its own write queue. A local resize
+  would parse output at a size the process never had, and Claude Code's diff rendering then leaves
+  stray characters behind.
+- Only the focused browser window asks for sizes; otherwise every attached window would push its
+  own size and the last one would win.
 
 **Agent status** comes from two places. Claude Code panes are launched with `--settings` pointing at a
 generated file (`adapters.ts` → `claudeHookSettings`) whose hooks `curl` `/api/hooks/:pane/:event`

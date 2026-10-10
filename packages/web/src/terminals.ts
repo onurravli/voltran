@@ -59,7 +59,6 @@ export class TerminalSession {
         this.term.attachCustomKeyEventHandler((event) => this.handleKey(event));
         this.term.onData((data) => this.send({ type: 'input', data }));
         this.term.onBinary((data) => this.send({ type: 'input', data }));
-        this.term.onResize(() => this.scheduleResize());
     }
 
     mount(container: HTMLElement): void {
@@ -144,13 +143,20 @@ export class TerminalSession {
     }
 
     private refit(): void {
-        if (!this.host.isConnected || this.host.clientWidth === 0 || this.host.clientHeight === 0) {
-            return;
+        if (this.fittingSize()) {
+            this.scheduleResize();
+        }
+    }
+
+    private fittingSize(): { cols: number; rows: number } | null {
+        if (!this.opened || !this.host.isConnected || this.host.clientWidth === 0 || this.host.clientHeight === 0) {
+            return null;
         }
         try {
-            this.fit.fit();
+            const size = this.fit.proposeDimensions();
+            return size && Number.isFinite(size.cols) && Number.isFinite(size.rows) ? size : null;
         } catch {
-            // renderer not ready yet; the next observer tick fits again
+            return null;
         }
     }
 
@@ -217,8 +223,15 @@ export class TerminalSession {
                 return;
             }
             if (parsed.type === 'snapshot') {
-                this.term.reset();
+                const { cols, rows } = parsed;
+                this.term.write('', () => {
+                    this.term.reset();
+                    this.term.resize(cols, rows);
+                });
                 this.term.write(parsed.data);
+            } else if (parsed.type === 'resize') {
+                const { cols, rows } = parsed;
+                this.term.write('', () => this.term.resize(cols, rows));
             }
         };
 
@@ -258,17 +271,20 @@ export class TerminalSession {
         }, RESIZE_DEBOUNCE_MS);
     }
 
-    // Every window attached to a pane would otherwise push its own size and the last one would win,
-    // so only the focused window sizes the process; regaining focus re-sends what it shows.
+    // The terminal never resizes itself: it asks the daemon for the size that fits and applies the
+    // daemon's resize where it falls in the output stream, so it never diverges from the process.
+    // Every window attached to a pane would otherwise ask for its own size and the last one would
+    // win, so only the focused window asks; regaining focus asks again.
     resendSize(): void {
         this.sendSize();
     }
 
     private sendSize(): void {
-        if (!this.opened || !this.host.isConnected || !document.hasFocus()) {
+        const size = this.fittingSize();
+        if (!size || !document.hasFocus()) {
             return;
         }
-        this.send({ type: 'resize', cols: this.term.cols, rows: this.term.rows });
+        this.send({ type: 'resize', cols: size.cols, rows: size.rows });
     }
 
     private send(message: { type: 'input'; data: string } | { type: 'resize'; cols: number; rows: number }): void {
