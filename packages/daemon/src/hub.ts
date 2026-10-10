@@ -123,6 +123,10 @@ export class Hub {
         return this.listeners.size;
     }
 
+    publish(event: ServerEvent): void {
+        this.emit(event);
+    }
+
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);

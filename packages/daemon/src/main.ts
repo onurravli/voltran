@@ -7,6 +7,7 @@ import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
 import { createVoltranServer } from './server.ts';
 import { Store } from './store.ts';
+import { VersionWatch } from './version.ts';
 
 export interface DaemonOptions {
     shell: string;
@@ -77,7 +78,8 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         }
     };
 
-    const server = createVoltranServer({ config, hub, guard, previousWindows, onShutdown: shutdown });
+    const version = new VersionWatch(fileURLToPath(new URL('../..', import.meta.url)), config.webDist);
+    const server = createVoltranServer({ config, hub, guard, previousWindows, version, onShutdown: shutdown });
     return { config, token, hub, server, shutdown };
 }
 

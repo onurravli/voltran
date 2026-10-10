@@ -7,6 +7,7 @@ import type { PaneClientMessage, ServerEvent } from '@voltran/shared';
 import type { Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, type Guard } from './security.ts';
+import type { VersionWatch } from './version.ts';
 
 const JSON_LIMIT = 1024 * 1024;
 const HOOK_LIMIT = 4 * 1024 * 1024;
@@ -38,8 +39,11 @@ export interface ServerOptions {
     hub: Hub;
     guard: Guard;
     previousWindows: number;
+    version?: VersionWatch;
     onShutdown: () => void;
 }
+
+const VERSION_POLL_MS = 2000;
 
 type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;
 
@@ -255,7 +259,17 @@ export function createVoltranServer(options: ServerOptions): Server {
         }
     });
 
-    attachWebSockets(server, hub, guard);
+    attachWebSockets(server, hub, guard, options.version);
+    const version = options.version;
+    if (version) {
+        const poll = setInterval(() => {
+            if (version.refresh()) {
+                hub.publish({ type: 'version', ...version.current() });
+            }
+        }, VERSION_POLL_MS);
+        poll.unref();
+        server.on('close', () => clearInterval(poll));
+    }
     return server;
 }
 
@@ -264,7 +278,7 @@ function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
     socket.destroy();
 }
 
-function attachWebSockets(server: Server, hub: Hub, guard: Guard): void {
+function attachWebSockets(server: Server, hub: Hub, guard: Guard, version: VersionWatch | undefined): void {
     const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
     const alive = new WeakMap<WebSocket, boolean>();
 
@@ -304,19 +318,22 @@ function attachWebSockets(server: Server, hub: Hub, guard: Guard): void {
             if (paneMatch) {
                 servePane(ws, hub, decodeURIComponent(paneMatch[1]));
             } else {
-                serveEvents(ws, hub);
+                serveEvents(ws, hub, version);
             }
         });
     });
 }
 
-function serveEvents(ws: WebSocket, hub: Hub): void {
+function serveEvents(ws: WebSocket, hub: Hub, version: VersionWatch | undefined): void {
     const send = (event: ServerEvent): void => {
         if (ws.readyState === ws.OPEN) {
             ws.send(JSON.stringify(event));
         }
     };
     send({ type: 'state', state: hub.state() });
+    if (version) {
+        send({ type: 'version', ...version.current() });
+    }
     const unsubscribe = hub.subscribe(send);
     ws.on('close', unsubscribe);
     ws.on('error', unsubscribe);

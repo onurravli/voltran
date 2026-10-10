@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppState, LayoutDirection, PaneView, Session } from '@voltran/shared';
+import type { AppState, LayoutDirection, PaneView, Session, VersionInfo } from '@voltran/shared';
 import { needsAttention } from '@voltran/shared';
 import { DEFAULT_FONT, parseFont, type TerminalFont } from './fonts.ts';
 import { DEFAULT_THEME_ID, parseThemeId } from './themes.ts';
@@ -28,6 +28,7 @@ export interface Toast {
 
 interface UiState {
     app: AppState | null;
+    version: VersionInfo | null;
     connection: Connection;
     selectedSessionId: string | null;
     focusedPaneId: string | null;
@@ -46,6 +47,7 @@ interface UiState {
     paneMenu: PaneMenuTarget | null;
     toast: Toast | null;
     setApp: (app: AppState) => void;
+    setVersion: (version: VersionInfo) => void;
     setConnection: (connection: Connection) => void;
     selectSession: (id: string | null) => void;
     focusPane: (id: string | null) => void;
@@ -100,6 +102,7 @@ let toastId = 0;
 
 export const useUi = create<UiState>((set, get) => ({
     app: null,
+    version: null,
     connection: 'connecting',
     ...readPersisted(),
     focusedPaneId: null,
@@ -124,6 +127,7 @@ export const useUi = create<UiState>((set, get) => ({
             maximizedPaneId: maximizedPaneId && paneIds.has(maximizedPaneId) ? maximizedPaneId : null,
         });
     },
+    setVersion: (version) => set({ version }),
     setConnection: (connection) => set({ connection }),
     selectSession: (id) => set({ selectedSessionId: id, maximizedPaneId: null, findPaneId: null }),
     focusPane: (id) => set({ focusedPaneId: id }),

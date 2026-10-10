@@ -157,8 +157,14 @@ export interface MovePaneBody {
 
 export type AttentionStatus = 'needs-input' | 'done' | 'exited';
 
+export interface VersionInfo {
+    ui: string | null;
+    behind: 'daemon' | 'ui' | 'both' | null;
+}
+
 export type ServerEvent =
     | { type: 'state'; state: AppState }
+    | ({ type: 'version' } & VersionInfo)
     | {
         type: 'attention';
         paneId: string;

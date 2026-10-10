@@ -98,4 +98,6 @@ each terminal palette; `index.html` applies a cached copy before first paint.
 The daemon serves the built UI from disk, so a UI change needs `npm run build` and a reload of the
 window; a daemon change needs `voltran down && voltran up`. Claude Code often runs inside a Voltran
 pane: `voltran down` would end that session, so ask the user to run the restart from another
-terminal.
+terminal. Windows tell the user which one is missing: `vite.config.ts` writes `dist/version.json`
+with hashes of `shared/src` and of the UI sources (`daemon/src/source-hash.ts`), and
+`daemon/src/version.ts` compares it with the `shared/src` the daemon loaded at start.

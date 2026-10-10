@@ -74,6 +74,8 @@ export function connectEvents(): () => void {
             }
             if (event.type === 'state') {
                 useUi.getState().setApp(event.state);
+            } else if (event.type === 'version') {
+                useUi.getState().setVersion({ ui: event.ui, behind: event.behind });
             } else if (event.type === 'attention') {
                 notifyAttention(event);
             }

@@ -8,6 +8,7 @@ import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
 import { FolderIcon, VoltranMark } from './components/Icons.tsx';
 import { SessionView } from './components/SessionView.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
+import { UpdateBanner } from './components/UpdateBanner.tsx';
 
 function Welcome() {
     const hasProjects = useUi((state) => (state.app?.projects.length ?? 0) > 0);
@@ -86,6 +87,7 @@ export function App() {
             <Dialogs />
             <PaneMenu />
             <ToastView />
+            <UpdateBanner />
         </div>
     );
 }

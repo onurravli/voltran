@@ -125,6 +125,10 @@ packages/
   start, panes come back asleep with their scrollback and start when you open them. Claude Code
   panes come back with `claude --resume <session>`, so the conversation continues. Open windows
   reconnect on their own.
+- **Updates.** A build records a hash of the UI's source and of the shared protocol code in
+  `dist/version.json`. When the UI is rebuilt, open windows offer to reload. When the build and the
+  running daemon come from different protocol code, they say whether to rebuild the UI or restart
+  the daemon.
 - **Terminal sizes.** A window never resizes a terminal by itself: it asks the daemon for the size
   that fits, and the daemon resizes the process and its own copy and marks the resize in the output
   stream. Every window applies it at that mark, so all copies of a terminal stay identical however
