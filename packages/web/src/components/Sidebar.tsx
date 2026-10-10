@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { PaneView, Project, Session, SubagentView } from '@voltran/shared';
-import { aggregateStatus, needsAttention } from '@voltran/shared';
+import { PROJECT_COLORS, aggregateStatus, needsAttention } from '@voltran/shared';
 import { api } from '../api.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
-import { BellIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, TrashIcon, VoltranMark } from './Icons.tsx';
+import { InlineEdit, MoreMenu } from './Controls.tsx';
+import { BellIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
 export function relativeTime(timestamp: number, now: number): string {
@@ -73,10 +74,30 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         return Boolean(moving && from && moving.sessionId !== session.id && !session.archived && from.projectId === session.projectId);
     });
     const [over, setOver] = useState(false);
+    const [renaming, setRenaming] = useState(false);
     const lead = leadPane(panes);
     const status = lead?.status ?? null;
+    const failed = status === 'exited' && lead?.exitCode !== 0 && lead?.exitCode !== null;
     const showDetail = lead && (needsAttention(lead.status) || lead.status === 'working') && lead.detail;
     const agents = panes.flatMap((pane) => (pane.subagents ?? []).map((agent) => ({ agent, paneId: pane.id })));
+
+    if (renaming) {
+        return (
+            <li>
+                <div className={`session-row${selected ? ' is-selected' : ''}`}>
+                    <StatusLamp status={status} failed={failed} />
+                    <InlineEdit
+                        className="session-row__title"
+                        label="Session name"
+                        value={session.title}
+                        editing
+                        onEditingChange={setRenaming}
+                        onSave={(title) => api.updateSession(session.id, { title })}
+                    />
+                </div>
+            </li>
+        );
+    }
 
     return (
         <li>
@@ -84,6 +105,8 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 type="button"
                 className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
                 onClick={() => selectSession(session.id)}
+                onDoubleClick={() => setRenaming(true)}
+                title="Double-click to rename"
                 onDragOver={(event) => {
                     if (accepts) {
                         event.preventDefault();
@@ -106,7 +129,7 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 }}
                 aria-current={selected ? 'true' : undefined}
             >
-                <StatusLamp status={status} failed={status === 'exited' && lead?.exitCode !== 0 && lead?.exitCode !== null} />
+                <StatusLamp status={status} failed={failed} />
                 <span className="session-row__text">
                     <span className="session-row__title">{session.title}</span>
                     {showDetail ? <span className="session-row__detail">{lead.detail}</span> : null}
@@ -123,6 +146,7 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
     const collapsed = useUi((state) => Boolean(state.collapsedProjects[project.id]));
     const toggleProject = useUi((state) => state.toggleProject);
     const openDialog = useUi((state) => state.openDialog);
+    const [renaming, setRenaming] = useState(false);
     const waiting = sessions.filter((session) => panesOf(app, session.id).some((pane) => needsAttention(pane.status))).length;
 
     const remove = (): void => {
@@ -138,24 +162,50 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
     return (
         <section className="project" style={{ '--project-color': project.color } as React.CSSProperties}>
             <div className="project__header">
-                <button
-                    type="button"
-                    className="project__toggle"
-                    onClick={() => toggleProject(project.id)}
-                    aria-expanded={!collapsed}
-                    title={project.path}
-                >
-                    <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
-                    <span className="project__name">{project.name}</span>
-                    {collapsed && waiting > 0 ? <span className="project__waiting">{waiting}</span> : null}
-                </button>
+                {renaming ? (
+                    <div className="project__toggle">
+                        <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
+                        <InlineEdit
+                            className="project__name"
+                            label="Project name"
+                            value={project.name}
+                            editing
+                            onEditingChange={setRenaming}
+                            onSave={(name) => api.updateProject(project.id, { name })}
+                        />
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        className="project__toggle"
+                        onClick={() => toggleProject(project.id)}
+                        onDoubleClick={() => setRenaming(true)}
+                        aria-expanded={!collapsed}
+                        title={`${project.path}\nDouble-click to rename`}
+                    >
+                        <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
+                        <span className="project__name">{project.name}</span>
+                        {collapsed && waiting > 0 ? <span className="project__waiting">{waiting}</span> : null}
+                    </button>
+                )}
                 <div className="project__actions">
                     <button type="button" className="icon-button" title={`New session in ${project.name}`} onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
                         <PlusIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title={`Remove ${project.name}`} onClick={remove}>
-                        <TrashIcon size={14} />
-                    </button>
+                    <MoreMenu
+                        small
+                        label={`${project.name} actions`}
+                        items={[
+                            { label: 'Rename', onSelect: () => setRenaming(true) },
+                            {
+                                label: 'Colour',
+                                swatches: PROJECT_COLORS,
+                                selected: project.color,
+                                onPick: (color) => api.updateProject(project.id, { color }).catch(reportError),
+                            },
+                            { label: 'Remove project…', danger: true, separated: true, onSelect: remove },
+                        ]}
+                    />
                 </div>
             </div>
             {collapsed ? null : sessions.length === 0 ? (

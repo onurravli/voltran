@@ -399,6 +399,15 @@ kbd {
     white-space: nowrap;
 }
 
+.project__name.inline-edit,
+.session-row__title.inline-edit {
+    flex: 1;
+    min-width: 0;
+    height: 22px;
+    color: var(--text);
+    font-weight: 500;
+}
+
 .project__waiting {
     margin-left: 4px;
     padding: 0 6px;
@@ -873,10 +882,6 @@ kbd {
     align-items: center;
     gap: 2px;
     margin-left: auto;
-}
-
-.more {
-    position: relative;
 }
 
 .session__banner {
@@ -1432,10 +1437,32 @@ kbd {
 }
 
 .menu--anchored {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
     min-width: 232px;
+}
+
+.menu__swatches {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.menu__swatch {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: var(--swatch);
+}
+
+.menu__swatch[aria-checked='true'] {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+}
+
+.menu__swatch:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
 }
 
 .menu__item--separated {

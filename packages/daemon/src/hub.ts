@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { basename, isAbsolute, resolve } from 'node:path';
 import {
+    PROJECT_COLORS,
     insertPane,
     isValidLayout,
     removePane,
@@ -49,7 +50,6 @@ export interface HubOptions {
 
 type Listener = (event: ServerEvent) => void;
 
-const PROJECT_COLORS = ['#7aa2f7', '#f7768e', '#9ece6a', '#e0af68', '#bb9af7', '#7dcfff', '#ff9e64', '#73daca'];
 const BROADCAST_DELAY_MS = 30;
 const MAX_TITLE = 200;
 const MAX_COMMAND = 4000;
@@ -162,7 +162,7 @@ export class Hub {
             path,
             color: typeof body.color === 'string' && /^#[0-9a-f]{6}$/i.test(body.color)
                 ? body.color
-                : PROJECT_COLORS[existing.length % PROJECT_COLORS.length],
+                : PROJECT_COLORS[existing.length % PROJECT_COLORS.length].value,
             createdAt: Date.now(),
         };
         this.store.insertProject(project);

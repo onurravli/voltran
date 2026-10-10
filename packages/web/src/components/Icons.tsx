@@ -30,8 +30,6 @@ export const RestoreIcon = (props: IconProps) => <Icon {...props}><path d="M13.5
 export const RestartIcon = (props: IconProps) => <Icon {...props}><path d="M13 8a5 5 0 1 1-1.6-3.7" /><path d="M13 2.5v3h-3" /></Icon>;
 export const CloseIcon = (props: IconProps) => <Icon {...props}><path d="m4 4 8 8M12 4l-8 8" /></Icon>;
 export const LinkIcon = (props: IconProps) => <Icon {...props}><path d="M6.5 9.5 9.5 6.5" /><path d="M7 4.5 8.3 3.2a2.8 2.8 0 0 1 4 4L11 8.5M9 11.5l-1.3 1.3a2.8 2.8 0 0 1-4-4L5 7.5" /></Icon>;
-export const ArchiveIcon = (props: IconProps) => <Icon {...props}><rect x="2" y="3" width="12" height="3" rx="1" /><path d="M3 6v6.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6M6.5 9h3" /></Icon>;
-export const TrashIcon = (props: IconProps) => <Icon {...props}><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.2a1 1 0 0 0 1 .8h3.8a1 1 0 0 0 1-.8l.6-8.2" /></Icon>;
 export const ChevronIcon = (props: IconProps) => <Icon {...props}><path d="m6 4 4 4-4 4" /></Icon>;
 export const BellIcon = (props: IconProps) => <Icon {...props}><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1H3z" /><path d="M6.5 14h3" /></Icon>;
 export const KeyboardIcon = (props: IconProps) => <Icon {...props}><rect x="1.5" y="4" width="13" height="8" rx="1.5" /><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 9.5h6" /></Icon>;

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { DropEdge, Layout, PaneView, Project, Session } from '@voltran/shared';
 import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
@@ -11,7 +11,6 @@ import {
     CloseIcon,
     LinkIcon,
     MaximizeIcon,
-    MoreIcon,
     PlusIcon,
     RestartIcon,
     RestoreIcon,
@@ -20,62 +19,8 @@ import {
     SplitRightIcon,
     StopIcon,
 } from './Icons.tsx';
+import { InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
-
-function InlineEdit({ value, onSave, className, label, editing: requested, onEditingChange }: {
-    value: string;
-    onSave: (next: string) => Promise<unknown>;
-    className: string;
-    label: string;
-    editing?: boolean;
-    onEditingChange?: (editing: boolean) => void;
-}) {
-    const [own, setOwn] = useState(false);
-    const editing = requested ?? own;
-    const setEditing = onEditingChange ?? setOwn;
-    const [draft, setDraft] = useState(value);
-
-    useEffect(() => {
-        if (!editing) {
-            setDraft(value);
-        }
-    }, [value, editing]);
-
-    const commit = (): void => {
-        setEditing(false);
-        const next = draft.trim();
-        if (next && next !== value) {
-            onSave(next).catch(reportError);
-        }
-    };
-
-    const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
-        if (event.key === 'Enter') {
-            commit();
-        } else if (event.key === 'Escape') {
-            setEditing(false);
-        }
-    };
-
-    if (editing) {
-        return (
-            <input
-                className={`${className} inline-edit`}
-                aria-label={label}
-                value={draft}
-                autoFocus
-                onChange={(event) => setDraft(event.target.value)}
-                onBlur={commit}
-                onKeyDown={onKeyDown}
-            />
-        );
-    }
-    return (
-        <span className={className} title="Double-click to rename" onDoubleClick={() => setEditing(true)}>
-            {value}
-        </span>
-    );
-}
 
 function paneSummary(pane: PaneView, kind: 'agent' | 'shell' | 'process' | undefined): string {
     if (pane.adapter === 'subagent' && pane.status === 'running') {
@@ -326,93 +271,6 @@ function LayoutNode({ node, path, session, panes, onSizes }: {
                 </Fragment>
             ))}
         </Group>
-    );
-}
-
-interface MenuItem {
-    label: string;
-    note?: string;
-    danger?: boolean;
-    separated?: boolean;
-    onSelect: () => void;
-}
-
-function MoreMenu({ label, items }: { label: string; items: MenuItem[] }) {
-    const [open, setOpen] = useState(false);
-    const root = useRef<HTMLDivElement>(null);
-    const trigger = useRef<HTMLButtonElement>(null);
-
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-        const entries = (): HTMLButtonElement[] => [...(root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
-        const dismiss = (): void => setOpen(false);
-        const onPointer = (event: MouseEvent): void => {
-            if (!root.current?.contains(event.target as Node)) {
-                dismiss();
-            }
-        };
-        const onKey = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                event.stopPropagation();
-                dismiss();
-                trigger.current?.focus();
-            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                event.preventDefault();
-                const list = entries();
-                const index = list.indexOf(document.activeElement as HTMLButtonElement);
-                const step = event.key === 'ArrowDown' ? 1 : -1;
-                list[index < 0 ? 0 : (index + step + list.length) % list.length]?.focus();
-            }
-        };
-        window.addEventListener('mousedown', onPointer);
-        window.addEventListener('keydown', onKey, true);
-        window.addEventListener('resize', dismiss);
-        window.addEventListener('blur', dismiss);
-        entries()[0]?.focus();
-        return () => {
-            window.removeEventListener('mousedown', onPointer);
-            window.removeEventListener('keydown', onKey, true);
-            window.removeEventListener('resize', dismiss);
-            window.removeEventListener('blur', dismiss);
-        };
-    }, [open]);
-
-    return (
-        <div className="more" ref={root}>
-            <button
-                ref={trigger}
-                type="button"
-                className="icon-button icon-button--bar"
-                aria-label={label}
-                title={label}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                onClick={() => setOpen(!open)}
-            >
-                <MoreIcon size={16} />
-            </button>
-            {open ? (
-                <div className="menu menu--anchored" role="menu" aria-label={label}>
-                    {items.map((item) => (
-                        <button
-                            key={item.label}
-                            type="button"
-                            role="menuitem"
-                            className={`menu__item${item.danger ? ' menu__item--danger' : ''}${item.separated ? ' menu__item--separated' : ''}`}
-                            onClick={() => {
-                                setOpen(false);
-                                item.onSelect();
-                            }}
-                        >
-                            <span>{item.label}</span>
-                            {item.note ? <span className="menu__note">{item.note}</span> : null}
-                        </button>
-                    ))}
-                </div>
-            ) : null}
-        </div>
     );
 }
 
