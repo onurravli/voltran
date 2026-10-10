@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import type { PaneStatus } from '@voltran/shared';
 import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFontInstalled, type TerminalFont } from '../fonts.ts';
-import { filterItems } from '../palette.ts';
+import { revealPane } from '../notify.ts';
+import { destinations, filterItems } from '../palette.ts';
 import { SHORTCUTS, togglePalette } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { THEMES, themeById, type Theme } from '../themes.ts';
+import { StatusLamp } from './StatusLamp.tsx';
 
 interface Item {
     id: string;
     label: string;
+    keywords?: string;
+    status?: PaneStatus | null;
     hint?: string;
     keys?: string;
     family?: string;
@@ -19,7 +24,7 @@ interface Item {
 type Mode = 'commands' | 'fonts' | 'themes';
 
 const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
-    commands: { placeholder: 'Type a command', empty: 'No matching commands' },
+    commands: { placeholder: 'Type a command, or a session or pane name', empty: 'No matching commands, sessions or panes' },
     fonts: { title: 'Font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
     themes: { title: 'Theme', placeholder: 'Pick a theme', empty: 'No matching themes' },
 };
@@ -60,6 +65,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const setTerminalFont = useUi((state) => state.setTerminalFont);
     const themeId = useUi((state) => state.themeId);
     const setTheme = useUi((state) => state.setTheme);
+    const app = useUi((state) => state.app);
     const [mode, setMode] = useState<Mode>('commands');
     const [families, setFamilies] = useState<string[]>([]);
     const [query, setQuery] = useState('');
@@ -117,7 +123,16 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     let items: Item[];
     if (mode === 'commands') {
+        const places: Item[] = query.trim() ? destinations(app).map((place) => ({
+            id: place.id,
+            label: place.label,
+            keywords: place.keywords,
+            status: place.status,
+            hint: place.keywords,
+            run: () => (place.paneId ? revealPane(place.sessionId, place.paneId) : useUi.getState().selectSession(place.sessionId)),
+        })) : [];
         items = filterItems<Item>([
+            ...places,
             { id: 'theme', label: 'Theme…', hint: themeById(themeId).name, keepOpen: true, run: enterThemes },
             { id: 'font-family', label: 'Font family…', hint: font.family, keepOpen: true, run: enterFonts },
             { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
@@ -260,6 +275,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                                 onClick={() => run(item)}
                             >
                                 {item.themeId && <ThemeSwatch theme={themeById(item.themeId)} />}
+                                {item.status !== undefined && <StatusLamp status={item.status} size="sm" />}
                                 <span className="palette__label" style={item.family ? { fontFamily: fontStack(item.family) } : undefined}>{item.label}</span>
                                 {item.keys ? <kbd>{item.keys}</kbd> : item.hint && <span className="palette__hint">{item.hint}</span>}
                             </li>

@@ -80,7 +80,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 
 | Keys | Action |
 |---|---|
-| ⌘K | Command palette: every action below, plus the theme and the terminal font family and size |
+| ⌘K | Command palette: every action below, plus the theme and the terminal font family and size. Type a session or pane name to jump to it |
 | ⌃⌥J | Jump to the next pane that needs you |
 | ⌃⌥B | Show or hide the sidebar |
 | ⌃⌥Z | Zen mode: the focused pane alone, full screen. Esc still reaches the terminal; ⇧Esc or ⌃⌥Z leaves |

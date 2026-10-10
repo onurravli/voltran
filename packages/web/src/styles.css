@@ -1565,7 +1565,8 @@ kbd {
     border-radius: 50%;
 }
 
-.palette__swatch + .palette__label {
+.palette__swatch + .palette__label,
+.palette__item .lamp + .palette__label {
     margin-right: auto;
 }
 
