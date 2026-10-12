@@ -750,10 +750,11 @@ kbd {
 }
 
 .session-header--working::before {
+    --scan-color: color-mix(in srgb, var(--project-color) 75%, var(--bay));
     z-index: 1;
-    background: linear-gradient(90deg, transparent, var(--project-color) 35%, var(--project-color) 65%, transparent) no-repeat;
-    background-size: 18% 100%;
-    filter: drop-shadow(0 0 4px var(--project-color));
+    background: linear-gradient(90deg, transparent, var(--scan-color) 35%, var(--scan-color) 65%, transparent) no-repeat;
+    background-size: 26% 100%;
+    filter: drop-shadow(0 0 4px var(--scan-color));
     animation: header-scan 1.6s ease-in-out infinite alternate;
 }
 
@@ -1005,8 +1006,8 @@ kbd {
 }
 
 .pane.is-focused .pane__header {
-    border-bottom-color: var(--focus);
-    box-shadow: inset 0 -1px 0 var(--focus);
+    border-bottom-color: color-mix(in srgb, var(--focus) 55%, var(--bay));
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--focus) 55%, var(--bay));
     color: var(--text-strong);
 }
 
