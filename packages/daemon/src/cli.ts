@@ -10,7 +10,15 @@ const REPO_ROOT = resolve(HERE, '../../..');
 const DAEMON_ENTRY = join(HERE, 'main.ts');
 const CHROME = '/Applications/Google Chrome.app';
 
-const HELP = `voltran — local multi-agent session and terminal orchestrator
+const LOGO = String.raw`__     __    _ _
+\ \   / /__ | | |_ _ __ __ _ _ __
+ \ \ / / _ \| | __| '__/ _${'`'} | '_ \
+  \ V / (_) | | |_| | | (_| | | | |
+   \_/ \___/|_|\__|_|  \__,_|_| |_|`;
+
+const HELP = `${LOGO}
+
+Local multi-agent session and terminal orchestrator
 
 Usage:
   voltran up [--browser] [--no-open] [--new]   start the daemon if needed and open the UI
