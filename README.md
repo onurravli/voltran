@@ -1,10 +1,4 @@
-```text
-__     __    _ _
-\ \   / /__ | | |_ _ __ __ _ _ __
- \ \ / / _ \| | __| '__/ _` | '_ \
-  \ V / (_) | | |_| | | (_| | | | |
-   \_/ \___/|_|\__|_|  \__,_|_| |_|
-```
+## Voltran
 
 A local control room for running many coding agents and terminals at once. Instead of a dozen
 terminal windows, you get one window with your projects, a session per piece of work, and split
