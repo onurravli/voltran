@@ -2,11 +2,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_THEME_ID,
+    DEFAULT_THEME_IDS,
     TERMINAL_KEYS,
     THEMES,
     UI_VARIABLES,
     contrastRatio,
+    parseAppearance,
+    parseThemeChoice,
     parseThemeId,
+    schemeOf,
     themeById,
     themeProperties,
 } from './themes.ts';
@@ -54,6 +58,13 @@ describe('THEMES', () => {
         expect(new Set(THEMES.map((theme) => theme.name)).size).toBe(THEMES.length);
         expect(THEMES[0].id).toBe(DEFAULT_THEME_ID);
         expect(THEMES.filter((theme) => theme.scheme === 'light').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('defaults each appearance to a theme of that scheme', () => {
+        expect(DEFAULT_THEME_IDS.dark).toBe(DEFAULT_THEME_ID);
+        expect(themeById(DEFAULT_THEME_IDS.dark).scheme).toBe('dark');
+        expect(themeById(DEFAULT_THEME_IDS.light).id).toBe(DEFAULT_THEME_IDS.light);
+        expect(themeById(DEFAULT_THEME_IDS.light).scheme).toBe('light');
     });
 
     it('keeps the main text at 4.5:1 or better in the terminal and on every UI surface', () => {
@@ -105,15 +116,73 @@ describe('THEMES', () => {
 });
 
 describe('parseThemeId', () => {
-    it('keeps a known id', () => {
-        expect(parseThemeId('nord')).toBe('nord');
-        expect(parseThemeId('github-light')).toBe('github-light');
+    it('keeps a known id of the scheme', () => {
+        expect(parseThemeId('nord', 'dark')).toBe('nord');
+        expect(parseThemeId('github-light', 'light')).toBe('github-light');
     });
 
-    it('falls back to the default for unknown or malformed values', () => {
+    it('falls back to the scheme default for unknown or malformed values', () => {
         for (const value of [undefined, null, '', 'Nord', ' nord', 'solarized-dark', 42, {}, ['nord']]) {
-            expect(parseThemeId(value)).toBe(DEFAULT_THEME_ID);
+            expect(parseThemeId(value, 'dark')).toBe(DEFAULT_THEME_IDS.dark);
+            expect(parseThemeId(value, 'light')).toBe(DEFAULT_THEME_IDS.light);
         }
+    });
+
+    it('falls back to the scheme default for a theme of the other scheme', () => {
+        expect(parseThemeId('catppuccin-latte', 'dark')).toBe(DEFAULT_THEME_IDS.dark);
+        expect(parseThemeId('dracula', 'light')).toBe(DEFAULT_THEME_IDS.light);
+    });
+});
+
+describe('parseAppearance', () => {
+    it('keeps a known appearance and otherwise follows the system', () => {
+        expect(parseAppearance('dark')).toBe('dark');
+        expect(parseAppearance('light')).toBe('light');
+        expect(parseAppearance('system')).toBe('system');
+        for (const value of [undefined, null, '', 'Dark', 'auto', 1, {}]) {
+            expect(parseAppearance(value)).toBe('system');
+        }
+    });
+});
+
+describe('parseThemeChoice', () => {
+    it('follows the system with the default themes when nothing is stored', () => {
+        expect(parseThemeChoice({})).toEqual({ appearance: 'system', themeIds: DEFAULT_THEME_IDS });
+    });
+
+    it('keeps a stored appearance and a theme per scheme', () => {
+        expect(parseThemeChoice({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } }))
+            .toEqual({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } });
+    });
+
+    it('replaces unknown or mismatched stored themes with the scheme default', () => {
+        expect(parseThemeChoice({ appearance: 'dark', themeIds: { dark: 'github-light', light: 'missing' } }))
+            .toEqual({ appearance: 'dark', themeIds: DEFAULT_THEME_IDS });
+        for (const themeIds of [null, 'nord', ['nord'], 42]) {
+            expect(parseThemeChoice({ themeIds }).themeIds).toEqual(DEFAULT_THEME_IDS);
+        }
+    });
+
+    it('keeps a single stored theme, and its scheme as the fixed appearance', () => {
+        expect(parseThemeChoice({ themeId: 'solarized-light' }))
+            .toEqual({ appearance: 'light', themeIds: { dark: DEFAULT_THEME_IDS.dark, light: 'solarized-light' } });
+        expect(parseThemeChoice({ themeId: 'dracula' }))
+            .toEqual({ appearance: 'dark', themeIds: { dark: 'dracula', light: DEFAULT_THEME_IDS.light } });
+        expect(parseThemeChoice({ themeId: 'missing' })).toEqual({ appearance: 'system', themeIds: DEFAULT_THEME_IDS });
+    });
+
+    it('ignores a single stored theme once an appearance is stored', () => {
+        expect(parseThemeChoice({ appearance: 'system', themeIds: { dark: 'nord' }, themeId: 'github-light' }))
+            .toEqual({ appearance: 'system', themeIds: { dark: 'nord', light: DEFAULT_THEME_IDS.light } });
+    });
+});
+
+describe('schemeOf', () => {
+    it('uses the system scheme only when following the system', () => {
+        expect(schemeOf('system', 'light')).toBe('light');
+        expect(schemeOf('system', 'dark')).toBe('dark');
+        expect(schemeOf('dark', 'light')).toBe('dark');
+        expect(schemeOf('light', 'dark')).toBe('light');
     });
 });
 

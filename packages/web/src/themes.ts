@@ -1,5 +1,9 @@
 export type Scheme = 'dark' | 'light';
 
+export type Appearance = 'system' | Scheme;
+
+export const APPEARANCES: Appearance[] = ['system', 'dark', 'light'];
+
 export const TERMINAL_KEYS = [
     'background',
     'foreground',
@@ -156,6 +160,8 @@ function defineTheme(
 }
 
 export const DEFAULT_THEME_ID = 'voltran';
+
+export const DEFAULT_THEME_IDS: Record<Scheme, string> = { dark: DEFAULT_THEME_ID, light: 'github-light' };
 
 const VOLTRAN: Theme = {
     id: DEFAULT_THEME_ID,
@@ -458,8 +464,36 @@ export const THEMES: Theme[] = [
 
 const BY_ID = new Map(THEMES.map((theme) => [theme.id, theme]));
 
-export function parseThemeId(value: unknown): string {
-    return typeof value === 'string' && BY_ID.has(value) ? value : DEFAULT_THEME_ID;
+export function parseThemeId(value: unknown, scheme: Scheme): string {
+    const theme = typeof value === 'string' ? BY_ID.get(value) : undefined;
+    return theme?.scheme === scheme ? theme.id : DEFAULT_THEME_IDS[scheme];
+}
+
+export function parseAppearance(value: unknown): Appearance {
+    return APPEARANCES.find((appearance) => appearance === value) ?? 'system';
+}
+
+export interface ThemeChoice {
+    appearance: Appearance;
+    themeIds: Record<Scheme, string>;
+}
+
+export function parseThemeChoice(value: { appearance?: unknown; themeIds?: unknown; themeId?: unknown }): ThemeChoice {
+    const ids = (value.themeIds && typeof value.themeIds === 'object' ? value.themeIds : {}) as Partial<Record<Scheme, unknown>>;
+    const choice: ThemeChoice = {
+        appearance: parseAppearance(value.appearance),
+        themeIds: { dark: parseThemeId(ids.dark, 'dark'), light: parseThemeId(ids.light, 'light') },
+    };
+    const single = typeof value.themeId === 'string' ? BY_ID.get(value.themeId) : undefined;
+    if (single && value.appearance === undefined) {
+        choice.appearance = single.scheme;
+        choice.themeIds[single.scheme] = single.id;
+    }
+    return choice;
+}
+
+export function schemeOf(appearance: Appearance, system: Scheme): Scheme {
+    return appearance === 'system' ? system : appearance;
 }
 
 export function themeById(id: string): Theme {

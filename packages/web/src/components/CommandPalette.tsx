@@ -5,7 +5,7 @@ import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
 import { FIND_SHORTCUT, SHORTCUTS, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
-import { THEMES, themeById, type Theme } from '../themes.ts';
+import { APPEARANCES, THEMES, schemeOf, themeById, type Appearance, type Scheme, type Theme } from '../themes.ts';
 import { StatusLamp } from './StatusLamp.tsx';
 
 interface Item {
@@ -21,33 +21,33 @@ interface Item {
     run: () => void;
 }
 
-type Mode = 'commands' | 'fonts' | 'themes';
+type Mode = 'commands' | 'fonts' | 'appearance' | Scheme;
 
 const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
     commands: { placeholder: 'Type a command, or a session or pane name', empty: 'No matching commands, sessions or panes' },
     fonts: { title: 'Font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
-    themes: { title: 'Theme', placeholder: 'Pick a theme', empty: 'No matching themes' },
+    appearance: { title: 'Appearance', placeholder: 'Follow the system, or always use dark or light', empty: 'No matching appearance' },
+    dark: { title: 'Dark theme', placeholder: 'Pick the theme for dark appearance', empty: 'No matching themes' },
+    light: { title: 'Light theme', placeholder: 'Pick the theme for light appearance', empty: 'No matching themes' },
 };
 
-interface Committed {
-    font: TerminalFont;
-    themeId: string;
+const APPEARANCE_LABELS: Record<Appearance, string> = { system: 'System', dark: 'Dark', light: 'Light' };
+
+function themesOf(scheme: Scheme): Theme[] {
+    return THEMES.filter((theme) => theme.scheme === scheme);
 }
 
 function sameFamily(a: string, b: string): boolean {
     return a.toLowerCase() === b.toLowerCase();
 }
 
-function restore(committed: Committed | null): void {
-    if (!committed) {
-        return;
-    }
+function restore(font: TerminalFont | null): void {
     const state = useUi.getState();
-    if (state.terminalFont !== committed.font) {
-        state.setTerminalFont(committed.font);
+    if (state.previewThemeId) {
+        state.setPreviewTheme(null);
     }
-    if (state.themeId !== committed.themeId) {
-        state.setTheme(committed.themeId);
+    if (font && state.terminalFont !== font) {
+        state.setTerminalFont(font);
     }
 }
 
@@ -63,14 +63,17 @@ function ThemeSwatch({ theme }: { theme: Theme }) {
 export function CommandPalette({ onClose }: { onClose: () => void }) {
     const font = useUi((state) => state.terminalFont);
     const setTerminalFont = useUi((state) => state.setTerminalFont);
-    const themeId = useUi((state) => state.themeId);
+    const appearance = useUi((state) => state.appearance);
+    const setAppearance = useUi((state) => state.setAppearance);
+    const themeIds = useUi((state) => state.themeIds);
     const setTheme = useUi((state) => state.setTheme);
+    const systemScheme = useUi((state) => state.systemScheme);
     const app = useUi((state) => state.app);
     const [mode, setMode] = useState<Mode>('commands');
     const [families, setFamilies] = useState<string[]>([]);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(0);
-    const committed = useRef<Committed | null>(null);
+    const committedFont = useRef<TerminalFont | null>(null);
     const input = useRef<HTMLInputElement>(null);
     const list = useRef<HTMLUListElement>(null);
 
@@ -78,14 +81,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         const previous = document.activeElement as HTMLElement | null;
         input.current?.focus();
         return () => {
-            restore(committed.current);
-            committed.current = null;
+            restore(committedFont.current);
+            committedFont.current = null;
             previous?.focus?.();
         };
     }, []);
 
     const enterList = (next: Exclude<Mode, 'commands'>, index: number): void => {
-        committed.current = { font, themeId };
+        committedFont.current = font;
         setMode(next);
         setQuery('');
         setActive(Math.max(0, index));
@@ -97,27 +100,37 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         enterList('fonts', choices.findIndex((family) => sameFamily(family, font.family)));
     };
 
-    const enterThemes = (): void => enterList('themes', THEMES.findIndex((theme) => theme.id === themeId));
+    const enterAppearance = (): void => enterList('appearance', APPEARANCES.indexOf(appearance));
+
+    const enterThemes = (scheme: Scheme): void => enterList(scheme, themesOf(scheme).findIndex((theme) => theme.id === themeIds[scheme]));
 
     const leaveList = (): void => {
-        restore(committed.current);
-        committed.current = null;
+        restore(committedFont.current);
+        committedFont.current = null;
         setMode('commands');
         setQuery('');
         setActive(0);
     };
 
     const chooseFamily = (family: string): void => {
-        committed.current = null;
+        committedFont.current = null;
         setTerminalFont({ ...font, family });
         onClose();
     };
 
+    const chooseAppearance = (next: Appearance): void => {
+        committedFont.current = null;
+        setAppearance(next);
+        onClose();
+    };
+
     const chooseTheme = (id: string): void => {
-        committed.current = null;
+        committedFont.current = null;
         setTheme(id);
         onClose();
     };
+
+    const appearanceLabel = (option: Appearance): string => (option === 'system' ? `System (${systemScheme})` : APPEARANCE_LABELS[option]);
 
     const resize = (size: number): void => setTerminalFont({ ...font, size: clampFontSize(size) });
 
@@ -135,7 +148,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         items = filterItems<Item>([
             ...places,
             ...(findIn ? [{ id: 'find', ...FIND_SHORTCUT, run: () => useUi.getState().openFind(findIn) }] : []),
-            { id: 'theme', label: 'Theme…', hint: themeById(themeId).name, keepOpen: true, run: enterThemes },
+            { id: 'appearance', label: 'Appearance…', keywords: 'system dark light mode', hint: appearanceLabel(appearance), keepOpen: true, run: enterAppearance },
+            { id: 'theme-dark', label: 'Dark theme…', hint: themeById(themeIds.dark).name, keepOpen: true, run: () => enterThemes('dark') },
+            { id: 'theme-light', label: 'Light theme…', hint: themeById(themeIds.light).name, keepOpen: true, run: () => enterThemes('light') },
             { id: 'font-family', label: 'Font family…', hint: font.family, keepOpen: true, run: enterFonts },
             { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
             { id: 'font-smaller', label: 'Font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
@@ -144,17 +159,25 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 .filter((shortcut) => shortcut.run !== togglePalette)
                 .map((shortcut) => ({ id: shortcut.code, label: shortcut.label, keys: shortcut.keys, run: shortcut.run })),
         ], query);
-    } else if (mode === 'themes') {
-        const current = committed.current?.themeId ?? themeId;
-        items = filterItems<Item>(THEMES.map((theme) => ({
+    } else if (mode === 'appearance') {
+        items = filterItems<Item>(APPEARANCES.map((option) => ({
+            id: `appearance:${option}`,
+            label: appearanceLabel(option),
+            keywords: option === 'system' ? 'auto' : undefined,
+            themeId: themeIds[schemeOf(option, systemScheme)],
+            hint: option === appearance ? 'current' : undefined,
+            run: () => chooseAppearance(option),
+        })), query);
+    } else if (mode === 'dark' || mode === 'light') {
+        items = filterItems<Item>(themesOf(mode).map((theme) => ({
             id: `theme:${theme.id}`,
             label: theme.name,
             themeId: theme.id,
-            hint: theme.id === current ? 'current' : undefined,
+            hint: theme.id === themeIds[mode] ? 'current' : undefined,
             run: () => chooseTheme(theme.id),
         })), query);
     } else {
-        const current = committed.current?.font.family ?? font.family;
+        const current = committedFont.current?.family ?? font.family;
         items = filterItems<Item>(families.map((family) => ({
             id: `family:${family}`,
             label: family,
@@ -175,7 +198,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     const selected = Math.min(active, Math.max(0, items.length - 1));
     const preview = mode === 'fonts' ? items[selected]?.family : undefined;
-    const previewTheme = mode === 'themes' ? items[selected]?.themeId : undefined;
+    const previewTheme = mode !== 'commands' ? items[selected]?.themeId : undefined;
 
     useEffect(() => {
         if (!preview) {
@@ -189,7 +212,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     useEffect(() => {
         if (previewTheme) {
-            useUi.getState().setTheme(previewTheme);
+            useUi.getState().setPreviewTheme(previewTheme);
         }
     }, [previewTheme]);
 

@@ -85,7 +85,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 
 | Keys | Action |
 |---|---|
-| ⌘K | Command palette: every action below, plus the theme and the terminal font family and size. Type a session or pane name to jump to it |
+| ⌘K | Command palette: every action below, plus the appearance, the themes and the terminal font family and size. Type a session or pane name to jump to it |
 | ⌘F | Find in the focused terminal's scrollback. ↩ / ⇧↩ or ⌘G / ⇧⌘G step through the matches, Esc closes. A capital letter makes it case-sensitive |
 | ⌃⌥J | Jump to the next pane that needs you |
 | ⌃⌥B | Show or hide the sidebar |
@@ -104,9 +104,11 @@ of the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the wo
 
 ### Themes and fonts
 
-⌘K → **Theme…** colours the whole app and every terminal. Voltran is the default; the others are
-Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, One Dark, Rosé Pine, and the light
-Catppuccin Latte, Solarized Light and GitHub Light. ⌘K → **Font family…** lists the common monospace fonts
+⌘K → **Appearance…** follows the system's dark or light mode, or keeps one of them. Dark and light
+each have their own theme, which colours the whole app and every terminal: ⌘K → **Dark theme…** picks
+from Voltran (the default), Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, One Dark and
+Rosé Pine, and ⌘K → **Light theme…** from GitHub Light (the default), Catppuccin Latte and Solarized
+Light. ⌘K → **Font family…** lists the common monospace fonts
 installed on your Mac or takes any installed font by name, and the font size commands make terminal
 text bigger or smaller. Moving
 through a list previews each choice, ↩ keeps it and Esc goes back. Status lamps take their colours

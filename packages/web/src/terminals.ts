@@ -9,7 +9,7 @@ import { wsUrl } from './api.ts';
 import { fontStack, type TerminalFont } from './fonts.ts';
 import { translateKey } from './keymap.ts';
 import { isAppShortcut } from './shortcuts.ts';
-import { useUi } from './store.ts';
+import { activeThemeId, useUi } from './store.ts';
 import { mix, themeById } from './themes.ts';
 
 export type LinkState = 'connecting' | 'open' | 'reconnecting' | 'gone';
@@ -44,7 +44,7 @@ export class TerminalSession {
         this.host = document.createElement('div');
         this.host.className = 'terminal-host';
         const font = useUi.getState().terminalFont;
-        const theme = themeById(useUi.getState().themeId);
+        const theme = themeById(activeThemeId(useUi.getState()));
         this.term = new Terminal({
             allowProposedApi: true,
             cursorBlink: true,
@@ -327,7 +327,7 @@ export class TerminalSession {
 }
 
 function searchOptions(query: string, incremental: boolean): ISearchOptions {
-    const { background, yellow } = themeById(useUi.getState().themeId).terminal;
+    const { background, yellow } = themeById(activeThemeId(useUi.getState())).terminal;
     return {
         caseSensitive: query !== query.toLowerCase(),
         incremental,
@@ -351,8 +351,9 @@ useUi.subscribe((state, previous) => {
     if (state.terminalFont !== previous.terminalFont) {
         sessions.forEach((session) => session.applyFont(state.terminalFont));
     }
-    if (state.themeId !== previous.themeId) {
-        const theme = themeById(state.themeId);
+    const themeId = activeThemeId(state);
+    if (themeId !== activeThemeId(previous)) {
+        const theme = themeById(themeId);
         sessions.forEach((session) => {
             session.term.options.minimumContrastRatio = theme.minimumContrastRatio;
             session.term.options.theme = theme.terminal;

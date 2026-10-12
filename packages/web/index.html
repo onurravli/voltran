@@ -10,7 +10,9 @@
     <!-- Paints the last theme before the app loads; main.tsx keeps voltran.theme current. -->
     <script>
       try {
-        const properties = JSON.parse(localStorage.getItem('voltran.theme') ?? '{}');
+        const cache = JSON.parse(localStorage.getItem('voltran.theme') ?? '{}');
+        const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const properties = cache[cache.appearance === 'system' ? system : cache.appearance] ?? {};
         for (const [name, value] of Object.entries(properties)) {
           document.documentElement.style.setProperty(name, String(value));
         }

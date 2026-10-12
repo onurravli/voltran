@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { AppState, LayoutDirection, PaneView, Session, VersionInfo } from '@voltran/shared';
 import { needsAttention } from '@voltran/shared';
 import { DEFAULT_FONT, parseFont, type TerminalFont } from './fonts.ts';
-import { DEFAULT_THEME_ID, parseThemeId } from './themes.ts';
+import { parseThemeChoice, schemeOf, themeById, type Appearance, type Scheme } from './themes.ts';
 
 export type Connection = 'connecting' | 'online' | 'offline' | 'unauthenticated';
 
@@ -26,7 +26,7 @@ export interface Toast {
     tone: 'info' | 'error';
 }
 
-interface UiState {
+export interface UiState {
     app: AppState | null;
     version: VersionInfo | null;
     connection: Connection;
@@ -42,7 +42,10 @@ interface UiState {
     sidebarHidden: boolean;
     zen: boolean;
     terminalFont: TerminalFont;
-    themeId: string;
+    appearance: Appearance;
+    themeIds: Record<Scheme, string>;
+    systemScheme: Scheme;
+    previewThemeId: string | null;
     dialog: Dialog | null;
     paneMenu: PaneMenuTarget | null;
     toast: Toast | null;
@@ -61,7 +64,9 @@ interface UiState {
     toggleSidebar: () => void;
     setZen: (zen: boolean, maximizedPaneId: string | null) => void;
     setTerminalFont: (font: TerminalFont) => void;
+    setAppearance: (appearance: Appearance) => void;
     setTheme: (id: string) => void;
+    setPreviewTheme: (id: string | null) => void;
     openDialog: (dialog: Dialog | null) => void;
     openPaneMenu: (target: PaneMenuTarget | null) => void;
     showToast: (message: string, tone?: Toast['tone']) => void;
@@ -75,7 +80,8 @@ interface Persisted {
     showArchived: boolean;
     sidebarHidden: boolean;
     terminalFont: TerminalFont;
-    themeId: string;
+    appearance: Appearance;
+    themeIds: Record<Scheme, string>;
 }
 
 function readPersisted(): Persisted {
@@ -89,14 +95,18 @@ function readPersisted(): Persisted {
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
                 terminalFont: parseFont(parsed.terminalFont),
-                themeId: parseThemeId(parsed.themeId),
+                ...parseThemeChoice(parsed),
             };
         }
     } catch {
         localStorage.removeItem(STORAGE_KEY);
     }
-    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, sidebarHidden: false, terminalFont: DEFAULT_FONT, themeId: DEFAULT_THEME_ID };
+    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, sidebarHidden: false, terminalFont: DEFAULT_FONT, ...parseThemeChoice({}) };
 }
+
+const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+const systemScheme = (): Scheme => (darkScheme.matches ? 'dark' : 'light');
 
 let toastId = 0;
 
@@ -105,6 +115,8 @@ export const useUi = create<UiState>((set, get) => ({
     version: null,
     connection: 'connecting',
     ...readPersisted(),
+    systemScheme: systemScheme(),
+    previewThemeId: null,
     focusedPaneId: null,
     maximizedPaneId: null,
     draggingPaneId: null,
@@ -141,7 +153,12 @@ export const useUi = create<UiState>((set, get) => ({
     toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),
     setZen: (zen, maximizedPaneId) => set({ zen, maximizedPaneId }),
     setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
-    setTheme: (id) => set({ themeId: parseThemeId(id) }),
+    setAppearance: (appearance) => set({ appearance }),
+    setTheme: (id) => {
+        const theme = themeById(id);
+        set({ themeIds: { ...get().themeIds, [theme.scheme]: theme.id } });
+    },
+    setPreviewTheme: (previewThemeId) => set({ previewThemeId }),
     openDialog: (dialog) => set({ dialog, paneMenu: null }),
     openPaneMenu: (paneMenu) => set({ paneMenu }),
     showToast: (message, tone = 'info') => {
@@ -163,10 +180,17 @@ useUi.subscribe((state) => {
         showArchived: state.showArchived,
         sidebarHidden: state.sidebarHidden,
         terminalFont: state.terminalFont,
-        themeId: state.themeId,
+        appearance: state.appearance,
+        themeIds: state.themeIds,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 });
+
+darkScheme.addEventListener('change', () => useUi.setState({ systemScheme: systemScheme() }));
+
+export function activeThemeId(state: UiState): string {
+    return state.previewThemeId ?? state.themeIds[schemeOf(state.appearance, state.systemScheme)];
+}
 
 function firstOpenSession(app: AppState): Session | undefined {
     return app.sessions.find((session) => !session.archived);
