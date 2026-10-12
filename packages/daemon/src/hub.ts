@@ -24,7 +24,7 @@ import {
     type UpdateProjectBody,
     type UpdateSessionBody,
 } from '@voltran/shared';
-import { adapterFor, isAdapterId, isClaudeHookEvent } from './adapters.ts';
+import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent } from './adapters.ts';
 import { PaneManager } from './panes.ts';
 import type { Store } from './store.ts';
 
@@ -376,6 +376,12 @@ export class Hub {
         if (spec.adapter === 'command') {
             requireString(spec.command, 'command', MAX_COMMAND);
         }
+        if (spec.adapter === 'claude' && spec.command !== undefined) {
+            const problem = claudeArgsProblem(requireString(spec.command, 'command', MAX_COMMAND));
+            if (problem) {
+                throw new HttpError(400, problem);
+            }
+        }
         if (spec.title !== undefined) {
             requireString(spec.title, 'title', MAX_TITLE);
         }
@@ -383,12 +389,12 @@ export class Hub {
 
     private insertPaneRecord(session: Session, spec: PaneSpec): Pane {
         const adapter = adapterFor(spec.adapter);
-        const command = spec.adapter === 'command' || spec.adapter === 'subagent' ? String(spec.command).trim() : null;
+        const command = spec.adapter === 'command' || spec.adapter === 'subagent' || spec.adapter === 'claude' ? spec.command?.trim() || null : null;
         const pane: Pane = {
             id: randomUUID(),
             sessionId: session.id,
             adapter: spec.adapter,
-            title: spec.title?.trim() || (command ? command.slice(0, 40) : adapter.label),
+            title: spec.title?.trim() || (command && spec.adapter !== 'claude' ? command.slice(0, 40) : adapter.label),
             command,
             cwd: session.cwd,
             agentSessionId: spec.adapter === 'claude' ? randomUUID() : null,

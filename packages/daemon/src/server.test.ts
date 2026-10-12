@@ -148,6 +148,9 @@ describe('validation', () => {
         expect((await api('POST', '/api/sessions', { projectId, title: 'x', link: 'javascript:alert(1)' })).status).toBe(400);
         expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'rm -rf' }] })).status).toBe(400);
         expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'command', command: '  ' }] })).status).toBe(400);
+        expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'claude', command: '--resume abc' }] })).status).toBe(400);
+        expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'claude', command: '--settings=x.json' }] })).status).toBe(400);
+        expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'claude', command: "--plugin-dir 'a b" }] })).status).toBe(400);
         expect((await api('POST', '/api/sessions', { projectId, title: '   ' })).status).toBe(400);
     });
 
@@ -233,7 +236,7 @@ describe('agent panes', () => {
         const { body: session } = await api<Session>('POST', '/api/sessions', {
             projectId: state.projects[0].id,
             title: 'hooks',
-            panes: [{ adapter: 'claude' }],
+            panes: [{ adapter: 'claude', command: "--plugin-dir './a b'" }],
         });
         const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
 
@@ -250,8 +253,8 @@ describe('agent panes', () => {
         const pane = async (): Promise<PaneView | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((entry) => entry.id === paneId);
         await until(async () => (await pane())?.status === 'working');
 
-        expect(await pane()).toMatchObject({ detail: 'hi from fake claude', agentSessionId: 'fake-session-1', agentResumable: true });
-        expect(output).toMatch(/fake claude --settings \S+claude-settings\.json --session-id [0-9a-f-]{36}/);
+        expect(await pane()).toMatchObject({ title: 'Claude Code', detail: 'hi from fake claude', agentSessionId: 'fake-session-1', agentResumable: true });
+        expect(output).toMatch(/fake claude --settings \S+claude-settings\.json --session-id [0-9a-f-]{36} --plugin-dir \.\/a b/);
 
         const forged = await fetch(`${base}/api/hooks/${paneId}/Stop`, { method: 'POST', headers: { Authorization: `Bearer ${daemon.token}` }, body: '{}' });
         expect(forged.status).toBe(403);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import type { AdapterId, AdapterInfo, PaneSpec } from '@voltran/shared';
+import { commandPane, type AdapterId, type AdapterInfo, type PaneSpec } from '@voltran/shared';
 import { api } from '../api.ts';
 import { FIND_KEYS, SHORTCUTS } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
@@ -108,7 +108,7 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
         event.preventDefault();
         const panes: PaneSpec[] = picks.map((adapter) => ({ adapter }));
         if (command.trim()) {
-            panes.push({ adapter: 'command', command: command.trim() });
+            panes.push(commandPane(command));
         }
         setBusy(true);
         setError(null);
@@ -322,7 +322,7 @@ export function PaneMenu() {
                 onSubmit={(event) => {
                     event.preventDefault();
                     if (command.trim()) {
-                        create({ adapter: 'command', command: command.trim() });
+                        create(commandPane(command));
                     }
                 }}
             >

@@ -39,7 +39,11 @@ is already open, `voltran up` does not open another one.
 - **Session**: one piece of work inside a project, such as a ticket, a branch or an investigation.
   It can carry a link to its ticket or pull request.
 - **Pane**: a terminal inside a session, which runs an agent (Claude Code, Codex, Gemini CLI), a
-  shell, or a command such as `npm run dev`. Panes split right or down and resize freely.
+  shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A command
+  that starts with `claude`, such as `claude --plugin-dir ./my-plugin`, opens a Claude Code pane
+  with those arguments, so it keeps its status, subagents and resume. Quotes work as in a shell but
+  nothing is expanded (`~`, `$VAR`), and Voltran sets `--settings`, `--session-id`, `--resume` and
+  `--continue` itself.
 
 ### Arranging panes
 

@@ -43,6 +43,7 @@ const DEFINITIONS: AdapterDefinition[] = [
             } else if (pane.agentSessionId) {
                 args.push('--session-id', pane.agentSessionId);
             }
+            args.push(...(splitArgs(pane.command ?? '') ?? []));
             return { file: 'claude', args };
         },
     },
@@ -108,6 +109,64 @@ export function adapterFor(id: AdapterId): AdapterDefinition {
 
 export function isAdapterId(value: unknown): value is AdapterId {
     return typeof value === 'string' && BY_ID.has(value as AdapterId);
+}
+
+const CLAUDE_OWNED_FLAGS = ['--settings', '--session-id', '--resume', '-r', '--continue', '-c'];
+
+export function splitArgs(text: string): string[] | null {
+    const args: string[] = [];
+    let word = '';
+    let inWord = false;
+    let quote: string | null = null;
+    for (let index = 0; index < text.length; index++) {
+        const char = text[index];
+        if (quote === "'") {
+            if (char === quote) {
+                quote = null;
+            } else {
+                word += char;
+            }
+        } else if (quote === '"') {
+            if (char === quote) {
+                quote = null;
+            } else if (char === '\\' && (text[index + 1] === '"' || text[index + 1] === '\\')) {
+                word += text[++index];
+            } else {
+                word += char;
+            }
+        } else if (char === "'" || char === '"') {
+            quote = char;
+            inWord = true;
+        } else if (char === '\\' && index + 1 < text.length) {
+            word += text[++index];
+            inWord = true;
+        } else if (/\s/.test(char)) {
+            if (inWord) {
+                args.push(word);
+                word = '';
+                inWord = false;
+            }
+        } else {
+            word += char;
+            inWord = true;
+        }
+    }
+    if (quote) {
+        return null;
+    }
+    if (inWord) {
+        args.push(word);
+    }
+    return args;
+}
+
+export function claudeArgsProblem(text: string): string | null {
+    const args = splitArgs(text);
+    if (!args) {
+        return 'the Claude arguments have an unterminated quote';
+    }
+    const owned = args.find((arg) => CLAUDE_OWNED_FLAGS.some((flag) => arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`))));
+    return owned ? `${owned.split('=')[0]} is set by Voltran` : null;
 }
 
 function findOnPath(binary: string, path: string): string | null {
