@@ -2,6 +2,7 @@ import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { describeAdapters, resolveShellPath, writeClaudeSettings } from './adapters.ts';
+import { startDaemonProcess } from './cli.ts';
 import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
 import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
@@ -13,7 +14,7 @@ export interface DaemonOptions {
     shell: string;
     path: string;
     baseEnv: NodeJS.ProcessEnv;
-    onShutdown?: () => void;
+    onShutdown?: (restart: boolean) => void;
 }
 
 export interface Daemon {
@@ -57,6 +58,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     const previousWindows = readPreviousWindows(config.windowsFile);
 
     let stopped = false;
+    let restarting = false;
     const shutdown = async (): Promise<void> => {
         if (stopped) {
             return;
@@ -74,12 +76,19 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
             rmSync(config.pidFile, { force: true });
             server.close();
             server.closeAllConnections();
-            options.onShutdown?.();
+            options.onShutdown?.(restarting);
         }
+    };
+    const restart = async (): Promise<void> => {
+        if (stopped) {
+            return;
+        }
+        restarting = true;
+        await shutdown();
     };
 
     const version = new VersionWatch(fileURLToPath(new URL('../..', import.meta.url)), config.webDist);
-    const server = createVoltranServer({ config, hub, guard, previousWindows, version, onShutdown: shutdown });
+    const server = createVoltranServer({ config, hub, guard, previousWindows, version, onShutdown: shutdown, onRestart: restart });
     return { config, token, hub, server, shutdown };
 }
 
@@ -92,8 +101,11 @@ export async function startDaemon(): Promise<void> {
         shell,
         path,
         baseEnv: process.env,
-        onShutdown: () => {
-            console.log('[voltran] stopped');
+        onShutdown: (restart) => {
+            if (restart) {
+                startDaemonProcess(config);
+            }
+            console.log(restart ? '[voltran] restarting' : '[voltran] stopped');
             setTimeout(() => process.exit(0), 200).unref();
         },
     });

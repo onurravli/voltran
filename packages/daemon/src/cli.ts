@@ -17,6 +17,7 @@ Usage:
   voltran add [path] [--name <name>]   register a folder as a project (default: current dir)
   voltran status                       show daemon and attention summary
   voltran down                         stop the daemon (agents resume on next open)
+  voltran restart                      restart the daemon to load new code; takes up's options
 
 Options:
   --browser   open in the default browser instead of a Chrome app window
@@ -56,19 +57,23 @@ function client(): Client {
     };
 }
 
-async function isRunning(api: Client): Promise<boolean> {
+async function runningPid(api: Client): Promise<number | null> {
     try {
-        await api.request('GET', '/api/health');
-        return true;
+        return (await api.request<{ pid: number }>('GET', '/api/health')).pid;
     } catch {
-        return false;
+        return null;
     }
 }
 
-async function waitUntilRunning(api: Client, timeoutMs: number): Promise<boolean> {
+async function isRunning(api: Client): Promise<boolean> {
+    return (await runningPid(api)) !== null;
+}
+
+async function waitUntilRunning(api: Client, timeoutMs: number, previousPid: number | null = null): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        if (await isRunning(api)) {
+        const pid = await runningPid(api);
+        if (pid !== null && pid !== previousPid) {
             return true;
         }
         await new Promise((resolveWait) => setTimeout(resolveWait, 150));
@@ -84,7 +89,7 @@ function ensureUiBuilt(config: Config): void {
     execFileSync('npm', ['run', 'build'], { cwd: REPO_ROOT, stdio: 'inherit' });
 }
 
-function startDaemonProcess(config: Config): void {
+export function startDaemonProcess(config: Config): void {
     const log = openSync(config.logFile, 'a');
     const child = spawn(process.execPath, [DAEMON_ENTRY], {
         cwd: config.home,
@@ -144,7 +149,10 @@ async function up(args: string[]): Promise<void> {
         started = true;
         console.log(`Voltran started on ${api.config.url}`);
     }
+    await openUi(api, args, started);
+}
 
+async function openUi(api: Client, args: string[], started: boolean): Promise<void> {
     if (args.includes('--no-open')) {
         return;
     }
@@ -172,6 +180,24 @@ async function down(): Promise<void> {
     }
     await api.request('POST', '/api/shutdown');
     console.log('Voltran stopped. Agent sessions resume when you open them again.');
+}
+
+// The daemon starts its own successor, so a restart run from a pane inside Voltran completes even
+// though that pane, and this process with it, is stopped along the way.
+async function restart(args: string[]): Promise<void> {
+    const api = client();
+    const previousPid = await runningPid(api);
+    if (previousPid === null) {
+        return up(args);
+    }
+    ensureUiBuilt(api.config);
+    await api.request('POST', '/api/restart');
+    if (!(await waitUntilRunning(api, 20_000, previousPid))) {
+        console.error(`Voltran did not restart. See ${api.config.logFile}`);
+        process.exit(1);
+    }
+    console.log(`Voltran restarted on ${api.config.url}`);
+    await openUi(api, args, true);
 }
 
 async function status(): Promise<void> {
@@ -216,6 +242,8 @@ export async function runCli(argv: string[]): Promise<void> {
         case 'down':
         case 'stop':
             return down();
+        case 'restart':
+            return restart(args);
         case 'status':
             return status();
         case 'add':

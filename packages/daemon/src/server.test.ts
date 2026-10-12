@@ -265,3 +265,26 @@ describe('agent panes', () => {
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
     });
 });
+
+describe('restart', () => {
+    it('shuts the daemon down and asks for a successor', async () => {
+        const restartPort = await freePort();
+        const config = loadConfig({ VOLTRAN_HOME: join(home, 'restart'), VOLTRAN_PORT: String(restartPort) });
+        let shutdownForRestart: boolean | null = null;
+        const restarting = buildDaemon(config, {
+            shell: '/bin/sh',
+            path: '/usr/bin:/bin',
+            baseEnv: process.env,
+            onShutdown: (restart) => {
+                shutdownForRestart = restart;
+            },
+        });
+        await new Promise<void>((resolveListen) => restarting.server.listen(restartPort, '127.0.0.1', resolveListen));
+
+        const response = await fetch(`http://127.0.0.1:${restartPort}/api/restart`, { method: 'POST', headers: { Authorization: `Bearer ${restarting.token}` } });
+        expect(response.status).toBe(202);
+        await until(() => shutdownForRestart !== null);
+        expect(shutdownForRestart).toBe(true);
+        expect(restarting.server.listening).toBe(false);
+    });
+});

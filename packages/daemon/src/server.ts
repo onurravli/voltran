@@ -41,6 +41,7 @@ export interface ServerOptions {
     previousWindows: number;
     version?: VersionWatch;
     onShutdown: () => void;
+    onRestart: () => void;
 }
 
 const VERSION_POLL_MS = 2000;
@@ -114,6 +115,10 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('POST', '/api/shutdown', (_req, res) => {
         sendJson(res, 202, { ok: true });
         setImmediate(options.onShutdown);
+    });
+    route('POST', '/api/restart', (_req, res) => {
+        sendJson(res, 202, { ok: true });
+        setImmediate(options.onRestart);
     });
 
     route('POST', '/api/projects', async (req, res) => sendJson(res, 201, hub.createProject(await readJson(req))));

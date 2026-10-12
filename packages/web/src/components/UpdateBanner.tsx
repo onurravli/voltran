@@ -7,9 +7,9 @@ declare const __VOLTRAN_UI__: string;
 
 const MESSAGES: Record<UpdateNotice, React.ReactNode> = {
     reload: 'Voltran’s UI was updated.',
-    'restart-daemon': <>The daemon is running older code. Restart it from a terminal outside Voltran: <code>voltran down && voltran up</code></>,
+    'restart-daemon': <>The daemon is running older code. Restart it: <code>voltran restart</code></>,
     rebuild: <>This UI build is older than the daemon. Run <code>npm run build</code>, then reload.</>,
-    'rebuild-and-restart': <>Voltran’s code changed. Run <code>npm run build</code>, then restart the daemon from a terminal outside Voltran.</>,
+    'rebuild-and-restart': <>Voltran’s code changed. Run <code>npm run build</code>, then <code>voltran restart</code>.</>,
 };
 
 export function UpdateBanner() {

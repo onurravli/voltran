@@ -32,6 +32,7 @@ is already open, `voltran up` does not open another one.
 | `voltran add [path] [--name <name>]` | Register a folder as a project (defaults to the current folder) |
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
+| `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
 
 ## How it is organized
 
@@ -182,9 +183,10 @@ npm run build        # rebuilds the UI the daemon serves
 With both dev servers running, `VOLTRAN_DEV=1 voltran up` opens the Vite URL signed in.
 
 Outside the dev servers, the daemon serves the built UI from `packages/web/dist`: after changing the
-UI, run `npm run build` and reload the window. After changing the daemon, restart it with `voltran
-down && voltran up`. If you are working from a pane inside Voltran, run the restart from another
-terminal: `voltran down` stops the pane you are typing in.
+UI, run `npm run build` and reload the window. After changing the daemon, run `voltran restart`. It
+works from a pane inside Voltran too: that pane stops with the others and resumes when you open it.
+The restarted daemon keeps the environment of the one before it, so after changing an environment
+variable the daemon should see, use `voltran down && voltran up` from a terminal that has it.
 
 `VOLTRAN_HOME` and `VOLTRAN_PORT` point a daemon at another data folder or port, which keeps
 experiments away from your real sessions.
