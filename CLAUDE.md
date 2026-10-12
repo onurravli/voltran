@@ -61,7 +61,9 @@ use `ActivityTracker` (output streaming / quiet / bell heuristics). Adapters (`c
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
 `PostToolUse`, and background agents are reconciled against the `background_tasks` list on `Stop`.
 `transcripts.ts` derives a subagent's transcript path from the parent transcript in the hook payload
-(never from a client), validates it, and parses Claude's JSONL. A `subagent` pane runs
+(never from a client), validates it, and parses Claude's JSONL. An agent that a workflow starts writes
+under `subagents/workflows/<run>/` instead, and no hook names the run, so reads look the file up there
+by agent id; the derived path stays the subagent's identity. A `subagent` pane runs
 `subagent-view.ts` as its process, which renders the transcript with `subagent-render.ts`; the daemon
 sends it `SIGUSR2` when the subagent stops. Claude's transcript format is internal and may change.
 

@@ -1,9 +1,10 @@
-import { closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync } from 'node:fs';
+import { closeSync, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { TranscriptChunk, TranscriptEntry } from '@voltran/shared';
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AGENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const RUN_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_CHUNK_BYTES = 1024 * 1024;
 const MAX_TEXT = 20_000;
 const MAX_RESULT = 2_000;
@@ -33,16 +34,39 @@ function insideSubagents(path: string): boolean {
             return false;
         }
         const folder = dirname(path);
-        const session = dirname(folder);
-        return realpathSync(folder) === join(realpathSync(dirname(session)), basename(session), 'subagents');
+        const run = basename(dirname(folder)) === 'workflows' && RUN_ID.test(basename(folder)) ? ['workflows', basename(folder)] : [];
+        const session = dirname(run.length > 0 ? dirname(dirname(folder)) : folder);
+        return realpathSync(folder) === join(realpathSync(dirname(session)), basename(session), 'subagents', ...run);
     } catch {
         return false;
     }
 }
 
+// An agent that a workflow starts writes under subagents/workflows/<run>/ instead, and its hooks do
+// not say which run, so the file is looked up there by name.
+function locate(path: string): string | null {
+    if (insideSubagents(path)) {
+        return path;
+    }
+    const workflows = join(dirname(path), 'workflows');
+    let runs: string[];
+    try {
+        runs = readdirSync(workflows);
+    } catch {
+        return null;
+    }
+    for (const run of runs) {
+        const candidate = join(workflows, run, basename(path));
+        if (RUN_ID.test(run) && insideSubagents(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
 export function readSubagentMeta(transcriptPath: string): SubagentMeta | null {
-    const metaPath = transcriptPath.replace(/\.jsonl$/, '.meta.json');
-    if (!existsSync(metaPath) || !insideSubagents(metaPath)) {
+    const metaPath = locate(transcriptPath.replace(/\.jsonl$/, '.meta.json'));
+    if (!metaPath) {
         return null;
     }
     try {
@@ -153,10 +177,11 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
 }
 
 export function readTranscript(path: string, from: number): TranscriptChunk | null {
-    if (!insideSubagents(path)) {
+    const file = locate(path);
+    if (!file) {
         return null;
     }
-    const fd = openSync(path, 'r');
+    const fd = openSync(file, 'r');
     try {
         const size = fstatSync(fd).size;
         const start = Number.isSafeInteger(from) && from >= 0 && from <= size ? from : 0;

@@ -119,6 +119,37 @@ describe('readTranscript', () => {
         symlinkSync(outside, join(dir, other));
         expect(readTranscript(subagentTranscriptPath(join(dir, `${other}.jsonl`), other, 'a1')!, 0)).toBeNull();
     });
+
+    it('finds the transcript of an agent a workflow started, once Claude writes it', () => {
+        const { parent, subagents } = project();
+        const path = subagentTranscriptPath(parent, SESSION, 'a7')!;
+        expect(readTranscript(path, 0)).toBeNull();
+        const run = join(subagents, 'workflows', 'wf_4f777aee-f5e');
+        mkdirSync(run, { recursive: true });
+        expect(readTranscript(path, 0)).toBeNull();
+        writeFileSync(join(run, 'agent-a7.jsonl'), line(LINES[5]));
+        expect(readTranscript(path, 0)?.entries).toEqual([{ kind: 'text', text: 'Virtual functions dispatch at runtime.', at: null }]);
+    });
+
+    it('refuses workflow transcripts reached through symlinks', () => {
+        const outside = mkdtempSync(join(tmpdir(), 'voltran-outside-'));
+        cleanups.push(outside);
+        mkdirSync(join(outside, 'wf_run'));
+        writeFileSync(join(outside, 'wf_run', 'agent-a1.jsonl'), line(LINES[5]));
+
+        const linkedRun = project();
+        mkdirSync(join(linkedRun.subagents, 'workflows'));
+        symlinkSync(join(outside, 'wf_run'), join(linkedRun.subagents, 'workflows', 'wf_run'));
+        expect(readTranscript(subagentTranscriptPath(linkedRun.parent, SESSION, 'a1')!, 0)).toBeNull();
+
+        mkdirSync(join(linkedRun.subagents, 'workflows', 'wf_real'));
+        symlinkSync(join(outside, 'wf_run', 'agent-a1.jsonl'), join(linkedRun.subagents, 'workflows', 'wf_real', 'agent-a2.jsonl'));
+        expect(readTranscript(subagentTranscriptPath(linkedRun.parent, SESSION, 'a2')!, 0)).toBeNull();
+
+        const linkedWorkflows = project();
+        symlinkSync(outside, join(linkedWorkflows.subagents, 'workflows'));
+        expect(readTranscript(subagentTranscriptPath(linkedWorkflows.parent, SESSION, 'a1')!, 0)).toBeNull();
+    });
 });
 
 describe('readSubagentMeta', () => {
@@ -127,6 +158,14 @@ describe('readSubagentMeta', () => {
         writeFileSync(join(subagents, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'Explore', description: 'map the repo', toolUseId: 't1' }));
         expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a1')!)).toEqual({ description: 'map the repo', type: 'Explore' });
         expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a2')!)).toBeNull();
+    });
+
+    it('reads it from the workflow run of an agent a workflow started', () => {
+        const { parent, subagents } = project();
+        const run = join(subagents, 'workflows', 'wf_4f777aee-f5e');
+        mkdirSync(run, { recursive: true });
+        writeFileSync(join(run, 'agent-a7.meta.json'), JSON.stringify({ agentType: 'developer', description: 'dev:OPT-244553', workflowPhase: 'Develop' }));
+        expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a7')!)).toEqual({ description: 'dev:OPT-244553', type: 'developer' });
     });
 });
 
