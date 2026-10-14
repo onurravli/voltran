@@ -33,6 +33,15 @@ is already open, `voltran up` does not open another one.
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
+| `voltran autostart [on\|off]` | Start the daemon when you log in to macOS (a LaunchAgent); with no argument, say whether it does |
+
+### In the Dock
+
+In Chrome, ⌘K → **Install Voltran as an app** installs Voltran as an app of its own: it gets its own
+window, Dock icon and ⌘Tab entry, and `voltran up` opens it from then on. Right-click its Dock icon →
+Options → Keep in Dock to pin it. The app cannot start the daemon, so run `voltran autostart on` once
+to have it running whenever you are logged in. The agent runs the Node that ran that command; run it
+again after switching Node versions.
 
 ## How it is organized
 

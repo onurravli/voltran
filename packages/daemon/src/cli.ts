@@ -1,13 +1,15 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, openSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AppState } from '@voltran/shared';
 import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
+import { LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, launchAgentPlist } from './macos.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
 const DAEMON_ENTRY = join(HERE, 'main.ts');
+const CLI_ENTRY = join(REPO_ROOT, 'bin', 'voltran.mjs');
 const CHROME = '/Applications/Google Chrome.app';
 
 const LOGO = String.raw`__     __    _ _
@@ -26,6 +28,9 @@ Usage:
   voltran status                       show daemon and attention summary
   voltran down                         stop the daemon (agents resume on next open)
   voltran restart                      restart the daemon to load new code; takes up's options
+  voltran autostart [on|off]           start the daemon when you log in to macOS
+
+Once Voltran is installed as an app (⌘K → Install Voltran as an app), up opens that app.
 
 Options:
   --browser   open in the default browser instead of a Chrome app window
@@ -108,9 +113,16 @@ export function startDaemonProcess(config: Config): void {
     child.unref();
 }
 
-function openWindow(url: string, preferBrowser: boolean): void {
+function openWindow(base: string, path: string, preferBrowser: boolean): void {
+    const url = `${base}${path}`;
     if (process.platform !== 'darwin') {
         console.log(`Open ${url}`);
+        return;
+    }
+    const app = preferBrowser ? null : installedChromeApp(base);
+    if (app) {
+        const launch = [`--profile-directory=${app.profileDirectory}`, `--app-id=${app.id}`, `--app-launch-url-for-shortcuts-menu-item=${url}`];
+        spawn('open', ['-na', CHROME, '--args', ...launch], { stdio: 'ignore', detached: true }).unref();
         return;
     }
     if (!preferBrowser && existsSync(CHROME)) {
@@ -177,7 +189,7 @@ async function openUi(api: Client, args: string[], started: boolean): Promise<vo
     }
     const { code } = await api.request<{ code: string }>('POST', '/api/login-code');
     const base = api.config.dev ? 'http://localhost:5173' : api.config.url;
-    openWindow(`${base}/auth?code=${code}`, args.includes('--browser'));
+    openWindow(base, `/auth?code=${code}`, args.includes('--browser'));
 }
 
 async function down(): Promise<void> {
@@ -206,6 +218,52 @@ async function restart(args: string[]): Promise<void> {
     }
     console.log(`Voltran restarted on ${api.config.url}`);
     await openUi(api, args, true);
+}
+
+function launchctl(args: string[]): boolean {
+    try {
+        execFileSync('launchctl', args, { stdio: 'ignore' });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// launchd starts agents with a bare environment, so the plist names node by its full path and passes
+// on the shell and Voltran's own settings; the daemon builds its PATH from that shell.
+function autostart(args: string[]): void {
+    if (process.platform !== 'darwin') {
+        console.log('voltran autostart is only available on macOS.');
+        return;
+    }
+    const domain = `gui/${process.getuid?.() ?? 0}`;
+    const [choice] = args;
+    if (choice === 'on') {
+        const config = loadConfig();
+        const env: Record<string, string> = { SHELL: process.env.SHELL || '/bin/zsh' };
+        for (const name of ['VOLTRAN_HOME', 'VOLTRAN_PORT']) {
+            if (process.env[name]) {
+                env[name] = process.env[name]!;
+            }
+        }
+        mkdirSync(dirname(LAUNCH_AGENT_FILE), { recursive: true });
+        writeFileSync(LAUNCH_AGENT_FILE, launchAgentPlist({ program: [process.execPath, CLI_ENTRY, 'up', '--no-open'], env, log: config.logFile }));
+        launchctl(['bootout', `${domain}/${LAUNCH_AGENT_LABEL}`]);
+        if (!launchctl(['bootstrap', domain, LAUNCH_AGENT_FILE])) {
+            console.error(`launchctl could not load ${LAUNCH_AGENT_FILE}`);
+            process.exit(1);
+        }
+        console.log(`Voltran now starts when you log in (${LAUNCH_AGENT_FILE}).`);
+        console.log(`It runs ${process.execPath}; run \`voltran autostart on\` again after switching Node versions.`);
+    } else if (choice === 'off') {
+        launchctl(['bootout', `${domain}/${LAUNCH_AGENT_LABEL}`]);
+        rmSync(LAUNCH_AGENT_FILE, { force: true });
+        console.log('Voltran no longer starts when you log in. The daemon keeps running until `voltran down`.');
+    } else {
+        console.log(existsSync(LAUNCH_AGENT_FILE)
+            ? 'Voltran starts when you log in. Turn it off with `voltran autostart off`.'
+            : 'Voltran does not start when you log in. Turn it on with `voltran autostart on`.');
+    }
 }
 
 async function status(): Promise<void> {
@@ -256,6 +314,8 @@ export async function runCli(argv: string[]): Promise<void> {
             return status();
         case 'add':
             return add(args);
+        case 'autostart':
+            return autostart(args);
         default:
             console.log(HELP);
     }

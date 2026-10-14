@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PaneStatus } from '@voltran/shared';
 import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFontInstalled, type TerminalFont } from '../fonts.ts';
+import { installApp } from '../install.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
 import { FIND_SHORTCUT, SHORTCUTS, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
@@ -69,6 +70,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const setTheme = useUi((state) => state.setTheme);
     const systemScheme = useUi((state) => state.systemScheme);
     const app = useUi((state) => state.app);
+    const installable = useUi((state) => state.installable);
     const [mode, setMode] = useState<Mode>('commands');
     const [families, setFamilies] = useState<string[]>([]);
     const [query, setQuery] = useState('');
@@ -155,6 +157,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
             { id: 'font-smaller', label: 'Font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
             { id: 'font-reset', label: 'Font size: reset', hint: `${DEFAULT_FONT.size}px`, keepOpen: true, run: () => resize(DEFAULT_FONT.size) },
+            ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),
             ...SHORTCUTS
                 .filter((shortcut) => shortcut.run !== togglePalette)
                 .map((shortcut) => ({ id: shortcut.code, label: shortcut.label, keys: shortcut.keys, run: shortcut.run })),
