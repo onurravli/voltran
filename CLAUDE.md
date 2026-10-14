@@ -16,7 +16,7 @@ npm run typecheck                # tsc for daemon and web (each includes shared)
 npm run build                    # builds packages/web/dist, which the daemon serves
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
 npm run dev:web                  # Vite on :5173, proxies /api and /ws to the daemon
-node bin/voltran.mjs up|down|status|add   # the CLI, same as `voltran` after npm link
+node bin/voltran.mjs up|down|status|add|autostart   # the CLI, same as `voltran` after npm link
 ```
 
 There is no linter or formatter; match the surrounding code (4-space indent, single quotes, no
@@ -77,6 +77,13 @@ endpoint (`POST /api/panes/:id/move`).
 `TerminalSession` per pane, kept across unmounts), `shortcuts.ts` (⌃⌥ shortcuts and ⌘K) and
 `keymap.ts` (iTerm-style line editing bytes). Themes (`themes.ts`) derive the UI's CSS variables from
 each terminal palette; `index.html` applies a cached copy before first paint.
+
+**Installed app.** Chrome can install Voltran as an app (`install.ts`, `public/manifest.webmanifest`).
+Every file stays behind the session cookie, so `index.html` fetches the manifest with
+`crossorigin="use-credentials"`; without it the manifest gets a 401 and Chrome refuses to install.
+`daemon/src/macos.ts` finds the installed app through the bundle Chrome writes to
+`~/Applications/Chrome Apps.localized` (its Info.plist names the app id, URL and profile), and the CLI
+opens it with `--app-id` plus `--app-launch-url-for-shortcuts-menu-item=<login URL>`, which signs it in.
 
 ## Testing
 
