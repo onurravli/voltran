@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#12151d" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="favicon" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <title>Voltran</title>
     <!-- Paints the last theme before the app loads; main.tsx keeps voltran.theme current. -->
     <script>
@@ -15,6 +16,9 @@
         const properties = cache[cache.appearance === 'system' ? system : cache.appearance] ?? {};
         for (const [name, value] of Object.entries(properties)) {
           document.documentElement.style.setProperty(name, String(value));
+        }
+        if (properties['--bay']) {
+          document.querySelector('meta[name="theme-color"]').content = properties['--bay'];
         }
       } catch {}
     </script>

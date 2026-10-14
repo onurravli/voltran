@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PaneStatus } from '@voltran/shared';
 import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFontInstalled, type TerminalFont } from '../fonts.ts';
+import { installApp } from '../install.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
 import { FIND_SHORTCUT, SHORTCUTS, editSettings, openSettingsInApp, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
@@ -70,6 +71,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const sidebarPosition = useUi((state) => state.sidebarPosition);
     const systemScheme = useUi((state) => state.systemScheme);
     const app = useUi((state) => state.app);
+    const installable = useUi((state) => state.installable);
     const [mode, setMode] = useState<Mode>('commands');
     const [families, setFamilies] = useState<string[]>([]);
     const [query, setQuery] = useState('');
@@ -160,6 +162,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'sidebar-side', label: `Move the sidebar to the ${otherSide}`, keywords: 'sidebar position left right', run: () => saveSettings({ sidebar: { position: otherSide } }) },
             { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
             { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
+            ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),
             ...SHORTCUTS
                 .filter((shortcut) => shortcut.run !== togglePalette)
                 .map((shortcut) => ({ id: shortcut.code, label: shortcut.label, keys: shortcut.keys, run: shortcut.run })),

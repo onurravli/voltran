@@ -54,6 +54,7 @@ export interface UiState {
     dialog: Dialog | null;
     paneMenu: PaneMenuTarget | null;
     toast: Toast | null;
+    installable: boolean;
     setApp: (app: AppState) => void;
     setVersion: (version: VersionInfo) => void;
     setConnection: (connection: Connection) => void;
@@ -78,6 +79,7 @@ export interface UiState {
     openDialog: (dialog: Dialog | null) => void;
     openPaneMenu: (target: PaneMenuTarget | null) => void;
     showToast: (message: string, tone?: Toast['tone']) => void;
+    setInstallable: (installable: boolean) => void;
 }
 
 const STORAGE_KEY = 'voltran.ui';
@@ -166,6 +168,7 @@ export const useUi = create<UiState>((set, get) => ({
     dialog: null,
     paneMenu: null,
     toast: null,
+    installable: false,
 
     setApp: (app) => {
         const { selectedSessionId, focusedPaneId, maximizedPaneId } = get();
@@ -252,6 +255,7 @@ export const useUi = create<UiState>((set, get) => ({
             }
         }, tone === 'error' ? 6000 : 3000);
     },
+    setInstallable: (installable) => set({ installable }),
 }));
 
 useUi.subscribe((state) => {
