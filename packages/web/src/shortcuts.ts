@@ -1,4 +1,4 @@
-import type { AppState, Session } from '@voltran/shared';
+import type { AppState, PaneView, Session } from '@voltran/shared';
 import { paneIds } from '@voltran/shared';
 import { api } from './api.ts';
 import { revealPane } from './notify.ts';
@@ -110,19 +110,27 @@ export function toggleZen(): void {
     showToast('Zen mode. ⇧Esc or ⌃⌥Z to leave');
 }
 
-function closeFocused(): void {
-    const { focusedPaneId, app, openDialog } = useUi.getState();
-    const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
-    if (!pane) {
+// An exited pane has no process left to stop, so closing it does not ask first.
+export function closePane(pane: PaneView): void {
+    if (pane.status === 'exited') {
+        api.deletePane(pane.id).catch(reportError);
         return;
     }
-    openDialog({
+    useUi.getState().openDialog({
         kind: 'confirm',
         title: `Close ${pane.title}?`,
         body: 'The process in this pane stops and its scrollback is deleted.',
         action: 'Close pane',
         onConfirm: () => api.deletePane(pane.id),
     });
+}
+
+function closeFocused(): void {
+    const { focusedPaneId, app } = useUi.getState();
+    const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
+    if (pane) {
+        closePane(pane);
+    }
 }
 
 export const SHORTCUTS: Shortcut[] = [

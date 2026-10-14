@@ -5,6 +5,7 @@ import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
 import { linkLabel, shortPath } from '../labels.ts';
+import { closePane } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
 import {
@@ -129,7 +130,6 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     const maximized = useUi((state) => state.maximizedPaneId === pane.id);
     const toggleMaximize = useUi((state) => state.toggleMaximize);
     const openPaneMenu = useUi((state) => state.openPaneMenu);
-    const openDialog = useUi((state) => state.openDialog);
     const adapter = useUi((state) => state.app?.adapters.find((entry) => entry.id === pane.adapter));
     const dragging = useUi((state) => state.draggingPaneId);
     const finding = useUi((state) => state.findPaneId === pane.id);
@@ -179,16 +179,6 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     const split = (event: ReactMouseEvent<HTMLButtonElement>, direction: 'horizontal' | 'vertical'): void => {
         const rect = event.currentTarget.getBoundingClientRect();
         openPaneMenu({ sessionId: session.id, splitFrom: pane.id, direction, anchor: { x: rect.right, y: rect.bottom + 4 } });
-    };
-
-    const close = (): void => {
-        openDialog({
-            kind: 'confirm',
-            title: `Close ${pane.title}?`,
-            body: 'The process in this pane stops and its scrollback is deleted.',
-            action: 'Close pane',
-            onConfirm: () => api.deletePane(pane.id),
-        });
     };
 
     const running = pane.pid !== null;
@@ -264,7 +254,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                     >
                         <RestartIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title="Close pane (⌃⌥W)" onClick={close}>
+                    <button type="button" className="icon-button" title="Close pane (⌃⌥W)" onClick={() => closePane(pane)}>
                         <CloseIcon size={14} />
                     </button>
                 </div>
@@ -301,6 +291,9 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                         <span>{pane.exitCode === null ? (pane.detail ?? 'The process did not start.') : `Exited with code ${pane.exitCode}.`}</span>
                         <button type="button" className="button button--small" onClick={() => api.restartPane(pane.id).catch(reportError)}>
                             {adapter?.resumable ? 'Restart and resume' : 'Restart'}
+                        </button>
+                        <button type="button" className="button button--small button--ghost" onClick={() => closePane(pane)}>
+                            Close pane
                         </button>
                     </div>
                 ) : null}
