@@ -4,7 +4,7 @@ import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFon
 import { installApp } from '../install.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
-import { FIND_SHORTCUT, SHORTCUTS, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
+import { FIND_SHORTCUT, SHORTCUTS, editSettings, openSettingsInApp, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { APPEARANCES, THEMES, schemeOf, themeById, type Appearance, type Scheme, type Theme } from '../themes.ts';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -63,11 +63,12 @@ function ThemeSwatch({ theme }: { theme: Theme }) {
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
     const font = useUi((state) => state.terminalFont);
-    const setTerminalFont = useUi((state) => state.setTerminalFont);
     const appearance = useUi((state) => state.appearance);
     const setAppearance = useUi((state) => state.setAppearance);
     const themeIds = useUi((state) => state.themeIds);
     const setTheme = useUi((state) => state.setTheme);
+    const saveSettings = useUi((state) => state.saveSettings);
+    const sidebarPosition = useUi((state) => state.sidebarPosition);
     const systemScheme = useUi((state) => state.systemScheme);
     const app = useUi((state) => state.app);
     const installable = useUi((state) => state.installable);
@@ -116,7 +117,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     const chooseFamily = (family: string): void => {
         committedFont.current = null;
-        setTerminalFont({ ...font, family });
+        saveSettings({ terminal: { fontFamily: family } });
         onClose();
     };
 
@@ -134,7 +135,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     const appearanceLabel = (option: Appearance): string => (option === 'system' ? `System (${systemScheme})` : APPEARANCE_LABELS[option]);
 
-    const resize = (size: number): void => setTerminalFont({ ...font, size: clampFontSize(size) });
+    const resize = (size: number): void => saveSettings({ terminal: { fontSize: clampFontSize(size) } });
+    const otherSide = sidebarPosition === 'left' ? 'right' : 'left';
 
     let items: Item[];
     if (mode === 'commands') {
@@ -157,6 +159,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
             { id: 'font-smaller', label: 'Font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
             { id: 'font-reset', label: 'Font size: reset', hint: `${DEFAULT_FONT.size}px`, keepOpen: true, run: () => resize(DEFAULT_FONT.size) },
+            { id: 'sidebar-side', label: `Move the sidebar to the ${otherSide}`, keywords: 'sidebar position left right', run: () => saveSettings({ sidebar: { position: otherSide } }) },
+            { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
+            { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
             ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),
             ...SHORTCUTS
                 .filter((shortcut) => shortcut.run !== togglePalette)

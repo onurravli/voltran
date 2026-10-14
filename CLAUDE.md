@@ -37,6 +37,16 @@ relative import. `packages/shared` is consumed as source by both the daemon and 
 WebSockets: `/ws/events` (whole-app state, one per window) and `/ws/panes/:id` (one terminal).
 `security.ts` (`Guard`) checks token or cookie, `Host` and `Origin` on every request and upgrade.
 
+**Settings** live in `~/.voltran/settings.json` (JSONC, nested sections). `shared/src/settings.ts` is
+the only place that decides whether a setting is valid, for the file and for `PATCH /api/settings`
+alike. `daemon/src/settings.ts` (`SettingsFile`) watches the folder, keeps the last valid settings
+while the file is broken, writes changes with `jsonc-parser` so comments survive, and the hub
+broadcasts a `settings` event to every window. The web store applies it; its localStorage copy is
+only a cache for the first paint. A new theme must be added to `DARK_THEME_IDS`/`LIGHT_THEME_IDS`
+too (a test checks they match `THEMES`). Editing the file inside Voltran (`POST /api/settings/edit`)
+opens a `command` pane whose command the daemon builds from `editor.command`; the hub deletes that
+pane when it exits with code 0 (tracked in memory only, so not after a restart).
+
 **A pane runtime** is a `node-pty` process mirrored into a headless xterm plus a serializer. Things that
 are easy to get wrong here:
 - A pane stays asleep until a client sends its first `resize`; that is what spawns the process.
@@ -72,8 +82,9 @@ edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hu
 whose set of panes differs from the session's. Moving a pane to another session is a separate
 endpoint (`POST /api/panes/:id/move`).
 
-**Web app** (`packages/web/src`): a zustand store (`store.ts`, UI preferences persisted in
-`localStorage` under `voltran.ui`), `events.ts` for the state socket, `terminals.ts` (one
+**Web app** (`packages/web/src`): a zustand store (`store.ts`; view state such as the selected session
+and the sidebar width persisted in `localStorage` under `voltran.ui`, settings from the daemon),
+`events.ts` for the state socket, `terminals.ts` (one
 `TerminalSession` per pane, kept across unmounts), `shortcuts.ts` (⌃⌥ shortcuts and ⌘K) and
 `keymap.ts` (iTerm-style line editing bytes). Themes (`themes.ts`) derive the UI's CSS variables from
 each terminal palette; `index.html` applies a cached copy before first paint.

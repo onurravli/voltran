@@ -54,6 +54,7 @@ export function App() {
     const selectedSessionId = useUi((state) => state.selectedSessionId);
     const sidebarHidden = useUi((state) => state.sidebarHidden);
     const sidebarWidth = useUi((state) => state.sidebarWidth);
+    const sidebarRight = useUi((state) => state.sidebarPosition === 'right');
     const zen = useUi((state) => state.zen);
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
     const hideSidebar = Boolean(session) && (sidebarHidden || zen);
@@ -81,7 +82,7 @@ export function App() {
 
     return (
         <div
-            className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && session ? ' app--zen' : ''}`}
+            className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && session ? ' app--zen' : ''}${sidebarRight ? ' app--sidebar-right' : ''}`}
             style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
         >
             <Sidebar />

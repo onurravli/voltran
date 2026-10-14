@@ -103,6 +103,33 @@ kbd {
     display: none;
 }
 
+@media (min-width: 761px) {
+    .app--sidebar-right {
+        grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    }
+
+    .app--sidebar-right .sidebar {
+        grid-row: 1;
+        grid-column: 2;
+        border-right: 0;
+        border-left: 1px solid var(--rivet-soft);
+    }
+
+    .app--sidebar-right .main {
+        grid-row: 1;
+        grid-column: 1;
+    }
+
+    .app--sidebar-right .sidebar__resizer {
+        right: auto;
+        left: -4px;
+    }
+
+    .app--sidebar-right .session-header > .icon-button--bar svg {
+        transform: scaleX(-1);
+    }
+}
+
 /* ---------- buttons ---------- */
 
 .button {

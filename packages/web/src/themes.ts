@@ -1,8 +1,9 @@
+import { APPEARANCES, DEFAULT_SETTINGS, type Appearance } from '@voltran/shared';
+
+export { APPEARANCES };
+export type { Appearance };
+
 export type Scheme = 'dark' | 'light';
-
-export type Appearance = 'system' | Scheme;
-
-export const APPEARANCES: Appearance[] = ['system', 'dark', 'light'];
 
 export const TERMINAL_KEYS = [
     'background',
@@ -159,9 +160,9 @@ function defineTheme(
     return { id, name, scheme, terminal, minimumContrastRatio: scheme === 'light' ? 3 : 1, ui: deriveUi(scheme, terminal, accents) };
 }
 
-export const DEFAULT_THEME_ID = 'voltran';
+export const DEFAULT_THEME_ID = DEFAULT_SETTINGS.theme.dark;
 
-export const DEFAULT_THEME_IDS: Record<Scheme, string> = { dark: DEFAULT_THEME_ID, light: 'github-light' };
+export const DEFAULT_THEME_IDS: Record<Scheme, string> = { ...DEFAULT_SETTINGS.theme };
 
 const VOLTRAN: Theme = {
     id: DEFAULT_THEME_ID,

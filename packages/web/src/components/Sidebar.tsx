@@ -296,6 +296,7 @@ function Footer() {
 
 function SidebarResizer() {
     const width = useUi((state) => state.sidebarWidth);
+    const outward = useUi((state) => (state.sidebarPosition === 'right' ? -1 : 1));
     const setSidebarWidth = useUi((state) => state.setSidebarWidth);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
     const canClose = useUi((state) => Boolean(state.app?.sessions.some((session) => session.id === state.selectedSessionId)));
@@ -319,7 +320,7 @@ function SidebarResizer() {
         const delta = event.key === 'ArrowLeft' ? -SIDEBAR_WIDTH_STEP : event.key === 'ArrowRight' ? SIDEBAR_WIDTH_STEP : 0;
         if (delta !== 0) {
             event.preventDefault();
-            setSidebarWidth(width + delta);
+            setSidebarWidth(width + delta * outward);
         }
     };
 
@@ -339,7 +340,7 @@ function SidebarResizer() {
                 if (!drag.current) {
                     return;
                 }
-                const next = draggedSidebarWidth(drag.current.width + event.clientX - drag.current.x);
+                const next = draggedSidebarWidth(drag.current.width + (event.clientX - drag.current.x) * outward);
                 if (next !== null) {
                     setSidebarWidth(next);
                 } else if (canClose) {

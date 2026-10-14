@@ -1,12 +1,12 @@
+import { DEFAULT_SETTINGS, MAX_FONT_FAMILY_LENGTH, MAX_FONT_SIZE, MIN_FONT_SIZE } from '@voltran/shared';
+
 export interface TerminalFont {
     family: string;
     size: number;
 }
 
-export const DEFAULT_FONT: TerminalFont = { family: 'JetBrains Mono', size: 13 };
-export const MIN_FONT_SIZE = 9;
-export const MAX_FONT_SIZE = 28;
-const MAX_FAMILY_LENGTH = 100;
+export const DEFAULT_FONT: TerminalFont = { family: DEFAULT_SETTINGS.terminal.fontFamily, size: DEFAULT_SETTINGS.terminal.fontSize };
+export { MAX_FONT_SIZE, MIN_FONT_SIZE };
 
 export const FONT_CANDIDATES = [
     'JetBrains Mono',
@@ -35,7 +35,7 @@ export function clampFontSize(size: number): number {
 }
 
 export function cleanFamily(family: string): string {
-    return family.replace(/["\\;{}]/g, '').trim().slice(0, MAX_FAMILY_LENGTH);
+    return family.replace(/["\\;{}]/g, '').trim().slice(0, MAX_FONT_FAMILY_LENGTH);
 }
 
 export function fontStack(family: string): string {

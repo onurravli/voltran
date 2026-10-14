@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { DARK_THEME_IDS, LIGHT_THEME_IDS } from '@voltran/shared';
 import {
     DEFAULT_THEME_ID,
     DEFAULT_THEME_IDS,
@@ -39,6 +40,11 @@ function distance(a: string, b: string): number {
 }
 
 describe('THEMES', () => {
+    it('are exactly the themes settings.json accepts', () => {
+        expect(THEMES.filter((theme) => theme.scheme === 'dark').map((theme) => theme.id)).toEqual(DARK_THEME_IDS);
+        expect(THEMES.filter((theme) => theme.scheme === 'light').map((theme) => theme.id)).toEqual(LIGHT_THEME_IDS);
+    });
+
     it('defines every terminal colour and every UI variable for each theme', () => {
         for (const theme of THEMES) {
             for (const key of TERMINAL_KEYS) {
