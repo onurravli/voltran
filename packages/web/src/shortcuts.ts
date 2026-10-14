@@ -67,6 +67,42 @@ function splitFocused(direction: 'horizontal' | 'vertical'): void {
         .catch(reportError);
 }
 
+export function openSettingsInApp(): void {
+    api.openSettings()
+        .then(({ path }) => useUi.getState().showToast(`Opened ${path}`))
+        .catch(reportError);
+}
+
+// The editor runs in a pane next to the focused one; without an open session there is nowhere to put
+// it, so the file opens in the system's editor instead.
+export function editSettings(): void {
+    const { app, selectedSessionId } = useUi.getState();
+    const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
+    if (!session || session.archived) {
+        openSettingsInApp();
+        return;
+    }
+    const returnTo = visibleFocusedPane();
+    api.editSettings({ sessionId: session.id, splitFrom: returnTo ?? undefined })
+        .then((pane) => {
+            const { maximizedPaneId, toggleMaximize, focusPane } = useUi.getState();
+            if (maximizedPaneId) {
+                toggleMaximize(pane.id);
+            }
+            focusPane(pane.id);
+            const stop = useUi.subscribe((state) => {
+                if (!state.app || state.app.panes.some((entry) => entry.id === pane.id)) {
+                    return;
+                }
+                stop();
+                if (state.focusedPaneId === null && returnTo && state.app.panes.some((entry) => entry.id === returnTo)) {
+                    state.focusPane(returnTo);
+                }
+            });
+        })
+        .catch(reportError);
+}
+
 export function togglePalette(): void {
     const { dialog, openDialog } = useUi.getState();
     openDialog(dialog?.kind === 'palette' ? null : { kind: 'palette' });

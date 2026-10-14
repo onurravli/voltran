@@ -90,6 +90,7 @@ export class Hub {
     private readonly adapters: AdapterInfo[];
     private listeners = new Set<Listener>();
     private broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly closeOnCleanExit = new Set<string>();
 
     constructor(options: HubOptions) {
         this.store = options.store;
@@ -104,6 +105,7 @@ export class Hub {
             onChange: () => this.scheduleBroadcast(),
             onPaneRecord: (pane) => this.store.updatePane(pane.id, pane),
             onAttention: (pane, status, body) => this.attention(pane, status, body),
+            onExit: (pane, exitCode) => this.exited(pane, exitCode),
         });
         for (const pane of this.store.listPanes()) {
             this.panes.load(pane);
@@ -272,12 +274,15 @@ export class Hub {
         this.scheduleBroadcast();
     }
 
-    createPane(sessionId: string, body: CreatePaneBody): Pane {
+    createPane(sessionId: string, body: CreatePaneBody, options: { closeOnCleanExit?: boolean } = {}): Pane {
         const session = this.mustGetSession(sessionId);
         this.validatePaneSpec(body);
         const direction = body.direction === 'vertical' ? 'vertical' : 'horizontal';
         const pane = this.insertPaneRecord(session, body);
         this.store.updateSession(session.id, { layout: insertPane(session.layout, pane.id, body.splitFrom, direction) });
+        if (options.closeOnCleanExit) {
+            this.closeOnCleanExit.add(pane.id);
+        }
         this.scheduleBroadcast();
         return pane;
     }
@@ -316,6 +321,7 @@ export class Hub {
     deletePane(id: string): void {
         const pane = this.mustGetPane(id);
         const session = this.store.getSession(pane.sessionId);
+        this.closeOnCleanExit.delete(id);
         this.panes.remove(id);
         this.store.deletePane(id);
         if (session) {
@@ -409,8 +415,20 @@ export class Hub {
 
     private removeSessionPanes(sessionId: string): void {
         for (const pane of this.store.panesOfSession(sessionId)) {
+            this.closeOnCleanExit.delete(pane.id);
             this.panes.remove(pane.id);
         }
+    }
+
+    private exited(pane: Pane, exitCode: number): void {
+        if (exitCode !== 0 || !this.closeOnCleanExit.has(pane.id)) {
+            return;
+        }
+        setImmediate(() => {
+            if (this.closeOnCleanExit.has(pane.id) && this.store.getPane(pane.id)) {
+                this.deletePane(pane.id);
+            }
+        });
     }
 
     private attention(pane: Pane, status: AttentionStatus, body: string): void {

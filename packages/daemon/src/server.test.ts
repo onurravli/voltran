@@ -1,11 +1,11 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import type { AppState, PaneView, Session } from '@voltran/shared';
+import { DEFAULT_SETTINGS, type AppState, type PaneView, type ServerEvent, type Session, type SettingsState } from '@voltran/shared';
 import { loadConfig } from './config.ts';
 import { buildDaemon, type Daemon } from './main.ts';
 
@@ -22,6 +22,7 @@ let daemon: Daemon;
 let base: string;
 let home: string;
 let port: number;
+const opened: string[] = [];
 
 const freePort = (): Promise<number> => new Promise((resolvePort) => {
     const probe = createServer();
@@ -66,6 +67,7 @@ beforeAll(async () => {
         shell: '/bin/sh',
         path: `${fakeBin}:${dirname(process.execPath)}:/usr/bin:/bin`,
         baseEnv: process.env,
+        openFile: (path) => opened.push(path),
     });
     await new Promise<void>((resolveListen) => daemon.server.listen(port, '127.0.0.1', resolveListen));
 });
@@ -263,6 +265,85 @@ describe('agent panes', () => {
         await api('DELETE', `/api/sessions/${session.id}`);
         const scrollback = join(home, 'data', 'scrollback');
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
+    });
+});
+
+describe('settings', () => {
+    it('saves a change into settings.json and tells every window', async () => {
+        const { body: initial } = await api<SettingsState>('GET', '/api/settings');
+        expect(initial).toMatchObject({ settings: DEFAULT_SETTINGS, problems: [], exists: false });
+
+        const events: ServerEvent[] = [];
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        socket.on('message', (data) => events.push(JSON.parse(data.toString())));
+        await until(() => events.some((event) => event.type === 'state'));
+        expect(events[0]).toMatchObject({ type: 'settings', exists: false });
+
+        const { status, body } = await api<SettingsState>('PATCH', '/api/settings', { terminal: { fontSize: 16 }, sidebar: { position: 'right' } });
+        expect(status).toBe(200);
+        expect(body).toMatchObject({ exists: true, problems: [], settings: { terminal: { fontSize: 16 }, sidebar: { position: 'right' } } });
+        expect(readFileSync(body.path, 'utf8')).toContain('"fontSize": 16');
+        await until(() => events.filter((event) => event.type === 'settings').length === 2);
+        expect(events.filter((event) => event.type === 'settings')[1]).toMatchObject({ settings: { terminal: { fontSize: 16 } } });
+        socket.close();
+    });
+
+    it('refuses invalid values and unknown settings without writing them', async () => {
+        const before = (await api<SettingsState>('GET', '/api/settings')).body;
+        const invalid = await api<{ error: string }>('PATCH', '/api/settings', { terminal: { fontSize: 'big' } });
+        expect(invalid).toEqual({ status: 400, body: { error: '"terminal.fontSize" must be a whole number from 9 to 28' } });
+        expect((await api('PATCH', '/api/settings', { colour: 'red' })).status).toBe(400);
+        expect((await api('PATCH', '/api/settings', [])).status).toBe(400);
+        expect((await fetch(`${base}/api/settings`, { method: 'PATCH', body: '{}' })).status).toBe(401);
+        expect((await api<SettingsState>('GET', '/api/settings')).body).toEqual(before);
+    });
+
+    it('opens the file in an editor, creating it first', async () => {
+        const { status, body } = await api<{ path: string }>('POST', '/api/settings/open');
+        expect(status).toBe(202);
+        expect(opened).toEqual([body.path]);
+        expect(existsSync(body.path)).toBe(true);
+    });
+
+    it('edits the file in a pane next to the focused one, which closes itself when the editor exits cleanly', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: state.projects[0].id, title: 'edit settings', panes: [{ adapter: 'shell' }] });
+        const shellId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+        const layout = async (): Promise<Session['layout'] | undefined> => (await api<AppState>('GET', '/api/state')).body.sessions.find((entry) => entry.id === session.id)?.layout;
+        const open = async (editor: string): Promise<{ pane: PaneView; output: () => string; close: () => void }> => {
+            await api('PATCH', '/api/settings', { editor: { command: editor } });
+            const { status, body: pane } = await api<PaneView>('POST', '/api/settings/edit', { sessionId: session.id, splitFrom: shellId });
+            expect(status).toBe(201);
+            let output = '';
+            const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${pane.id}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+            socket.on('message', (data, isBinary) => {
+                if (isBinary) {
+                    output += data.toString();
+                }
+            });
+            await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+            socket.send(JSON.stringify({ type: 'resize', cols: 80, rows: 24 }));
+            return { pane, output: () => output, close: () => socket.close() };
+        };
+
+        const clean = await open('cat');
+        expect(clean.pane).toMatchObject({ adapter: 'command', title: 'settings.json' });
+        expect(await layout()).toEqual({ type: 'split', direction: 'horizontal', children: [{ type: 'pane', paneId: shellId }, { type: 'pane', paneId: clean.pane.id }], sizes: expect.any(Array) });
+        await until(() => clean.output().includes('"command": "cat"'));
+        await until(async () => (await api<AppState>('GET', '/api/state')).body.panes.every((pane) => pane.id !== clean.pane.id));
+        expect(await layout()).toEqual({ type: 'pane', paneId: shellId });
+        clean.close();
+
+        const failed = await open('false');
+        await until(async () => (await api<AppState>('GET', '/api/state')).body.panes.find((pane) => pane.id === failed.pane.id)?.status === 'exited');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect((await api<AppState>('GET', '/api/state')).body.panes.find((pane) => pane.id === failed.pane.id)).toMatchObject({ exitCode: 1 });
+        failed.close();
+
+        expect((await api('POST', '/api/settings/edit', { sessionId: 'unknown' })).status).toBe(404);
+        expect((await fetch(`${base}/api/settings/edit`, { method: 'POST', body: JSON.stringify({ sessionId: session.id }) })).status).toBe(401);
+        await api('PATCH', '/api/settings', { editor: { command: '' } });
+        await api('DELETE', `/api/sessions/${session.id}`);
     });
 });
 

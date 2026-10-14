@@ -2,10 +2,13 @@ import type {
     CreatePaneBody,
     CreateProjectBody,
     CreateSessionBody,
+    EditSettingsBody,
     MovePaneBody,
     Pane,
     Project,
     Session,
+    SettingsPatch,
+    SettingsState,
     UpdatePaneBody,
     UpdateProjectBody,
     UpdateSessionBody,
@@ -65,6 +68,9 @@ export const api = {
     restartPane: (id: string) => request<void>('POST', `/api/panes/${id}/restart`),
     killPane: (id: string) => request<void>('POST', `/api/panes/${id}/kill`),
     seenPane: (id: string) => request<void>('POST', `/api/panes/${id}/seen`),
+    updateSettings: (patch: SettingsPatch) => request<SettingsState>('PATCH', '/api/settings', patch),
+    openSettings: () => request<{ path: string }>('POST', '/api/settings/open'),
+    editSettings: (body: EditSettingsBody) => request<Pane>('POST', '/api/settings/edit', body),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };

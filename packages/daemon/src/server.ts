@@ -1,12 +1,14 @@
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import type { PaneClientMessage, ServerEvent } from '@voltran/shared';
+import { parseSettingsPatch, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
 import type { Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, type Guard } from './security.ts';
+import { editorCommand, type SettingsFile } from './settings.ts';
 import type { VersionWatch } from './version.ts';
 
 const JSON_LIMIT = 1024 * 1024;
@@ -38,8 +40,11 @@ export interface ServerOptions {
     config: Config;
     hub: Hub;
     guard: Guard;
+    settings: SettingsFile;
     previousWindows: number;
     version?: VersionWatch;
+    env: NodeJS.ProcessEnv;
+    openFile: (path: string) => void;
     onShutdown: () => void;
     onRestart: () => void;
 }
@@ -94,13 +99,23 @@ async function readJson<T>(req: IncomingMessage, limit = JSON_LIMIT): Promise<T>
     }
 }
 
+export function openInEditor(path: string): void {
+    const opener = process.platform === 'darwin' ? ['open', '-t', path] : process.platform === 'win32' ? null : ['xdg-open', path];
+    if (!opener) {
+        return;
+    }
+    const child = spawn(opener[0], opener.slice(1), { stdio: 'ignore', detached: true });
+    child.on('error', () => undefined);
+    child.unref();
+}
+
 const UNAUTHENTICATED_PAGE = `<!doctype html><meta charset="utf-8"><title>Voltran</title>
 <body style="font:15px system-ui;background:#0d0f14;color:#c8cdd8;display:grid;place-items:center;height:100vh;margin:0">
 <div style="text-align:center"><h1 style="font-weight:600;letter-spacing:.2em">VOLTRAN</h1>
 <p>This browser is not signed in. Run <code style="background:#1a1e27;padding:2px 6px;border-radius:4px">voltran up</code> in a terminal to open it.</p></div>`;
 
 export function createVoltranServer(options: ServerOptions): Server {
-    const { config, hub, guard } = options;
+    const { config, hub, guard, settings } = options;
 
     const routes: Route[] = [];
     const route = (method: string, path: string, handler: Handler): void => {
@@ -119,6 +134,32 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('POST', '/api/restart', (_req, res) => {
         sendJson(res, 202, { ok: true });
         setImmediate(options.onRestart);
+    });
+
+    route('GET', '/api/settings', (_req, res) => sendJson(res, 200, settings.state()));
+    route('PATCH', '/api/settings', async (req, res) => {
+        const { patch, problems } = parseSettingsPatch(await readJson(req));
+        if (problems.length > 0) {
+            throw new HttpError(400, problems.join('; '));
+        }
+        sendJson(res, 200, settings.update(patch));
+    });
+    route('POST', '/api/settings/open', (_req, res) => {
+        settings.create();
+        options.openFile(settings.path);
+        sendJson(res, 202, { path: settings.path });
+    });
+    route('POST', '/api/settings/edit', async (req, res) => {
+        const body = await readJson<EditSettingsBody | null>(req);
+        const pane = hub.createPane(String(body?.sessionId), {
+            adapter: 'command',
+            title: 'settings.json',
+            command: editorCommand(settings.state().settings.editor.command, settings.path, options.env),
+            splitFrom: typeof body?.splitFrom === 'string' ? body.splitFrom : undefined,
+            direction: 'horizontal',
+        }, { closeOnCleanExit: true });
+        settings.create();
+        sendJson(res, 201, pane);
     });
 
     route('POST', '/api/projects', async (req, res) => sendJson(res, 201, hub.createProject(await readJson(req))));
@@ -264,7 +305,7 @@ export function createVoltranServer(options: ServerOptions): Server {
         }
     });
 
-    attachWebSockets(server, hub, guard, options.version);
+    attachWebSockets(server, hub, guard, settings, options.version);
     const version = options.version;
     if (version) {
         const poll = setInterval(() => {
@@ -283,7 +324,7 @@ function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
     socket.destroy();
 }
 
-function attachWebSockets(server: Server, hub: Hub, guard: Guard, version: VersionWatch | undefined): void {
+function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: SettingsFile, version: VersionWatch | undefined): void {
     const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
     const alive = new WeakMap<WebSocket, boolean>();
 
@@ -323,18 +364,19 @@ function attachWebSockets(server: Server, hub: Hub, guard: Guard, version: Versi
             if (paneMatch) {
                 servePane(ws, hub, decodeURIComponent(paneMatch[1]));
             } else {
-                serveEvents(ws, hub, version);
+                serveEvents(ws, hub, settings, version);
             }
         });
     });
 }
 
-function serveEvents(ws: WebSocket, hub: Hub, version: VersionWatch | undefined): void {
+function serveEvents(ws: WebSocket, hub: Hub, settings: SettingsFile, version: VersionWatch | undefined): void {
     const send = (event: ServerEvent): void => {
         if (ws.readyState === ws.OPEN) {
             ws.send(JSON.stringify(event));
         }
     };
+    send({ type: 'settings', ...settings.state() });
     send({ type: 'state', state: hub.state() });
     if (version) {
         send({ type: 'version', ...version.current() });

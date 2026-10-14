@@ -6,7 +6,8 @@ import { startDaemonProcess } from './cli.ts';
 import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
 import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
-import { createVoltranServer } from './server.ts';
+import { createVoltranServer, openInEditor } from './server.ts';
+import { SettingsFile } from './settings.ts';
 import { Store } from './store.ts';
 import { VersionWatch } from './version.ts';
 
@@ -15,6 +16,7 @@ export interface DaemonOptions {
     path: string;
     baseEnv: NodeJS.ProcessEnv;
     onShutdown?: (restart: boolean) => void;
+    openFile?: (path: string) => void;
 }
 
 export interface Daemon {
@@ -52,6 +54,8 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         baseEnv: options.baseEnv,
     });
     const guard = new Guard(config, token);
+    const settings = new SettingsFile(config.settingsFile, (state) => hub.publish({ type: 'settings', ...state }));
+    settings.watch();
 
     // Remembers how many windows were open so the next `voltran up` can wait for them to reconnect
     // instead of opening another one.
@@ -69,6 +73,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         } catch {
             // only a hint for the next start
         }
+        settings.close();
         try {
             await hub.shutdown();
         } finally {
@@ -88,7 +93,18 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     };
 
     const version = new VersionWatch(fileURLToPath(new URL('../..', import.meta.url)), config.webDist);
-    const server = createVoltranServer({ config, hub, guard, previousWindows, version, onShutdown: shutdown, onRestart: restart });
+    const server = createVoltranServer({
+        config,
+        hub,
+        guard,
+        settings,
+        previousWindows,
+        version,
+        env: options.baseEnv,
+        openFile: options.openFile ?? openInEditor,
+        onShutdown: shutdown,
+        onRestart: restart,
+    });
     return { config, token, hub, server, shutdown };
 }
 

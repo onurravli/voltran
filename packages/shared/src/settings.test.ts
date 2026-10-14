@@ -1,0 +1,94 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_SETTINGS, MAX_EDITOR_COMMAND_LENGTH, MAX_FONT_SIZE, applySettingsPatch, parseSettings, parseSettingsPatch, settingsEdits } from './settings.ts';
+
+describe('parseSettings', () => {
+    it('reads every setting from nested sections', () => {
+        const raw = {
+            appearance: 'dark',
+            theme: { dark: 'nord', light: 'solarized-light' },
+            terminal: { fontFamily: 'Menlo', fontSize: 15 },
+            sidebar: { position: 'right' },
+            editor: { command: 'nvim -p' },
+        };
+        expect(parseSettings(raw)).toEqual({ settings: raw, problems: [] });
+    });
+
+    it('fills what is missing with the defaults', () => {
+        expect(parseSettings({})).toEqual({ settings: DEFAULT_SETTINGS, problems: [] });
+        expect(parseSettings({ terminal: { fontSize: 16 } }).settings).toEqual({ ...DEFAULT_SETTINGS, terminal: { ...DEFAULT_SETTINGS.terminal, fontSize: 16 } });
+    });
+
+    it('keeps the default for each invalid value and says why', () => {
+        const { settings, problems } = parseSettings({
+            appearance: 'dim',
+            theme: { dark: 'github-light' },
+            terminal: { fontSize: '15', fontFamily: '  ' },
+            sidebar: { position: 'top' },
+            editor: { command: 'vim\nrm -rf ~' },
+        });
+        expect(settings).toEqual(DEFAULT_SETTINGS);
+        expect(problems).toEqual([
+            '"appearance" must be "system", "dark" or "light"',
+            expect.stringMatching(/^"theme\.dark" must be "voltran", .* or "rose-pine"$/),
+            expect.stringMatching(/^"terminal\.fontFamily" must be the name of a font/),
+            `"terminal.fontSize" must be a whole number from 9 to ${MAX_FONT_SIZE}`,
+            '"sidebar.position" must be "left" or "right"',
+            `"editor.command" must be a command on one line, at most ${MAX_EDITOR_COMMAND_LENGTH} characters`,
+        ]);
+    });
+
+    it('accepts an empty editor command, which means the default editor, and rejects a long one', () => {
+        expect(parseSettings({ editor: { command: '' } })).toEqual({ settings: DEFAULT_SETTINGS, problems: [] });
+        expect(parseSettings({ editor: { command: 'x'.repeat(MAX_EDITOR_COMMAND_LENGTH + 1) } }).problems).toHaveLength(1);
+    });
+
+    it('rejects font sizes outside the range and fractions', () => {
+        for (const fontSize of [8, MAX_FONT_SIZE + 1, 13.5, Number.NaN]) {
+            expect(parseSettings({ terminal: { fontSize } }).settings.terminal.fontSize).toBe(DEFAULT_SETTINGS.terminal.fontSize);
+        }
+    });
+
+    it('names unknown settings and sections that are not objects', () => {
+        expect(parseSettings({ termnal: { fontSize: 14 }, terminal: { size: 14 }, theme: 'nord' }).problems).toEqual([
+            'unknown setting "termnal"',
+            'unknown setting "terminal.size"',
+            '"theme" must be an object',
+        ]);
+    });
+
+    it('treats anything but an object as no settings', () => {
+        for (const raw of [null, [], 'dark', 3]) {
+            expect(parseSettings(raw)).toEqual({ settings: DEFAULT_SETTINGS, problems: ['the settings must be an object'] });
+        }
+    });
+});
+
+describe('parseSettingsPatch', () => {
+    it('keeps only what was sent', () => {
+        expect(parseSettingsPatch({ terminal: { fontSize: 14 } })).toEqual({ patch: { terminal: { fontSize: 14 } }, problems: [] });
+    });
+
+    it('reports invalid values instead of dropping them silently', () => {
+        expect(parseSettingsPatch({ sidebar: { position: 'top' } }).problems).toEqual(['"sidebar.position" must be "left" or "right"']);
+    });
+});
+
+describe('applySettingsPatch', () => {
+    it('changes only the patched settings', () => {
+        expect(applySettingsPatch(DEFAULT_SETTINGS, { theme: { light: 'solarized-light' } })).toEqual({
+            ...DEFAULT_SETTINGS,
+            theme: { dark: DEFAULT_SETTINGS.theme.dark, light: 'solarized-light' },
+        });
+    });
+});
+
+describe('settingsEdits', () => {
+    it('lists one path per patched setting', () => {
+        expect(settingsEdits({ appearance: 'light', terminal: { fontFamily: 'Menlo', fontSize: 12 } })).toEqual([
+            { path: ['appearance'], value: 'light' },
+            { path: ['terminal', 'fontFamily'], value: 'Menlo' },
+            { path: ['terminal', 'fontSize'], value: 12 },
+        ]);
+        expect(settingsEdits({})).toEqual([]);
+    });
+});

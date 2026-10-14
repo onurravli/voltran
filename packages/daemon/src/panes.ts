@@ -51,6 +51,7 @@ export interface PaneManagerOptions {
     onChange: () => void;
     onPaneRecord: (pane: Pane) => void;
     onAttention: (pane: Pane, status: AttentionStatus, body: string) => void;
+    onExit?: (pane: Pane, exitCode: number) => void;
     heuristicQuietMs?: number;
     hooksSilenceMs?: number;
     startupPromptMs?: number;
@@ -435,6 +436,7 @@ export class PaneManager {
             if (exitCode !== 0 && adapter.kind !== 'shell') {
                 this.options.onAttention(runtime.pane, 'exited', `${adapter.label} exited with code ${exitCode}`);
             }
+            this.options.onExit?.(runtime.pane, exitCode);
         });
     }
 

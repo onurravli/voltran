@@ -1,3 +1,5 @@
+import type { SettingsState } from './settings.ts';
+
 export type AdapterId = 'claude' | 'codex' | 'gemini' | 'shell' | 'command' | 'subagent';
 
 export type PaneKind = 'agent' | 'shell' | 'process';
@@ -155,6 +157,11 @@ export interface MovePaneBody {
     sessionId: string;
 }
 
+export interface EditSettingsBody {
+    sessionId: string;
+    splitFrom?: string;
+}
+
 export type AttentionStatus = 'needs-input' | 'done' | 'exited';
 
 export interface VersionInfo {
@@ -164,6 +171,7 @@ export interface VersionInfo {
 
 export type ServerEvent =
     | { type: 'state'; state: AppState }
+    | ({ type: 'settings' } & SettingsState)
     | ({ type: 'version' } & VersionInfo)
     | {
         type: 'attention';

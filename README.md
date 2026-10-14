@@ -113,7 +113,32 @@ Light. ⌘K → **Font family…** lists the common monospace fonts
 installed on your Mac or takes any installed font by name, and the font size commands make terminal
 text bigger or smaller. Moving
 through a list previews each choice, ↩ keeps it and Esc goes back. Status lamps take their colours
-from the theme, so the hues above can differ, and the choices are remembered in the browser.
+from the theme, so the hues above can differ. ⌘K → **Move the sidebar to the right** (or left) puts the
+project list on the other side.
+
+### Settings file
+
+Every choice above is saved in `~/.voltran/settings.json`, and you can edit that file instead of
+using ⌘K: ⌘K → **Open the settings file** opens it in a terminal editor in a pane next to the focused
+one, creating it with every setting and the values each accepts. The editor is `editor.command`, or
+`$VISUAL`, then `$EDITOR`, then `vim`; the pane closes when the editor exits cleanly. With no session
+open, or with **Open the settings file in the default app**, it opens in your system's editor
+instead. The file takes comments and trailing commas, like VS Code's:
+
+```jsonc
+{
+    "appearance": "system",          // "system", "dark" or "light"
+    "theme": { "dark": "voltran", "light": "github-light" },
+    "terminal": { "fontFamily": "JetBrains Mono", "fontSize": 13 },
+    "sidebar": { "position": "left" }, // "left" or "right"
+    "editor": { "command": "" }        // such as "nvim"
+}
+```
+
+Saving the file changes every open window at once, and a choice made in ⌘K is written back into it
+without touching your comments. A value Voltran does not accept keeps its default, and the window
+says which one and why; while the file is not valid JSON, the last valid settings stay in effect.
+The first window to connect after an update moves the choices it had in the browser into the file.
 
 ## How it works
 
