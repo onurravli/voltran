@@ -311,11 +311,43 @@ kbd {
 /* ---------- sidebar ---------- */
 
 .sidebar {
+    position: relative;
     display: flex;
     flex-direction: column;
     min-height: 0;
     border-right: 1px solid var(--rivet-soft);
     background: var(--bay);
+}
+
+.sidebar__resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    z-index: 5;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.sidebar__resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(50% - 1px);
+    width: 2px;
+    transition: background 120ms ease;
+}
+
+.sidebar__resizer:hover::after,
+.sidebar__resizer:focus-visible::after,
+.sidebar__resizer.is-dragging::after {
+    background: var(--focus);
+}
+
+.sidebar__resizer:focus-visible {
+    outline: none;
 }
 
 .sidebar__header {
@@ -1685,6 +1717,9 @@ kbd {
         max-height: 45vh;
         border-right: 0;
         border-bottom: 1px solid var(--rivet-soft);
+    }
+    .sidebar__resizer {
+        display: none;
     }
     .session-header__path {
         display: none;

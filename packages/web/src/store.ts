@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AppState, LayoutDirection, PaneView, Session, VersionInfo } from '@voltran/shared';
 import { needsAttention } from '@voltran/shared';
 import { DEFAULT_FONT, parseFont, type TerminalFont } from './fonts.ts';
+import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from './sidebar.ts';
 import { parseThemeChoice, schemeOf, themeById, type Appearance, type Scheme } from './themes.ts';
 
 export type Connection = 'connecting' | 'online' | 'offline' | 'unauthenticated';
@@ -40,6 +41,7 @@ export interface UiState {
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
     sidebarHidden: boolean;
+    sidebarWidth: number;
     zen: boolean;
     terminalFont: TerminalFont;
     appearance: Appearance;
@@ -62,6 +64,7 @@ export interface UiState {
     toggleProject: (id: string) => void;
     setShowArchived: (value: boolean) => void;
     toggleSidebar: () => void;
+    setSidebarWidth: (width: number) => void;
     setZen: (zen: boolean, maximizedPaneId: string | null) => void;
     setTerminalFont: (font: TerminalFont) => void;
     setAppearance: (appearance: Appearance) => void;
@@ -79,6 +82,7 @@ interface Persisted {
     collapsedProjects: Record<string, boolean>;
     showArchived: boolean;
     sidebarHidden: boolean;
+    sidebarWidth: number;
     terminalFont: TerminalFont;
     appearance: Appearance;
     themeIds: Record<Scheme, string>;
@@ -94,6 +98,7 @@ function readPersisted(): Persisted {
                 collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
+                sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
                 terminalFont: parseFont(parsed.terminalFont),
                 ...parseThemeChoice(parsed),
             };
@@ -101,7 +106,15 @@ function readPersisted(): Persisted {
     } catch {
         localStorage.removeItem(STORAGE_KEY);
     }
-    return { selectedSessionId: null, collapsedProjects: {}, showArchived: false, sidebarHidden: false, terminalFont: DEFAULT_FONT, ...parseThemeChoice({}) };
+    return {
+        selectedSessionId: null,
+        collapsedProjects: {},
+        showArchived: false,
+        sidebarHidden: false,
+        sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+        terminalFont: DEFAULT_FONT,
+        ...parseThemeChoice({}),
+    };
 }
 
 const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
@@ -151,6 +164,7 @@ export const useUi = create<UiState>((set, get) => ({
     toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
     setShowArchived: (value) => set({ showArchived: value }),
     toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),
+    setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
     setZen: (zen, maximizedPaneId) => set({ zen, maximizedPaneId }),
     setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
     setAppearance: (appearance) => set({ appearance }),
@@ -179,6 +193,7 @@ useUi.subscribe((state) => {
         collapsedProjects: state.collapsedProjects,
         showArchived: state.showArchived,
         sidebarHidden: state.sidebarHidden,
+        sidebarWidth: state.sidebarWidth,
         terminalFont: state.terminalFont,
         appearance: state.appearance,
         themeIds: state.themeIds,

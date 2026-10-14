@@ -53,6 +53,7 @@ export function App() {
     const app = useUi((state) => state.app);
     const selectedSessionId = useUi((state) => state.selectedSessionId);
     const sidebarHidden = useUi((state) => state.sidebarHidden);
+    const sidebarWidth = useUi((state) => state.sidebarWidth);
     const zen = useUi((state) => state.zen);
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
     const hideSidebar = Boolean(session) && (sidebarHidden || zen);
@@ -79,7 +80,10 @@ export function App() {
     }
 
     return (
-        <div className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && session ? ' app--zen' : ''}`}>
+        <div
+            className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && session ? ' app--zen' : ''}`}
+            style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+        >
             <Sidebar />
             <main className="main">
                 {!app ? <div className="loading">Connecting to Voltran…</div> : session ? <SessionView key={session.id} session={session} /> : <Welcome />}

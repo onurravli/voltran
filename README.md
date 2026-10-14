@@ -52,7 +52,8 @@ Drag a pane by its title bar onto an edge of another pane to move it to that sid
 to swap the two, or onto another session of the same project in the sidebar to move it into that
 session. Moving a pane only changes the layout: its process, scrollback and agent conversation carry
 on. ⌃⌥↩ maximizes a pane, ⌃⌥B hides the sidebar, and zen mode (⌃⌥Z) shows the focused pane alone in
-full screen.
+full screen. Drag the sidebar's right edge to make it between 200 and 480 pixels wide, or all the way
+to the left to close it; double-click the edge to go back to the default width.
 
 ### Status
 

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { PaneView, Project, Session, SubagentView } from '@voltran/shared';
 import { PROJECT_COLORS, aggregateStatus, needsAttention } from '@voltran/shared';
 import { api } from '../api.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
+import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH_STEP, draggedSidebarWidth } from '../sidebar.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { BellIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
@@ -293,6 +294,71 @@ function Footer() {
     );
 }
 
+function SidebarResizer() {
+    const width = useUi((state) => state.sidebarWidth);
+    const setSidebarWidth = useUi((state) => state.setSidebarWidth);
+    const toggleSidebar = useUi((state) => state.toggleSidebar);
+    const canClose = useUi((state) => Boolean(state.app?.sessions.some((session) => session.id === state.selectedSessionId)));
+    const drag = useRef<{ x: number; width: number } | null>(null);
+    const [dragging, setDragging] = useState(false);
+
+    const start = (event: PointerEvent<HTMLDivElement>): void => {
+        if (event.button !== 0) {
+            return;
+        }
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { x: event.clientX, width };
+        setDragging(true);
+    };
+    const end = (): void => {
+        drag.current = null;
+        setDragging(false);
+    };
+    const step = (event: KeyboardEvent<HTMLDivElement>): void => {
+        const delta = event.key === 'ArrowLeft' ? -SIDEBAR_WIDTH_STEP : event.key === 'ArrowRight' ? SIDEBAR_WIDTH_STEP : 0;
+        if (delta !== 0) {
+            event.preventDefault();
+            setSidebarWidth(width + delta);
+        }
+    };
+
+    return (
+        <div
+            className={`sidebar__resizer${dragging ? ' is-dragging' : ''}`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Sidebar width"
+            aria-valuemin={MIN_SIDEBAR_WIDTH}
+            aria-valuemax={MAX_SIDEBAR_WIDTH}
+            aria-valuenow={width}
+            tabIndex={0}
+            title="Drag to resize, double-click to reset"
+            onPointerDown={start}
+            onPointerMove={(event) => {
+                if (!drag.current) {
+                    return;
+                }
+                const next = draggedSidebarWidth(drag.current.width + event.clientX - drag.current.x);
+                if (next !== null) {
+                    setSidebarWidth(next);
+                } else if (canClose) {
+                    setSidebarWidth(drag.current.width);
+                    end();
+                    toggleSidebar();
+                } else {
+                    setSidebarWidth(MIN_SIDEBAR_WIDTH);
+                }
+            }}
+            onPointerUp={end}
+            onPointerCancel={end}
+            onLostPointerCapture={end}
+            onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
+            onKeyDown={step}
+        />
+    );
+}
+
 export function Sidebar() {
     const app = useUi((state) => state.app);
     const showArchived = useUi((state) => state.showArchived);
@@ -331,6 +397,7 @@ export function Sidebar() {
 
             <Inbox />
             <Footer />
+            <SidebarResizer />
         </aside>
     );
 }
