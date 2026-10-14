@@ -85,8 +85,6 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
     );
 }
 
-const DEFAULT_PICKS: AdapterId[] = ['claude', 'shell'];
-
 function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: () => void }) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
@@ -95,7 +93,7 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
     const [project, setProject] = useState(projectId ?? currentProjectId ?? projects[0]?.id ?? '');
     const [title, setTitle] = useState('');
     const [link, setLink] = useState('');
-    const [picks, setPicks] = useState<AdapterId[]>(() => DEFAULT_PICKS.filter((id) => adapters.find((adapter) => adapter.id === id)?.available));
+    const [picks, setPicks] = useState<AdapterId[]>([]);
     const [command, setCommand] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -159,18 +157,23 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
                             <AdapterChip key={adapter.id} adapter={adapter} selected={picks.includes(adapter.id)} onToggle={() => toggle(adapter.id)} />
                         ))}
                     </div>
+                </fieldset>
+                <label className="field">
+                    <span className="field__label">Run a command <span className="field__optional">optional</span></span>
                     <input
                         className="field__input field__input--mono"
                         value={command}
                         onChange={(event) => setCommand(event.target.value)}
-                        placeholder="Also run a command, e.g. npm run dev"
+                        placeholder="npm run dev"
                         spellCheck={false}
                     />
-                </fieldset>
+                </label>
                 {error ? <p className="form__error" role="alert">{error}</p> : null}
                 <div className="form__actions">
                     <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
-                    <button type="submit" className="button button--primary" disabled={busy || !title.trim() || !project}>Start session</button>
+                    <button type="submit" className="button button--primary" disabled={busy || !title.trim() || !project || (picks.length === 0 && !command.trim())}>
+                        Start session
+                    </button>
                 </div>
             </form>
         </Modal>

@@ -1331,6 +1331,10 @@ kbd {
     font-weight: 600;
 }
 
+legend.field__label {
+    margin-bottom: 6px;
+}
+
 .field__optional {
     color: var(--text-faint);
     font-weight: 400;
@@ -1381,7 +1385,6 @@ kbd {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 4px;
 }
 
 .chip {
@@ -1396,7 +1399,7 @@ kbd {
     color: var(--text-muted);
 }
 
-.chip:hover:not(:disabled) {
+.chip:not(.is-selected):hover:not(:disabled) {
     color: var(--text);
 }
 
