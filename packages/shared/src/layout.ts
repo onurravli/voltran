@@ -1,5 +1,7 @@
 import type { Layout, LayoutDirection, LayoutSplit } from './types.ts';
 
+export const MAX_WORKSPACE_PANES = 16;
+
 const leaf = (paneId: string): Layout => ({ type: 'pane', paneId });
 
 const evenSizes = (count: number): number[] => Array.from({ length: count }, () => 100 / count);
@@ -24,34 +26,38 @@ export function insertPane(
         return leaf(paneId);
     }
     if (targetId && paneIds(layout).includes(targetId)) {
-        return insertNextTo(layout, paneId, targetId, direction);
+        return insertNextTo(layout, leaf(paneId), targetId, direction);
     }
-    if (layout.type === 'split' && layout.direction === direction) {
-        const children = [...layout.children, leaf(paneId)];
-        return { ...layout, children, sizes: evenSizes(children.length) };
-    }
-    return { type: 'split', direction, children: [layout, leaf(paneId)], sizes: [50, 50] };
+    return append(layout, leaf(paneId), direction);
 }
 
-function insertNextTo(node: Layout, paneId: string, targetId: string, direction: LayoutDirection, before = false): Layout {
+function append(layout: Layout, inserted: Layout, direction: LayoutDirection): Layout {
+    if (layout.type === 'split' && layout.direction === direction) {
+        const children = [...layout.children, inserted];
+        return { ...layout, children, sizes: evenSizes(children.length) };
+    }
+    return { type: 'split', direction, children: [layout, inserted], sizes: [50, 50] };
+}
+
+function insertNextTo(node: Layout, inserted: Layout, targetId: string, direction: LayoutDirection, before = false): Layout {
     if (node.type === 'pane') {
         if (node.paneId !== targetId) {
             return node;
         }
-        return { type: 'split', direction, children: before ? [leaf(paneId), node] : [node, leaf(paneId)], sizes: [50, 50] };
+        return { type: 'split', direction, children: before ? [inserted, node] : [node, inserted], sizes: [50, 50] };
     }
 
     const index = node.children.findIndex((child) => child.type === 'pane' && child.paneId === targetId);
     if (index >= 0 && node.direction === direction) {
         const children = [...node.children];
-        children.splice(before ? index : index + 1, 0, leaf(paneId));
+        children.splice(before ? index : index + 1, 0, inserted);
         const sizes = [...node.sizes];
         const half = sizes[index] / 2;
         sizes.splice(index, 1, half, half);
         return { ...node, children, sizes };
     }
 
-    return { ...node, children: node.children.map((child) => insertNextTo(child, paneId, targetId, direction, before)) };
+    return { ...node, children: node.children.map((child) => insertNextTo(child, inserted, targetId, direction, before)) };
 }
 
 export type DropEdge = 'left' | 'right' | 'top' | 'bottom' | 'swap';
@@ -75,7 +81,20 @@ export function movePane(layout: Layout | null, paneId: string, targetId: string
     }
     const rest = removePane(layout, paneId);
     const direction: LayoutDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical';
-    return rest ? insertNextTo(rest, paneId, targetId, direction, edge === 'left' || edge === 'top') : layout;
+    return rest ? insertNextTo(rest, leaf(paneId), targetId, direction, edge === 'left' || edge === 'top') : layout;
+}
+
+// Puts panes that are not in this layout yet, in their own arrangement, on the edge of a pane they
+// were dropped on; dropped on the middle of a pane, or with no pane to drop on, they go to the right.
+export function placeLayout(layout: Layout | null, placed: Layout, targetId: string | null, edge: DropEdge): Layout {
+    if (!layout) {
+        return placed;
+    }
+    if (!targetId || !paneIds(layout).includes(targetId)) {
+        return append(layout, placed, 'horizontal');
+    }
+    const direction: LayoutDirection = edge === 'top' || edge === 'bottom' ? 'vertical' : 'horizontal';
+    return insertNextTo(layout, placed, targetId, direction, edge === 'left' || edge === 'top');
 }
 
 export function removePane(layout: Layout | null, paneId: string): Layout | null {

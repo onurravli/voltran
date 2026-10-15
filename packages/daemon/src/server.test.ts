@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { DEFAULT_SETTINGS, type AppState, type PaneView, type ServerEvent, type Session, type SettingsState } from '@voltran/shared';
+import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
 import { loadConfig } from './config.ts';
 import { buildDaemon, type Daemon } from './main.ts';
 
@@ -229,6 +229,108 @@ describe('moving panes', () => {
         for (const id of [source.id, elsewhere.id, archived.id]) {
             await api('DELETE', `/api/sessions/${id}`);
         }
+    });
+});
+
+describe('workspaces', () => {
+    const row = (...ids: string[]): Layout => ({ type: 'split', direction: 'horizontal', children: ids.map((paneId) => ({ type: 'pane', paneId })), sizes: ids.map(() => 100 / ids.length) });
+    const workspaceOf = async (id: string): Promise<Workspace | undefined> => (await api<AppState>('GET', '/api/state')).body.workspaces.find((entry) => entry.id === id);
+
+    it('shows panes of different projects side by side without taking them from their sessions', async () => {
+        const { body: first } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'workspace-a-')) });
+        const { body: second } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'workspace-b-')) });
+        const { body: a } = await api<Session>('POST', '/api/sessions', { projectId: first.id, title: 'a', panes: [{ adapter: 'shell' }, { adapter: 'shell' }] });
+        const { body: b } = await api<Session>('POST', '/api/sessions', { projectId: second.id, title: 'b', panes: [{ adapter: 'shell' }] });
+        const [a1, a2] = paneIds(a.layout);
+        const [b1] = paneIds(b.layout);
+
+        const { status, body: created } = await api<Workspace>('POST', '/api/workspaces', { title: '  Review  ' });
+        expect(status).toBe(201);
+        expect(created).toMatchObject({ title: 'Review', layout: null });
+        const { status: saved, body: updated } = await api<Workspace>('PATCH', `/api/workspaces/${created.id}`, { title: 'Release', layout: row(a1, b1, a2) });
+        expect(saved).toBe(200);
+        expect(updated).toMatchObject({ title: 'Release', layout: row(a1, b1, a2) });
+
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        expect(state.workspaces.find((entry) => entry.id === created.id)?.layout).toEqual(row(a1, b1, a2));
+        expect(paneIds(state.sessions.find((entry) => entry.id === a.id)?.layout ?? null)).toEqual([a1, a2]);
+        expect(state.panes.find((pane) => pane.id === b1)?.sessionId).toBe(b.id);
+
+        expect((await api('DELETE', `/api/workspaces/${created.id}`)).status).toBe(200);
+        expect(await workspaceOf(created.id)).toBeUndefined();
+        expect((await api<AppState>('GET', '/api/state')).body.panes.filter((pane) => [a1, a2, b1].includes(pane.id))).toHaveLength(3);
+        for (const project of [first.id, second.id]) {
+            await api('DELETE', `/api/projects/${project}`);
+        }
+    });
+
+    it('refuses malformed layouts, unknown or repeated panes and too many panes', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: state.projects[0].id, title: 'limits', panes: [{ adapter: 'shell' }] });
+        const [paneId] = paneIds(session.layout);
+        const { body: workspace } = await api<Workspace>('POST', '/api/workspaces', { title: 'limits' });
+
+        expect((await api('POST', '/api/workspaces', { title: '  ' })).status).toBe(400);
+        expect((await api('PATCH', `/api/workspaces/${workspace.id}`, { layout: { type: 'split', children: [] } })).status).toBe(400);
+        expect((await api('PATCH', `/api/workspaces/${workspace.id}`, { layout: row(paneId, paneId) })).status).toBe(400);
+        expect((await api('PATCH', `/api/workspaces/${workspace.id}`, { layout: row(paneId, 'invented') })).status).toBe(409);
+        const many = Array.from({ length: MAX_WORKSPACE_PANES + 1 }, (_, index) => `pane-${index}`);
+        expect((await api('PATCH', `/api/workspaces/${workspace.id}`, { layout: row(...many) })).status).toBe(400);
+        expect((await api('PATCH', '/api/workspaces/unknown', { title: 'x' })).status).toBe(404);
+        expect((await fetch(`${base}/api/workspaces`, { method: 'POST', body: JSON.stringify({ title: 'x' }) })).status).toBe(401);
+        expect((await workspaceOf(workspace.id))?.layout).toBeNull();
+
+        await api('DELETE', `/api/workspaces/${workspace.id}`);
+        await api('DELETE', `/api/sessions/${session.id}`);
+    });
+
+    it('splits a pane inside a workspace into its own session and the workspace at once', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: state.projects[0].id, title: 'split', panes: [{ adapter: 'shell' }] });
+        const [source] = paneIds(session.layout);
+        const { body: workspace } = await api<Workspace>('POST', '/api/workspaces', { title: 'split' });
+        await api('PATCH', `/api/workspaces/${workspace.id}`, { layout: { type: 'pane', paneId: source } });
+
+        const { status, body: pane } = await api<PaneView>('POST', `/api/sessions/${session.id}/panes`, { adapter: 'shell', splitFrom: source, direction: 'vertical', workspaceId: workspace.id });
+        expect(status).toBe(201);
+        expect(pane.sessionId).toBe(session.id);
+        expect((await workspaceOf(workspace.id))?.layout).toEqual({ type: 'split', direction: 'vertical', children: [{ type: 'pane', paneId: source }, { type: 'pane', paneId: pane.id }], sizes: [50, 50] });
+        expect(paneIds((await api<AppState>('GET', '/api/state')).body.sessions.find((entry) => entry.id === session.id)?.layout ?? null)).toEqual([source, pane.id]);
+
+        const before = (await api<AppState>('GET', '/api/state')).body.panes.length;
+        expect((await api('POST', `/api/sessions/${session.id}/panes`, { adapter: 'shell', workspaceId: 'unknown' })).status).toBe(404);
+        expect((await api<AppState>('GET', '/api/state')).body.panes.length).toBe(before);
+
+        await api('DELETE', `/api/workspaces/${workspace.id}`);
+        await api('DELETE', `/api/sessions/${session.id}`);
+    });
+
+    it('drops a pane from every workspace when the pane, its session or its project goes away', async () => {
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'workspace-prune-')) });
+        const { body: one } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'one', panes: [{ adapter: 'shell' }, { adapter: 'shell' }] });
+        const { body: two } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'two', panes: [{ adapter: 'shell' }] });
+        const { body: three } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'three', panes: [{ adapter: 'shell' }] });
+        const [p1, p2] = paneIds(one.layout);
+        const [p3] = paneIds(two.layout);
+        const [p4] = paneIds(three.layout);
+        const { body: left } = await api<Workspace>('POST', '/api/workspaces', { title: 'left' });
+        const { body: right } = await api<Workspace>('POST', '/api/workspaces', { title: 'right' });
+        await api('PATCH', `/api/workspaces/${left.id}`, { layout: row(p1, p2, p3, p4) });
+        await api('PATCH', `/api/workspaces/${right.id}`, { layout: row(p3, p1) });
+
+        await api('DELETE', `/api/panes/${p1}`);
+        expect(paneIds((await workspaceOf(left.id))?.layout ?? null)).toEqual([p2, p3, p4]);
+        expect((await workspaceOf(right.id))?.layout).toEqual({ type: 'pane', paneId: p3 });
+
+        await api('DELETE', `/api/sessions/${two.id}`);
+        expect(paneIds((await workspaceOf(left.id))?.layout ?? null)).toEqual([p2, p4]);
+        expect((await workspaceOf(right.id))?.layout).toBeNull();
+
+        await api('DELETE', `/api/projects/${project.id}`);
+        expect((await workspaceOf(left.id))?.layout).toBeNull();
+
+        await api('DELETE', `/api/workspaces/${left.id}`);
+        await api('DELETE', `/api/workspaces/${right.id}`);
     });
 });
 

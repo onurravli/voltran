@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { basename, isAbsolute, resolve } from 'node:path';
 import {
+    MAX_WORKSPACE_PANES,
     PROJECT_COLORS,
     insertPane,
     isValidLayout,
+    paneIds,
     removePane,
     samePanes,
     type AdapterInfo,
@@ -13,6 +15,7 @@ import {
     type CreatePaneBody,
     type CreateProjectBody,
     type CreateSessionBody,
+    type CreateWorkspaceBody,
     type Layout,
     type MovePaneBody,
     type Pane,
@@ -23,6 +26,8 @@ import {
     type UpdatePaneBody,
     type UpdateProjectBody,
     type UpdateSessionBody,
+    type UpdateWorkspaceBody,
+    type Workspace,
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent } from './adapters.ts';
 import { PaneManager } from './panes.ts';
@@ -110,6 +115,7 @@ export class Hub {
         for (const pane of this.store.listPanes()) {
             this.panes.load(pane);
         }
+        this.pruneWorkspaces();
     }
 
     state(): AppState {
@@ -117,6 +123,7 @@ export class Hub {
             projects: this.store.listProjects(),
             sessions: this.store.listSessions(),
             panes: this.panes.views(),
+            workspaces: this.store.listWorkspaces(),
             adapters: this.adapters,
         };
     }
@@ -199,6 +206,7 @@ export class Hub {
             this.removeSessionPanes(session.id);
         }
         this.store.deleteProject(id);
+        this.pruneWorkspaces();
         this.scheduleBroadcast();
     }
 
@@ -271,15 +279,23 @@ export class Hub {
         this.mustGetSession(id);
         this.removeSessionPanes(id);
         this.store.deleteSession(id);
+        this.pruneWorkspaces();
         this.scheduleBroadcast();
     }
 
     createPane(sessionId: string, body: CreatePaneBody, options: { closeOnCleanExit?: boolean } = {}): Pane {
         const session = this.mustGetSession(sessionId);
         this.validatePaneSpec(body);
+        const workspace = body.workspaceId === undefined ? null : this.mustGetWorkspace(requireString(body.workspaceId, 'workspaceId', 64));
+        if (workspace && paneIds(workspace.layout).length >= MAX_WORKSPACE_PANES) {
+            throw new HttpError(409, `a workspace holds at most ${MAX_WORKSPACE_PANES} panes`);
+        }
         const direction = body.direction === 'vertical' ? 'vertical' : 'horizontal';
         const pane = this.insertPaneRecord(session, body);
         this.store.updateSession(session.id, { layout: insertPane(session.layout, pane.id, body.splitFrom, direction) });
+        if (workspace) {
+            this.store.updateWorkspace(workspace.id, { layout: insertPane(workspace.layout, pane.id, body.splitFrom, direction) });
+        }
         if (options.closeOnCleanExit) {
             this.closeOnCleanExit.add(pane.id);
         }
@@ -327,6 +343,44 @@ export class Hub {
         if (session) {
             this.store.updateSession(session.id, { layout: removePane(session.layout, id) });
         }
+        this.pruneWorkspaces();
+        this.scheduleBroadcast();
+    }
+
+    createWorkspace(body: CreateWorkspaceBody): Workspace {
+        const now = Date.now();
+        const workspace: Workspace = {
+            id: randomUUID(),
+            title: requireString(body?.title, 'title', MAX_TITLE),
+            layout: null,
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.store.insertWorkspace(workspace);
+        this.scheduleBroadcast();
+        return workspace;
+    }
+
+    updateWorkspace(id: string, body: UpdateWorkspaceBody): Workspace {
+        this.mustGetWorkspace(id);
+        const patch: Partial<Pick<Workspace, 'title' | 'layout'>> = {};
+        if (body.title !== undefined) {
+            patch.title = requireString(body.title, 'title', MAX_TITLE);
+        }
+        if (body.layout !== undefined) {
+            if (body.layout !== null) {
+                this.validateWorkspaceLayout(body.layout);
+            }
+            patch.layout = body.layout;
+        }
+        this.store.updateWorkspace(id, patch);
+        this.scheduleBroadcast();
+        return this.mustGetWorkspace(id);
+    }
+
+    deleteWorkspace(id: string): void {
+        this.mustGetWorkspace(id);
+        this.store.deleteWorkspace(id);
         this.scheduleBroadcast();
     }
 
@@ -413,6 +467,34 @@ export class Hub {
         return pane;
     }
 
+    private validateWorkspaceLayout(layout: unknown): void {
+        if (!isValidLayout(layout)) {
+            throw new HttpError(400, 'layout is malformed');
+        }
+        const ids = paneIds(layout);
+        if (new Set(ids).size !== ids.length) {
+            throw new HttpError(400, 'a pane can be in a workspace only once');
+        }
+        if (ids.length > MAX_WORKSPACE_PANES) {
+            throw new HttpError(400, `a workspace holds at most ${MAX_WORKSPACE_PANES} panes`);
+        }
+        if (ids.some((paneId) => !this.store.getPane(paneId))) {
+            throw new HttpError(409, 'layout names a pane that does not exist');
+        }
+    }
+
+    // Workspaces only point at panes, so every path that deletes panes ends here.
+    private pruneWorkspaces(): void {
+        const existing = new Set(this.store.listPanes().map((pane) => pane.id));
+        for (const workspace of this.store.listWorkspaces()) {
+            const missing = paneIds(workspace.layout).filter((paneId) => !existing.has(paneId));
+            if (missing.length > 0) {
+                const layout = missing.reduce<Layout | null>((rest, paneId) => removePane(rest, paneId), workspace.layout);
+                this.store.updateWorkspace(workspace.id, { layout });
+            }
+        }
+    }
+
     private removeSessionPanes(sessionId: string): void {
         for (const pane of this.store.panesOfSession(sessionId)) {
             this.closeOnCleanExit.delete(pane.id);
@@ -480,6 +562,14 @@ export class Hub {
             throw new HttpError(404, 'session not found');
         }
         return session;
+    }
+
+    private mustGetWorkspace(id: string): Workspace {
+        const workspace = this.store.getWorkspace(id);
+        if (!workspace) {
+            throw new HttpError(404, 'workspace not found');
+        }
+        return workspace;
     }
 
     private mustGetPane(id: string): Pane {

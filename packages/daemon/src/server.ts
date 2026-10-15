@@ -177,6 +177,13 @@ export function createVoltranServer(options: ServerOptions): Server {
     });
     route('POST', '/api/sessions/:id/panes', async (req, res, [id]) => sendJson(res, 201, hub.createPane(id, await readJson(req))));
 
+    route('POST', '/api/workspaces', async (req, res) => sendJson(res, 201, hub.createWorkspace(await readJson(req))));
+    route('PATCH', '/api/workspaces/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateWorkspace(id, await readJson(req))));
+    route('DELETE', '/api/workspaces/:id', (_req, res, [id]) => {
+        hub.deleteWorkspace(id);
+        sendJson(res, 200, { ok: true });
+    });
+
     route('PATCH', '/api/panes/:id', async (req, res, [id]) => sendJson(res, 200, hub.updatePane(id, await readJson(req))));
     route('POST', '/api/panes/:id/move', async (req, res, [id]) => sendJson(res, 200, hub.movePane(id, await readJson(req))));
     route('DELETE', '/api/panes/:id', (_req, res, [id]) => {

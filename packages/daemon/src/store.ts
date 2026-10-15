@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { AdapterId, Layout, Pane, Project, Session } from '@voltran/shared';
+import type { AdapterId, Layout, Pane, Project, Session, Workspace } from '@voltran/shared';
 
 const SCHEMA_VERSION = 1;
 
@@ -34,6 +34,13 @@ create table if not exists panes (
     agent_resumable integer not null default 0,
     ended integer not null default 0,
     created_at integer not null
+);
+create table if not exists workspaces (
+    id text primary key,
+    title text not null,
+    layout text,
+    created_at integer not null,
+    updated_at integer not null
 );
 `;
 
@@ -72,6 +79,14 @@ const toPane = (row: Row): Pane => ({
     createdAt: Number(row.created_at),
 });
 
+const toWorkspace = (row: Row): Workspace => ({
+    id: String(row.id),
+    title: String(row.title),
+    layout: row.layout ? (JSON.parse(String(row.layout)) as Layout) : null,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+});
+
 export class Store {
     private db: DatabaseSync;
 
@@ -98,6 +113,10 @@ export class Store {
         return (this.db.prepare('select * from panes order by created_at').all() as Row[]).map(toPane);
     }
 
+    listWorkspaces(): Workspace[] {
+        return (this.db.prepare('select * from workspaces order by created_at').all() as Row[]).map(toWorkspace);
+    }
+
     getProject(id: string): Project | null {
         const row = this.db.prepare('select * from projects where id = ?').get(id) as Row | undefined;
         return row ? toProject(row) : null;
@@ -111,6 +130,11 @@ export class Store {
     getPane(id: string): Pane | null {
         const row = this.db.prepare('select * from panes where id = ?').get(id) as Row | undefined;
         return row ? toPane(row) : null;
+    }
+
+    getWorkspace(id: string): Workspace | null {
+        const row = this.db.prepare('select * from workspaces where id = ?').get(id) as Row | undefined;
+        return row ? toWorkspace(row) : null;
     }
 
     panesOfSession(sessionId: string): Pane[] {
@@ -199,5 +223,24 @@ export class Store {
 
     deletePane(id: string): void {
         this.db.prepare('delete from panes where id = ?').run(id);
+    }
+
+    insertWorkspace(workspace: Workspace): void {
+        this.db.prepare('insert into workspaces (id, title, layout, created_at, updated_at) values (?, ?, ?, ?, ?)')
+            .run(workspace.id, workspace.title, workspace.layout ? JSON.stringify(workspace.layout) : null, workspace.createdAt, workspace.updatedAt);
+    }
+
+    updateWorkspace(id: string, patch: Partial<Pick<Workspace, 'title' | 'layout'>>): void {
+        const current = this.getWorkspace(id);
+        if (!current) {
+            return;
+        }
+        const next = { ...current, ...patch, updatedAt: Date.now() };
+        this.db.prepare('update workspaces set title = ?, layout = ?, updated_at = ? where id = ?')
+            .run(next.title, next.layout ? JSON.stringify(next.layout) : null, next.updatedAt, id);
+    }
+
+    deleteWorkspace(id: string): void {
+        this.db.prepare('delete from workspaces where id = ?').run(id);
     }
 }

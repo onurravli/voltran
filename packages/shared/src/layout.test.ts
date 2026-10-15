@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { insertPane, isValidLayout, movePane, normalizeSizes, paneIds, removePane, samePanes } from './layout.ts';
+import { insertPane, isValidLayout, movePane, normalizeSizes, paneIds, placeLayout, removePane, samePanes } from './layout.ts';
 import type { Layout, LayoutSplit } from './types.ts';
 
 describe('insertPane', () => {
@@ -156,5 +156,33 @@ describe('movePane', () => {
             expect(samePanes(next, layout)).toBe(true);
             expect(isValidLayout(next)).toBe(true);
         }
+    });
+});
+
+describe('placeLayout', () => {
+    const pane = (paneId: string): Layout => ({ type: 'pane', paneId });
+    const pair: Layout = { type: 'split', direction: 'vertical', children: [pane('x'), pane('y')], sizes: [30, 70] };
+
+    it('becomes the whole layout when there is none', () => {
+        expect(placeLayout(null, pair, null, 'swap')).toBe(pair);
+    });
+
+    it('goes on the edge of the pane it was dropped on, keeping its own arrangement', () => {
+        const layout = insertPane(pane('a'), 'b', 'a', 'horizontal');
+        expect(placeLayout(layout, pair, 'b', 'top')).toEqual({
+            type: 'split',
+            direction: 'horizontal',
+            children: [pane('a'), { type: 'split', direction: 'vertical', children: [pair, pane('b')], sizes: [50, 50] }],
+            sizes: [50, 50],
+        });
+        expect(paneIds(placeLayout(layout, pane('c'), 'a', 'left'))).toEqual(['c', 'a', 'b']);
+        expect(paneIds(placeLayout(layout, pane('c'), 'a', 'bottom'))).toEqual(['a', 'c', 'b']);
+    });
+
+    it('goes to the right of the pane when dropped on its middle, or of everything without a target', () => {
+        expect(paneIds(placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), 'a', 'swap'))).toEqual(['a', 'c', 'b']);
+        const appended = placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), null, 'swap');
+        expect(appended.type === 'split' && appended.children.length).toBe(3);
+        expect(placeLayout(pane('a'), pane('c'), 'missing', 'left')).toEqual({ type: 'split', direction: 'horizontal', children: [pane('a'), pane('c')], sizes: [50, 50] });
     });
 });

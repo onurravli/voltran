@@ -52,6 +52,14 @@ export interface Session {
     updatedAt: number;
 }
 
+export interface Workspace {
+    id: string;
+    title: string;
+    layout: Layout | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
 export interface Pane {
     id: string;
     sessionId: string;
@@ -110,6 +118,7 @@ export interface AppState {
     projects: Project[];
     sessions: Session[];
     panes: PaneView[];
+    workspaces: Workspace[];
     adapters: AdapterInfo[];
 }
 
@@ -147,6 +156,16 @@ export interface UpdateSessionBody {
 export interface CreatePaneBody extends PaneSpec {
     splitFrom?: string;
     direction?: LayoutDirection;
+    workspaceId?: string;
+}
+
+export interface CreateWorkspaceBody {
+    title: string;
+}
+
+export interface UpdateWorkspaceBody {
+    title?: string;
+    layout?: Layout | null;
 }
 
 export interface UpdatePaneBody {

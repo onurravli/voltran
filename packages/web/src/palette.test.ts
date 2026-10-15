@@ -50,6 +50,7 @@ const app = {
     projects: [{ id: 'project', name: 'checkout', path: '/tmp', color: '#7aa2f7', createdAt: 0 }],
     sessions: [session('one', 'Fix flaky total'), session('two', 'Old spike', true)],
     panes: [pane('a', 'one', 'Claude', 'needs-input'), pane('b', 'one', 'tests', 'running'), pane('c', 'two', 'zsh', 'idle')],
+    workspaces: [],
     adapters: [],
 } as AppState;
 
