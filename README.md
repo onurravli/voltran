@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packages/web/public/favicon.svg" alt="Voltran" width="96" height="96">
+</p>
+
 ## Voltran
 
 A local control room for running many coding agents and terminals at once. Instead of a dozen
