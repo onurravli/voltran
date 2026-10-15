@@ -88,6 +88,14 @@ there are at most `MAX_WORKSPACE_PANES`. Every path that deletes panes (a pane, 
 calls `pruneWorkspaces`, and the hub prunes again at start. In the web app `PaneBox`/`LayoutNode`
 take a `PaneHost` (session or workspace); a pane's own session still decides whether it is archived.
 
+**Git status.** `daemon/src/git.ts` (`GitWatcher`) runs `git status --porcelain=v2` for every
+folder an open session works in, one command at a time with a timeout, every 10 s while a window is
+open and a second after a Claude pane's `PostToolUse`/`Stop`; `AppState.git` is keyed by folder.
+Keep `core.fsmonitor=false` and `--no-optional-locks` in `STATUS_ARGS`: the first stops a repository
+from running a command through `git status`, the second keeps polling off `index.lock`. Pull
+requests come from `gh pr view`, cached per branch for two minutes and skipped when
+`git.pullRequests` is off or `gh` is missing. Tests inject a `GitRunner` instead of the real `gh`.
+
 **Web app** (`packages/web/src`): a zustand store (`store.ts`; view state such as the selected session
 and the sidebar width persisted in `localStorage` under `voltran.ui`, settings from the daemon),
 `events.ts` for the state socket, `terminals.ts` (one

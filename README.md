@@ -85,6 +85,18 @@ workspace shows at most 16 panes. A pane whose session is archived keeps its pla
 until the session is restored, and a pane that is closed leaves every workspace it was in. Deleting
 a workspace stops nothing.
 
+### Git
+
+A session in a git repository shows its branch in the header, with the commits to push (↑) and pull
+(↓) and the number of changed files (●); hover it for staged, unstaged, untracked and conflicting
+files. A detached head shows its commit. When the GitHub CLI (`gh`) is installed and signed in, the
+branch's pull request appears next to it with its state and checks, and opens on click; set
+`git.pullRequests` to `false` to stop asking GitHub. The project's row in the sidebar shows the
+branch too. Voltran reads the status every 10 seconds while a window is open, and a second after a
+Claude Code pane uses a tool, so an agent's edits show up straight away. It runs `git status` with
+`core.fsmonitor` off and without optional locks, so it neither runs a command a repository
+configures nor holds `index.lock` while an agent commits.
+
 ### Status
 
 | Lamp | Meaning |
@@ -164,7 +176,8 @@ instead. The file takes comments and trailing commas, like VS Code's:
     "terminal": { "fontFamily": "JetBrains Mono", "fontSize": 13 },
     "ui": { "fontFamily": "", "fontSize": 13 }, // "" is the system font
     "sidebar": { "position": "left" }, // "left" or "right"
-    "editor": { "command": "" }        // such as "nvim"
+    "editor": { "command": "" },       // such as "nvim"
+    "git": { "pullRequests": true }    // look up each branch's pull request with gh
 }
 ```
 
