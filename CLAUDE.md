@@ -82,6 +82,12 @@ edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hu
 whose set of panes differs from the session's. Moving a pane to another session is a separate
 endpoint (`POST /api/panes/:id/move`).
 
+**Workspaces** are named layouts that point at panes of any session or project without owning them
+(`PATCH /api/workspaces/:id`); the hub only checks that every pane exists, appears once and that
+there are at most `MAX_WORKSPACE_PANES`. Every path that deletes panes (a pane, a session, a project)
+calls `pruneWorkspaces`, and the hub prunes again at start. In the web app `PaneBox`/`LayoutNode`
+take a `PaneHost` (session or workspace); a pane's own session still decides whether it is archived.
+
 **Web app** (`packages/web/src`): a zustand store (`store.ts`; view state such as the selected session
 and the sidebar width persisted in `localStorage` under `voltran.ui`, settings from the daemon),
 `events.ts` for the state socket, `terminals.ts` (one

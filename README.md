@@ -58,6 +58,9 @@ again after switching Node versions.
   with those arguments, so it keeps its status, subagents and resume. Quotes work as in a shell but
   nothing is expanded (`~`, `$VAR`), and Voltran sets `--settings`, `--session-id`, `--resume` and
   `--continue` itself.
+- **Workspace**: a named screen that shows panes from any projects side by side, such as two agents
+  from one repository next to the dev server of another. It only points at the panes: they keep
+  running in their own sessions and show there too.
 
 ### Arranging panes
 
@@ -67,6 +70,20 @@ session. Moving a pane only changes the layout: its process, scrollback and agen
 on. ⌃⌥↩ maximizes a pane, ⌃⌥B hides the sidebar, and zen mode (⌃⌥Z) shows the focused pane alone in
 full screen. Drag the sidebar's right edge to make it between 200 and 480 pixels wide, or all the way
 to the left to close it; double-click the edge to go back to the default width.
+
+### Workspaces
+
+The **+** next to **Workspaces** at the top of the sidebar starts one; double-click it to rename it.
+Drag a session from the sidebar onto it to add every pane that session has, in the session's own
+arrangement, or open a session's pane list with the arrow at the end of its row and drag a single
+pane. Drop onto the empty workspace, onto an edge of a pane already in it, or onto the workspace's
+row in the sidebar; a pane title bar can be dragged onto that row too. Inside a workspace, panes
+rearrange the same way as in a session, each title bar names the project and session the pane
+belongs to (click it to open that session), and ⌃⌥\ / ⌃⌥- add the new shell to the focused pane's
+session and to the workspace. ⌃⌥W or the × takes a pane out of the workspace without stopping it. A
+workspace shows at most 16 panes. A pane whose session is archived keeps its place but stays asleep
+until the session is restored, and a pane that is closed leaves every workspace it was in. Deleting
+a workspace stops nothing.
 
 ### Status
 
@@ -99,17 +116,17 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 
 | Keys | Action |
 |---|---|
-| ⌘K | Command palette: every action below, plus the appearance, the themes and the terminal font family and size. Type a session or pane name to jump to it |
+| ⌘K | Command palette: every action below, plus the appearance, the themes and the terminal font family and size. Type a workspace, session or pane name to jump to it |
 | ⌘F | Find in the focused terminal's scrollback. ↩ / ⇧↩ or ⌘G / ⇧⌘G step through the matches, Esc closes. A capital letter makes it case-sensitive |
 | ⌃⌥J | Jump to the next pane that needs you |
 | ⌃⌥B | Show or hide the sidebar |
 | ⌃⌥Z | Zen mode: the focused pane alone, full screen. Esc still reaches the terminal; ⇧Esc or ⌃⌥Z leaves |
 | ⌃⌥N | Start a new session |
-| ⌃⌥↑ / ⌃⌥↓ | Previous / next session |
-| ⌃⌥← / ⌃⌥→ | Previous / next pane in the session (moves the maximized view along when a pane is maximized) |
+| ⌃⌥↑ / ⌃⌥↓ | Previous / next workspace or session |
+| ⌃⌥← / ⌃⌥→ | Previous / next pane on screen (moves the maximized view along when a pane is maximized) |
 | ⌃⌥\ / ⌃⌥- | Split the focused pane right / down with a shell |
 | ⌃⌥↩ | Maximize or restore the focused pane |
-| ⌃⌥W | Close the focused pane |
+| ⌃⌥W | Close the focused pane; in a workspace, take it out of the workspace |
 | ⌃⌥/ | Show all shortcuts |
 
 In terminals, Option types the characters of your keyboard layout (such as @ and { on Turkish Q), as
