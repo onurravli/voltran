@@ -5,6 +5,7 @@ import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, SESSION_DRAG_TYPE } from '../drag.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH_STEP, draggedSidebarWidth } from '../sidebar.ts';
+import { gitLabels } from '../labels.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
@@ -286,6 +287,8 @@ function Workspaces() {
 function ProjectGroup({ project, sessions }: { project: Project; sessions: Session[] }) {
     const app = useUi((state) => state.app);
     const collapsed = useUi((state) => Boolean(state.collapsedProjects[project.id]));
+    const git = useUi((state) => state.app?.git[project.path]);
+    const gitLabel = git ? gitLabels(git) : null;
     const toggleProject = useUi((state) => state.toggleProject);
     const openDialog = useUi((state) => state.openDialog);
     const [renaming, setRenaming] = useState(false);
@@ -328,6 +331,12 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
                         <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
                         <span className="project__name">{project.name}</span>
                         {collapsed && waiting > 0 ? <span className="project__waiting">{waiting}</span> : null}
+                        {gitLabel ? (
+                            <span className="project__git" title={gitLabel.detail}>
+                                <span className="project__git-branch">{gitLabel.branch}</span>
+                                {gitLabel.changes ? <span className={`git-count${git?.conflicted ? ' git-count--conflict' : ''}`}>{gitLabel.changes}</span> : null}
+                            </span>
+                        ) : null}
                     </button>
                 )}
                 <div className="project__actions">

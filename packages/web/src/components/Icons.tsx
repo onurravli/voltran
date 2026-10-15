@@ -36,6 +36,7 @@ export const ChevronDownIcon = (props: IconProps) => <Icon {...props}><path d="m
 export const BellIcon = (props: IconProps) => <Icon {...props}><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1H3z" /><path d="M6.5 14h3" /></Icon>;
 export const KeyboardIcon = (props: IconProps) => <Icon {...props}><rect x="1.5" y="4" width="13" height="8" rx="1.5" /><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 9.5h6" /></Icon>;
 export const FolderIcon = (props: IconProps) => <Icon {...props}><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" /></Icon>;
+export const BranchIcon = (props: IconProps) => <Icon {...props}><circle cx="5" cy="3.5" r="1.5" /><circle cx="5" cy="12.5" r="1.5" /><circle cx="11" cy="5.5" r="1.5" /><path d="M5 5v6M11 7c0 2.5-6 1.5-6 4" /></Icon>;
 export const StopIcon = (props: IconProps) => <Icon {...props}><rect x="4" y="4" width="8" height="8" rx="1.5" /></Icon>;
 export const MoreIcon = (props: IconProps) => <Icon {...props} strokeWidth={2.2}><path d="M3.5 8h.01M8 8h.01M12.5 8h.01" /></Icon>;
 

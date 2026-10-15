@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { linkLabel, shortPath } from './labels.ts';
+import type { GitStatus } from '@voltran/shared';
+import { gitLabels, linkLabel, pullRequestLabel, shortPath } from './labels.ts';
 
 describe('linkLabel', () => {
     it('names GitHub pull requests and issues by repository and number', () => {
@@ -37,5 +38,34 @@ describe('shortPath', () => {
     it('leaves short paths alone', () => {
         expect(shortPath('/tmp/x')).toBe('/tmp/x');
         expect(shortPath('/')).toBe('/');
+    });
+});
+
+const clean: GitStatus = { branch: 'main', commit: 'abc1234', upstream: 'origin/main', ahead: 0, behind: 0, changed: 0, staged: 0, unstaged: 0, untracked: 0, conflicted: 0, pullRequest: null };
+
+describe('gitLabels', () => {
+    it('shows only the branch of a clean, up-to-date checkout', () => {
+        expect(gitLabels(clean)).toEqual({ branch: 'main', sync: null, changes: null, detail: 'On main, tracking origin/main\nNo changes' });
+    });
+
+    it('counts commits to push and pull, and the changed files by kind', () => {
+        const labels = gitLabels({ ...clean, ahead: 2, behind: 1, changed: 4, staged: 1, unstaged: 2, untracked: 1, conflicted: 1 });
+        expect([labels.sync, labels.changes]).toEqual(['↑2 ↓1', '4']);
+        expect(labels.detail).toBe('On main, tracking origin/main\n2 commits to push, 1 commit to pull\n4 changed files: 1 staged, 2 unstaged, 1 untracked, 1 in conflict');
+    });
+
+    it('names a detached head by its commit and a branch without upstream as such', () => {
+        expect(gitLabels({ ...clean, branch: null }).branch).toBe('abc1234');
+        expect(gitLabels({ ...clean, branch: null }).detail).toContain('Detached at abc1234');
+        expect(gitLabels({ ...clean, upstream: null, ahead: 3 }).detail).toBe('On main, with no upstream branch\n3 commits to push\nNo changes');
+        expect(gitLabels({ ...clean, branch: 'main', commit: null, upstream: null }).branch).toBe('main');
+    });
+});
+
+describe('pullRequestLabel', () => {
+    it('shows the number, the state and how the checks went', () => {
+        expect(pullRequestLabel({ number: 42, url: 'https://x', state: 'open', checks: 'passing' })).toEqual({ text: '#42 open', mark: '✓', title: 'Pull request #42 is open, checks passing. Click to open it.' });
+        expect(pullRequestLabel({ number: 7, url: 'https://x', state: 'draft', checks: null })).toMatchObject({ text: '#7 draft', mark: null });
+        expect(pullRequestLabel({ number: 9, url: 'https://x', state: 'open', checks: 'failing' }).mark).toBe('✗');
     });
 });

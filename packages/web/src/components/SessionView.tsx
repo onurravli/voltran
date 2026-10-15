@@ -1,15 +1,16 @@
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import type { DropEdge, Layout, PaneView, Project, Session } from '@voltran/shared';
+import type { DropEdge, GitStatus, Layout, PaneView, Project, Session } from '@voltran/shared';
 import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
-import { linkLabel, shortPath } from '../labels.ts';
+import { gitLabels, linkLabel, pullRequestLabel, shortPath } from '../labels.ts';
 import { closePane } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
 import { draggedItem, dropIntoWorkspace, endDrag, removeFromWorkspace, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
 import {
+    BranchIcon,
     ChevronDownIcon,
     ChevronUpIcon,
     CloseIcon,
@@ -393,6 +394,28 @@ export function LayoutNode({ node, path, host, panes, onSizes }: {
     );
 }
 
+function GitChips({ status }: { status: GitStatus }) {
+    const labels = gitLabels(status);
+    const pr = status.pullRequest;
+    const prLabel = pr ? pullRequestLabel(pr) : null;
+    return (
+        <>
+            <span className="git-chip" title={labels.detail}>
+                <BranchIcon size={13} />
+                <span className="git-chip__branch">{labels.branch}</span>
+                {labels.sync ? <span className="git-chip__sync">{labels.sync}</span> : null}
+                {labels.changes ? <span className={`git-count${status.conflicted > 0 ? ' git-count--conflict' : ''}`}>{labels.changes}</span> : null}
+            </span>
+            {pr && prLabel ? (
+                <a className={`git-pr git-pr--${pr.state}`} href={pr.url} target="_blank" rel="noreferrer noopener" title={prLabel.title}>
+                    {prLabel.text}
+                    {prLabel.mark ? <span className={`git-pr__checks git-pr__checks--${pr.checks}`}>{prLabel.mark}</span> : null}
+                </a>
+            ) : null}
+        </>
+    );
+}
+
 function SessionHeader({ session, project }: { session: Session; project: Project | undefined }) {
     const openPaneMenu = useUi((state) => state.openPaneMenu);
     const openDialog = useUi((state) => state.openDialog);
@@ -404,6 +427,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
             .map((entry) => entry.id));
         return state.app?.panes.some((pane) => pane.status === 'working' && sessionIds.has(pane.sessionId)) ?? false;
     });
+    const git = useUi((state) => state.app?.git[session.cwd]);
     const [renaming, setRenaming] = useState(false);
     const [editingLink, setEditingLink] = useState(false);
     const [linkDraft, setLinkDraft] = useState(session.link ?? '');
@@ -475,6 +499,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
             <button type="button" className="session-header__path" title={`${session.cwd}\nClick to copy`} onClick={copyPath}>
                 {shortPath(session.cwd)}
             </button>
+            {git ? <GitChips status={git} /> : null}
             {editingLink ? (
                 <input
                     className="session-header__link-input"
