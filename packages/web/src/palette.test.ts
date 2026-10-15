@@ -69,6 +69,12 @@ describe('destinations', () => {
         expect([second.sessionId, second.paneId]).toEqual(['one', 'a']);
     });
 
+    it('lists workspaces first and opens them by id', () => {
+        const withWorkspace = { ...app, workspaces: [{ id: 'w', title: 'Release', layout: { type: 'pane', paneId: 'a' }, createdAt: 0, updatedAt: 0 }] } as AppState;
+        const [first] = destinations(withWorkspace);
+        expect([first.kind, first.label, first.workspaceId, first.sessionId, first.status]).toEqual(['workspace', 'Release', 'w', null, 'needs-input']);
+    });
+
     it('lists nothing before the state arrives', () => {
         expect(destinations(null)).toEqual([]);
     });

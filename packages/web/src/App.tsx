@@ -2,13 +2,14 @@ import { useEffect } from 'react';
 import { connectEvents } from './events.ts';
 import { syncAttentionBadge } from './notify.ts';
 import { installShortcuts } from './shortcuts.ts';
-import { useUi } from './store.ts';
+import { selectedWorkspace, useUi } from './store.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
 import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
 import { FolderIcon, VoltranMark } from './components/Icons.tsx';
 import { SessionView } from './components/SessionView.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { UpdateBanner } from './components/UpdateBanner.tsx';
+import { WorkspaceView } from './components/WorkspaceView.tsx';
 
 function Welcome() {
     const hasProjects = useUi((state) => (state.app?.projects.length ?? 0) > 0);
@@ -56,8 +57,10 @@ export function App() {
     const sidebarWidth = useUi((state) => state.sidebarWidth);
     const sidebarRight = useUi((state) => state.sidebarPosition === 'right');
     const zen = useUi((state) => state.zen);
+    const workspace = useUi(selectedWorkspace);
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
-    const hideSidebar = Boolean(session) && (sidebarHidden || zen);
+    const showing = Boolean(workspace || session);
+    const hideSidebar = showing && (sidebarHidden || zen);
 
     useEffect(() => {
         const stopEvents = connectEvents();
@@ -82,12 +85,20 @@ export function App() {
 
     return (
         <div
-            className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && session ? ' app--zen' : ''}${sidebarRight ? ' app--sidebar-right' : ''}`}
+            className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && showing ? ' app--zen' : ''}${sidebarRight ? ' app--sidebar-right' : ''}`}
             style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
         >
             <Sidebar />
             <main className="main">
-                {!app ? <div className="loading">Connecting to Voltran…</div> : session ? <SessionView key={session.id} session={session} /> : <Welcome />}
+                {!app ? (
+                    <div className="loading">Connecting to Voltran…</div>
+                ) : workspace ? (
+                    <WorkspaceView key={workspace.id} workspace={workspace} />
+                ) : session ? (
+                    <SessionView key={session.id} session={session} />
+                ) : (
+                    <Welcome />
+                )}
             </main>
             <Dialogs />
             <PaneMenu />

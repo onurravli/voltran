@@ -8,6 +8,7 @@ import { linkLabel, shortPath } from '../labels.ts';
 import { closePane } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
+import { draggedItem, dropIntoWorkspace, endDrag, removeFromWorkspace, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
 import {
     ChevronDownIcon,
     ChevronUpIcon,
@@ -124,19 +125,35 @@ function FindBar({ paneId }: { paneId: string }) {
     );
 }
 
-function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
+function dropLabel(edge: DropEdge, joining: boolean): string {
+    if (edge === 'swap') {
+        return joining ? 'Place on the right' : 'Swap panes';
+    }
+    return `Place ${edge === 'top' ? 'above' : edge === 'bottom' ? 'below' : `on the ${edge}`}`;
+}
+
+export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const focused = useUi((state) => state.focusedPaneId === pane.id);
     const maximized = useUi((state) => state.maximizedPaneId === pane.id);
     const toggleMaximize = useUi((state) => state.toggleMaximize);
     const openPaneMenu = useUi((state) => state.openPaneMenu);
     const adapter = useUi((state) => state.app?.adapters.find((entry) => entry.id === pane.adapter));
+    const session = useUi((state) => state.app?.sessions.find((entry) => entry.id === pane.sessionId));
+    const project = useUi((state) => state.app?.projects.find((entry) => entry.id === session?.projectId));
     const dragging = useUi((state) => state.draggingPaneId);
+    const draggingSession = useUi((state) => state.draggingSessionId);
     const finding = useUi((state) => state.findPaneId === pane.id);
     const [link, setLink] = useState<LinkState>('connecting');
     const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
     const pressedOn = useRef<Element | null>(null);
-    const canDrop = dragging !== null && dragging !== pane.id && !maximized && !session.archived;
+    const archived = session?.archived ?? false;
+    const inWorkspace = host.kind === 'workspace';
+    const hosted = paneIds(host.layout);
+    const joining = inWorkspace && (draggingSession !== null || (dragging !== null && !hosted.includes(dragging)));
+    const canDrop = !maximized && (inWorkspace
+        ? (dragging !== null && dragging !== pane.id) || draggingSession !== null
+        : dragging !== null && dragging !== pane.id && !archived && hosted.includes(dragging));
 
     useEffect(() => {
         if (!canDrop) {
@@ -146,7 +163,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
 
     useEffect(() => {
         const container = containerRef.current;
-        if (session.archived || !container) {
+        if (archived || !container) {
             return;
         }
         const terminal = terminalFor(pane.id);
@@ -164,7 +181,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
             offFocus();
             terminal.unmount();
         };
-    }, [pane.id, session.archived]);
+    }, [pane.id, archived]);
 
     useEffect(() => {
         if (!focused) {
@@ -178,7 +195,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
 
     const split = (event: ReactMouseEvent<HTMLButtonElement>, direction: 'horizontal' | 'vertical'): void => {
         const rect = event.currentTarget.getBoundingClientRect();
-        openPaneMenu({ sessionId: session.id, splitFrom: pane.id, direction, anchor: { x: rect.right, y: rect.bottom + 4 } });
+        openPaneMenu({ sessionId: pane.sessionId, splitFrom: pane.id, direction, workspaceId: inWorkspace ? host.id : undefined, anchor: { x: rect.right, y: rect.bottom + 4 } });
     };
 
     const running = pane.pid !== null;
@@ -191,18 +208,26 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
 
     const drop = (event: React.DragEvent<HTMLElement>): void => {
         event.preventDefault();
-        const moving = event.dataTransfer.getData(PANE_DRAG_TYPE) || dragging;
+        const dragged = draggedItem(event.dataTransfer);
         const edge = edgeOf(event);
         setDropEdge(null);
-        useUi.getState().setDraggingPane(null);
-        if (!moving) {
+        endDrag();
+        if (inWorkspace) {
+            if (dragged) {
+                dropIntoWorkspace(host.id, dragged, pane.id, edge);
+            }
             return;
         }
-        const next = movePane(session.layout, moving, pane.id, edge);
-        if (next !== session.layout) {
-            api.updateSession(session.id, { layout: next }).catch(reportError);
+        if (dragged?.kind !== 'pane') {
+            return;
+        }
+        const next = movePane(host.layout, dragged.paneId, pane.id, edge);
+        if (next !== host.layout) {
+            saveHostLayout(host, next);
         }
     };
+
+    const close = (): void => (inWorkspace ? removeFromWorkspace(host.id, pane.id) : closePane(pane));
 
     return (
         <div className={`pane${focused ? ' is-focused' : ''}${dragging === pane.id ? ' is-dragging' : ''} pane--${pane.status}`} onMouseDown={() => useUi.getState().focusPane(pane.id)}>
@@ -218,12 +243,26 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                         return;
                     }
                     event.dataTransfer.setData(PANE_DRAG_TYPE, pane.id);
-                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.effectAllowed = 'copyMove';
                     useUi.getState().setDraggingPane(pane.id);
                 }}
-                onDragEnd={() => useUi.getState().setDraggingPane(null)}
+                onDragEnd={endDrag}
             >
                 <StatusLamp status={pane.status} failed={failed} size="sm" />
+                {inWorkspace && session ? (
+                    <button
+                        type="button"
+                        className="pane__origin"
+                        style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}
+                        title={`Open ${session.title}`}
+                        onClick={() => {
+                            useUi.getState().selectSession(session.id);
+                            useUi.getState().focusPane(pane.id);
+                        }}
+                    >
+                        <span>{project ? `${project.name} / ${session.title}` : session.title}</span>
+                    </button>
+                ) : null}
                 <InlineEdit
                     className="pane__title"
                     label="Pane name"
@@ -254,24 +293,24 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                     >
                         <RestartIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title="Close pane (⌃⌥W)" onClick={() => closePane(pane)}>
+                    <button type="button" className="icon-button" title={inWorkspace ? 'Remove from this workspace (⌃⌥W)' : 'Close pane (⌃⌥W)'} onClick={close}>
                         <CloseIcon size={14} />
                     </button>
                 </div>
             </div>
             <div className="pane__body">
-                {session.archived ? (
+                {archived ? (
                     <div className="pane__placeholder">Archived. Restore the session to resume this pane.</div>
                 ) : (
                     <div className="pane__terminal" ref={containerRef} />
                 )}
-                {finding && !session.archived ? <FindBar paneId={pane.id} /> : null}
+                {finding && !archived ? <FindBar paneId={pane.id} /> : null}
                 {canDrop ? (
                     <div
                         className="pane__drop"
                         onDragOver={(event) => {
                             event.preventDefault();
-                            event.dataTransfer.dropEffect = 'move';
+                            event.dataTransfer.dropEffect = joining ? 'copy' : 'move';
                             setDropEdge(edgeOf(event));
                         }}
                         onDragLeave={() => setDropEdge(null)}
@@ -279,14 +318,14 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
                     >
                         {dropEdge ? (
                             <div className={`pane__drop-zone pane__drop-zone--${dropEdge}`}>
-                                <span>{dropEdge === 'swap' ? 'Swap panes' : `Place ${dropEdge === 'top' ? 'above' : dropEdge === 'bottom' ? 'below' : `on the ${dropEdge}`}`}</span>
+                                <span>{dropLabel(dropEdge, joining)}</span>
                             </div>
                         ) : null}
                     </div>
                 ) : null}
-                {link === 'reconnecting' && !session.archived ? <div className="pane__chip">Reconnecting…</div> : null}
+                {link === 'reconnecting' && !archived ? <div className="pane__chip">Reconnecting…</div> : null}
                 {link === 'gone' ? <div className="pane__chip">This pane was removed</div> : null}
-                {pane.status === 'exited' && !session.archived ? (
+                {pane.status === 'exited' && !archived ? (
                     <div className={`pane__exit${failed ? ' is-failed' : ''}`}>
                         <span>{pane.exitCode === null ? (pane.detail ?? 'The process did not start.') : `Exited with code ${pane.exitCode}.`}</span>
                         <button type="button" className="button button--small" onClick={() => api.restartPane(pane.id).catch(reportError)}>
@@ -302,7 +341,7 @@ function PaneBox({ pane, session }: { pane: PaneView; session: Session }) {
     );
 }
 
-function setSizesAt(layout: Layout, path: number[], sizes: number[]): Layout {
+export function setSizesAt(layout: Layout, path: number[], sizes: number[]): Layout {
     if (layout.type === 'pane') {
         return layout;
     }
@@ -315,16 +354,16 @@ function setSizesAt(layout: Layout, path: number[], sizes: number[]): Layout {
 
 const childKey = (node: Layout): string => (node.type === 'pane' ? node.paneId : `split:${paneIds(node).join(',')}`);
 
-function LayoutNode({ node, path, session, panes, onSizes }: {
+export function LayoutNode({ node, path, host, panes, onSizes }: {
     node: Layout;
     path: number[];
-    session: Session;
+    host: PaneHost;
     panes: Map<string, PaneView>;
     onSizes: (path: number[], sizes: number[]) => void;
 }) {
     if (node.type === 'pane') {
         const pane = panes.get(node.paneId);
-        return pane ? <PaneBox pane={pane} session={session} /> : <div className="pane pane--missing" />;
+        return pane ? <PaneBox pane={pane} host={host} /> : <div className="pane pane--missing" />;
     }
 
     const ids = node.children.map(childKey);
@@ -346,7 +385,7 @@ function LayoutNode({ node, path, session, panes, onSizes }: {
                 <Fragment key={ids[index]}>
                     {index > 0 ? <Separator className={`separator separator--${node.direction}`} /> : null}
                     <Panel id={ids[index]} minSize="6%" className="split__panel">
-                        <LayoutNode node={child} path={[...path, index]} session={session} panes={panes} onSizes={onSizes} />
+                        <LayoutNode node={child} path={[...path, index]} host={host} panes={panes} onSizes={onSizes} />
                     </Panel>
                 </Fragment>
             ))}
@@ -483,12 +522,12 @@ export function SessionView({ session }: { session: Session }) {
     const project = app?.projects.find((entry) => entry.id === session.projectId);
     const panes = new Map(panesOf(app, session.id).map((pane) => [pane.id, pane]));
     const maximized = maximizedPaneId ? panes.get(maximizedPaneId) : undefined;
+    const host: PaneHost = { kind: 'session', id: session.id, layout: session.layout };
 
     const onSizes = (path: number[], sizes: number[]): void => {
-        if (!session.layout) {
-            return;
+        if (session.layout) {
+            saveHostLayout(host, setSizesAt(session.layout, path, sizes));
         }
-        api.updateSession(session.id, { layout: setSizesAt(session.layout, path, sizes) }).catch(reportError);
     };
 
     return (
@@ -504,9 +543,9 @@ export function SessionView({ session }: { session: Session }) {
             ) : null}
             <div className="session__body">
                 {maximized ? (
-                    <PaneBox pane={maximized} session={session} />
+                    <PaneBox pane={maximized} host={host} />
                 ) : session.layout ? (
-                    <LayoutNode node={session.layout} path={[]} session={session} panes={panes} onSizes={onSizes} />
+                    <LayoutNode node={session.layout} path={[]} host={host} panes={panes} onSizes={onSizes} />
                 ) : (
                     <div className="empty">
                         <p>This session has no panes.</p>

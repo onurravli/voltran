@@ -1,6 +1,6 @@
 import type { ServerEvent } from '@voltran/shared';
 import { api } from './api.ts';
-import { attentionPanes, useUi } from './store.ts';
+import { attentionPanes, selectedWorkspace, shownPaneIds, useUi } from './store.ts';
 
 type AttentionEvent = Extract<ServerEvent, { type: 'attention' }>;
 
@@ -41,21 +41,25 @@ export async function enableNotifications(): Promise<NotificationPermission> {
     return Notification.requestPermission();
 }
 
+// A pane the open workspace shows is revealed there; any other pane in its own session.
 export function revealPane(sessionId: string, paneId: string): void {
     const ui = useUi.getState();
-    ui.selectSession(sessionId);
+    if (!selectedWorkspace(ui) || !shownPaneIds(ui).includes(paneId)) {
+        ui.selectSession(sessionId);
+    }
     ui.focusPane(paneId);
     void api.seenPane(paneId).catch(() => undefined);
 }
 
 export function notifyAttention(event: AttentionEvent): void {
-    const { focusedPaneId, selectedSessionId } = useUi.getState();
+    const { focusedPaneId } = useUi.getState();
+    const shown = shownPaneIds(useUi.getState()).includes(event.paneId);
     const looking = document.visibilityState === 'visible' && document.hasFocus();
     if (looking && focusedPaneId === event.paneId && event.status === 'done') {
         void api.seenPane(event.paneId).catch(() => undefined);
         return;
     }
-    if (looking && (focusedPaneId === event.paneId || (selectedSessionId === event.sessionId && event.status === 'done'))) {
+    if (looking && (focusedPaneId === event.paneId || (shown && event.status === 'done'))) {
         return;
     }
     if (!notificationsSupported() || Notification.permission !== 'granted') {

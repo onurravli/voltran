@@ -2,6 +2,7 @@ import type {
     CreatePaneBody,
     CreateProjectBody,
     CreateSessionBody,
+    CreateWorkspaceBody,
     EditSettingsBody,
     MovePaneBody,
     Pane,
@@ -12,6 +13,8 @@ import type {
     UpdatePaneBody,
     UpdateProjectBody,
     UpdateSessionBody,
+    UpdateWorkspaceBody,
+    Workspace,
 } from '@voltran/shared';
 
 export class ApiError extends Error {
@@ -61,6 +64,9 @@ export const api = {
     createSession: (body: CreateSessionBody) => request<Session>('POST', '/api/sessions', body),
     updateSession: (id: string, body: UpdateSessionBody) => request<Session>('PATCH', `/api/sessions/${id}`, body),
     deleteSession: (id: string) => request<void>('DELETE', `/api/sessions/${id}`),
+    createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/api/workspaces', body),
+    updateWorkspace: (id: string, body: UpdateWorkspaceBody) => request<Workspace>('PATCH', `/api/workspaces/${id}`, body),
+    deleteWorkspace: (id: string) => request<void>('DELETE', `/api/workspaces/${id}`),
     createPane: (sessionId: string, body: CreatePaneBody) => request<Pane>('POST', `/api/sessions/${sessionId}/panes`, body),
     updatePane: (id: string, body: UpdatePaneBody) => request<Pane>('PATCH', `/api/panes/${id}`, body),
     deletePane: (id: string) => request<void>('DELETE', `/api/panes/${id}`),

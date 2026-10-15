@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import type { PaneView, Project, Session, SubagentView } from '@voltran/shared';
-import { PROJECT_COLORS, aggregateStatus, needsAttention } from '@voltran/shared';
+import type { PaneView, Project, Session, SubagentView, Workspace } from '@voltran/shared';
+import { PROJECT_COLORS, aggregateStatus, needsAttention, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
+import { PANE_DRAG_TYPE, SESSION_DRAG_TYPE } from '../drag.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH_STEP, draggedSidebarWidth } from '../sidebar.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
+import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
+import { workspaceStatus } from '../workspaces.ts';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { BellIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -66,9 +69,40 @@ function SubagentList({ session, agents }: { session: Session; agents: { agent: 
     );
 }
 
+function PaneList({ session, panes }: { session: Session; panes: PaneView[] }) {
+    const order = paneIds(session.layout);
+    const sorted = [...panes].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    return (
+        <ul className="subagents" aria-label={`Panes of ${session.title}`}>
+            {sorted.map((pane) => (
+                <li key={pane.id}>
+                    <button
+                        type="button"
+                        className="subagent-row pane-row"
+                        title="Drag onto a workspace to show it there"
+                        draggable
+                        onDragStart={(event) => {
+                            event.dataTransfer.setData(PANE_DRAG_TYPE, pane.id);
+                            event.dataTransfer.effectAllowed = 'copyMove';
+                            useUi.getState().setDraggingPane(pane.id);
+                        }}
+                        onDragEnd={endDrag}
+                        onClick={() => revealPane(session.id, pane.id)}
+                    >
+                        <StatusLamp status={pane.status} size="sm" />
+                        <span className="subagent-row__label">{pane.title}</span>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 function SessionRow({ session, panes }: { session: Session; panes: PaneView[] }) {
     const selected = useUi((state) => state.selectedSessionId === session.id);
     const selectSession = useUi((state) => state.selectSession);
+    const expanded = useUi((state) => Boolean(state.expandedSessions[session.id]));
+    const toggleSessionPanes = useUi((state) => state.toggleSessionPanes);
     const accepts = useUi((state) => {
         const moving = state.draggingPaneId ? state.app?.panes.find((pane) => pane.id === state.draggingPaneId) : undefined;
         const from = moving ? state.app?.sessions.find((entry) => entry.id === moving.sessionId) : undefined;
@@ -101,13 +135,20 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
     }
 
     return (
-        <li>
+        <li className="session-item">
             <button
                 type="button"
                 className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
                 onClick={() => selectSession(session.id)}
                 onDoubleClick={() => setRenaming(true)}
-                title="Double-click to rename"
+                title="Double-click to rename, drag onto a workspace to show its panes there"
+                draggable={panes.length > 0}
+                onDragStart={(event) => {
+                    event.dataTransfer.setData(SESSION_DRAG_TYPE, session.id);
+                    event.dataTransfer.effectAllowed = 'copy';
+                    useUi.getState().setDraggingSession(session.id);
+                }}
+                onDragEnd={endDrag}
                 onDragOver={(event) => {
                     if (accepts) {
                         event.preventDefault();
@@ -137,8 +178,108 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 </span>
                 {session.link ? <LinkIcon size={13} className="session-row__link" /> : null}
             </button>
+            {panes.length > 0 ? (
+                <button
+                    type="button"
+                    className="session-item__expand"
+                    aria-expanded={expanded}
+                    aria-label={expanded ? `Hide the panes of ${session.title}` : `Show the panes of ${session.title}`}
+                    title={expanded ? 'Hide panes' : 'Show panes, to drag one onto a workspace'}
+                    onClick={() => toggleSessionPanes(session.id)}
+                >
+                    <ChevronIcon size={11} className={`project__chevron${expanded ? ' is-open' : ''}`} />
+                </button>
+            ) : null}
+            {expanded && panes.length > 0 ? <PaneList session={session} panes={panes} /> : null}
             {agents.length > 0 ? <SubagentList session={session} agents={agents} /> : null}
         </li>
+    );
+}
+
+function WorkspaceRow({ workspace }: { workspace: Workspace }) {
+    const app = useUi((state) => state.app);
+    const selected = useUi((state) => state.selectedWorkspaceId === workspace.id);
+    const selectWorkspace = useUi((state) => state.selectWorkspace);
+    const accepts = useUi((state) => state.draggingPaneId !== null || state.draggingSessionId !== null);
+    const [over, setOver] = useState(false);
+    const [renaming, setRenaming] = useState(false);
+    const status = workspaceStatus(app, workspace);
+    const count = paneIds(workspace.layout).length;
+
+    if (renaming) {
+        return (
+            <li>
+                <div className={`session-row${selected ? ' is-selected' : ''}`}>
+                    <StatusLamp status={status} />
+                    <InlineEdit
+                        className="session-row__title"
+                        label="Workspace name"
+                        value={workspace.title}
+                        editing
+                        onEditingChange={setRenaming}
+                        onSave={(title) => api.updateWorkspace(workspace.id, { title })}
+                    />
+                </div>
+            </li>
+        );
+    }
+
+    return (
+        <li>
+            <button
+                type="button"
+                className={`session-row${selected ? ' is-selected' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
+                onClick={() => selectWorkspace(workspace.id)}
+                onDoubleClick={() => setRenaming(true)}
+                title="Double-click to rename"
+                onDragOver={(event) => {
+                    if (accepts) {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'copy';
+                        setOver(true);
+                    }
+                }}
+                onDragLeave={() => setOver(false)}
+                onDrop={(event) => {
+                    setOver(false);
+                    const dragged = draggedItem(event.dataTransfer);
+                    endDrag();
+                    if (dragged) {
+                        event.preventDefault();
+                        dropIntoWorkspace(workspace.id, dragged, null, 'swap');
+                    }
+                }}
+                aria-current={selected ? 'true' : undefined}
+            >
+                <StatusLamp status={status} />
+                <span className="session-row__text">
+                    <span className="session-row__title">{workspace.title}</span>
+                    <span className="session-row__detail">{count === 0 ? 'Drag panes here' : count === 1 ? '1 pane' : `${count} panes`}</span>
+                </span>
+            </button>
+        </li>
+    );
+}
+
+function Workspaces() {
+    const workspaces = useUi((state) => state.app?.workspaces);
+
+    return (
+        <section className="workspaces" aria-label="Workspaces">
+            <div className="project__header">
+                <span className="workspaces__heading">Workspaces</span>
+                <div className="project__actions">
+                    <button type="button" className="icon-button" title="New workspace: panes from any project, side by side" onClick={createWorkspace}>
+                        <PlusIcon size={14} />
+                    </button>
+                </div>
+            </div>
+            {workspaces && workspaces.length > 0 ? (
+                <ul className="project__sessions">
+                    {workspaces.map((workspace) => <WorkspaceRow key={workspace.id} workspace={workspace} />)}
+                </ul>
+            ) : null}
+        </section>
     );
 }
 
@@ -299,7 +440,8 @@ function SidebarResizer() {
     const outward = useUi((state) => (state.sidebarPosition === 'right' ? -1 : 1));
     const setSidebarWidth = useUi((state) => state.setSidebarWidth);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
-    const canClose = useUi((state) => Boolean(state.app?.sessions.some((session) => session.id === state.selectedSessionId)));
+    const canClose = useUi((state) => Boolean(state.app?.sessions.some((session) => session.id === state.selectedSessionId)
+        || state.app?.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)));
     const drag = useRef<{ x: number; width: number } | null>(null);
     const [dragging, setDragging] = useState(false);
 
@@ -384,6 +526,7 @@ export function Sidebar() {
             </header>
 
             <nav className="sidebar__projects" aria-label="Projects and sessions">
+                <Workspaces />
                 {projects.map((project) => (
                     <ProjectGroup
                         key={project.id}

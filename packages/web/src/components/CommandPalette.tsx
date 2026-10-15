@@ -40,7 +40,7 @@ type FontTarget = 'terminal' | 'ui';
 type Mode = 'commands' | 'terminal-fonts' | 'ui-fonts' | 'appearance' | Scheme;
 
 const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
-    commands: { placeholder: 'Type a command, or a session or pane name', empty: 'No matching commands, sessions or panes' },
+    commands: { placeholder: 'Type a command, or a workspace, session or pane name', empty: 'No matching commands, workspaces, sessions or panes' },
     'terminal-fonts': { title: 'Terminal font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
     'ui-fonts': { title: 'UI font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
     appearance: { title: 'Appearance', placeholder: 'Follow the system, or always use dark or light', empty: 'No matching appearance' },
@@ -174,7 +174,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             keywords: place.keywords,
             status: place.status,
             hint: place.keywords,
-            run: () => (place.paneId ? revealPane(place.sessionId, place.paneId) : useUi.getState().selectSession(place.sessionId)),
+            run: () => {
+                if (place.workspaceId) {
+                    useUi.getState().selectWorkspace(place.workspaceId);
+                } else if (place.sessionId && place.paneId) {
+                    revealPane(place.sessionId, place.paneId);
+                } else if (place.sessionId) {
+                    useUi.getState().selectSession(place.sessionId);
+                }
+            },
         })) : [];
         const findIn = visibleFocusedPane();
         items = filterItems<Item>([

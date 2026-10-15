@@ -617,6 +617,57 @@ kbd {
     font-size: calc(11px * var(--ui-scale));
 }
 
+.pane-row {
+    cursor: grab;
+}
+
+.session-item {
+    position: relative;
+}
+
+.session-item > .session-row {
+    padding-right: 26px;
+}
+
+.session-item__expand {
+    position: absolute;
+    top: calc(6px + (1.4em - 18.2px) / 2);
+    right: 4px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 18px;
+    border: 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-faint);
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.session-item:hover > .session-item__expand,
+.session-item__expand:focus-visible,
+.session-item__expand[aria-expanded='true'] {
+    opacity: 1;
+}
+
+.session-item__expand:hover {
+    background: var(--rivet-soft);
+    color: var(--text);
+}
+
+.workspaces {
+    margin-bottom: 10px;
+    padding-left: 8px;
+}
+
+.workspaces__heading {
+    flex: 1;
+    padding: 4px 4px 4px 2px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 .add-project {
     display: flex;
     align-items: center;
@@ -1116,6 +1167,43 @@ kbd {
     white-space: nowrap;
 }
 
+.pane__origin {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 30%;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: calc(12px * var(--ui-scale));
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.pane__origin span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pane__origin::before {
+    content: '';
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--project-color);
+}
+
+.pane__origin:hover {
+    background: var(--rivet-soft);
+    color: var(--text);
+}
+
 .pane--needs-input .pane__summary {
     color: var(--signal);
 }
@@ -1308,6 +1396,36 @@ kbd {
 
 .empty {
     color: var(--text-muted);
+}
+
+.workspace__empty {
+    flex: 1;
+    margin: 16px;
+    border: 1px dashed var(--rivet);
+    border-radius: var(--radius-m);
+}
+
+.workspace__empty.is-drop-candidate {
+    border-color: var(--focus);
+}
+
+.workspace__empty.is-drop-target {
+    background: color-mix(in srgb, var(--focus) 12%, transparent);
+}
+
+.workspace__empty p {
+    margin: 0;
+}
+
+.workspace__hint {
+    color: var(--text-faint);
+    font-size: calc(12px * var(--ui-scale));
+}
+
+.workspace__count {
+    flex: none;
+    color: var(--text-faint);
+    font-size: calc(12px * var(--ui-scale));
 }
 
 .welcome--full {

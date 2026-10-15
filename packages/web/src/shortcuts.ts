@@ -1,8 +1,8 @@
 import type { AppState, PaneView, Session } from '@voltran/shared';
-import { paneIds } from '@voltran/shared';
 import { api } from './api.ts';
 import { revealPane } from './notify.ts';
-import { attentionPanes, reportError, useUi } from './store.ts';
+import { attentionPanes, reportError, selectedWorkspace, shownPaneIds, useUi } from './store.ts';
+import { removeFromWorkspace } from './workspace-actions.ts';
 
 interface Shortcut {
     code: string;
@@ -20,20 +20,21 @@ export function orderedSessions(app: AppState | null, showArchived: boolean): Se
 }
 
 function stepSession(delta: number): void {
-    const { app, showArchived, selectedSessionId, selectSession } = useUi.getState();
-    const sessions = orderedSessions(app, showArchived);
-    if (sessions.length === 0) {
+    const { app, showArchived, selectedSessionId, selectedWorkspaceId, selectSession, selectWorkspace } = useUi.getState();
+    const views = [
+        ...(app?.workspaces ?? []).map((workspace) => ({ id: workspace.id, select: () => selectWorkspace(workspace.id) })),
+        ...orderedSessions(app, showArchived).map((session) => ({ id: session.id, select: () => selectSession(session.id) })),
+    ];
+    if (views.length === 0) {
         return;
     }
-    const index = sessions.findIndex((session) => session.id === selectedSessionId);
-    const next = sessions[(index + delta + sessions.length) % sessions.length];
-    selectSession(next.id);
+    const index = views.findIndex((view) => view.id === (selectedWorkspaceId ?? selectedSessionId));
+    views[(index + delta + views.length) % views.length].select();
 }
 
 function stepPane(delta: number): void {
-    const { app, selectedSessionId, focusedPaneId, maximizedPaneId, focusPane, toggleMaximize } = useUi.getState();
-    const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
-    const ids = paneIds(session?.layout ?? null);
+    const { focusedPaneId, maximizedPaneId, focusPane, toggleMaximize } = useUi.getState();
+    const ids = shownPaneIds(useUi.getState());
     if (ids.length < 2) {
         return;
     }
@@ -58,11 +59,17 @@ function jumpToAttention(): void {
 }
 
 function splitFocused(direction: 'horizontal' | 'vertical'): void {
-    const { focusedPaneId, selectedSessionId } = useUi.getState();
-    if (!selectedSessionId) {
+    const state = useUi.getState();
+    const workspace = selectedWorkspace(state);
+    const focused = visibleFocusedPane();
+    const sessionId = workspace ? state.app?.panes.find((pane) => pane.id === focused)?.sessionId : state.selectedSessionId;
+    if (!sessionId) {
+        if (workspace) {
+            state.showToast('Click a pane first; the new one joins its session');
+        }
         return;
     }
-    api.createPane(selectedSessionId, { adapter: 'shell', splitFrom: focusedPaneId ?? undefined, direction })
+    api.createPane(sessionId, { adapter: 'shell', splitFrom: focused ?? undefined, direction, workspaceId: workspace?.id })
         .then((pane) => useUi.getState().focusPane(pane.id))
         .catch(reportError);
 }
@@ -127,19 +134,19 @@ function leaveZen(): void {
 }
 
 export function toggleZen(): void {
-    const { zen, app, focusedPaneId, maximizedPaneId, selectedSessionId, setZen, showToast } = useUi.getState();
+    const { zen, focusedPaneId, maximizedPaneId, selectedSessionId, setZen, showToast } = useUi.getState();
     if (zen) {
         leaveZen();
         return;
     }
-    if (!selectedSessionId) {
-        showToast('Open a session to use zen mode');
+    if (!selectedSessionId && !selectedWorkspace(useUi.getState())) {
+        showToast('Open a session or a workspace to use zen mode');
         return;
     }
-    const sessionPanes = app?.panes.filter((pane) => pane.sessionId === selectedSessionId) ?? [];
-    const target = sessionPanes.find((pane) => pane.id === focusedPaneId) ?? sessionPanes[0];
+    const shown = shownPaneIds(useUi.getState());
+    const target = shown.find((id) => id === focusedPaneId) ?? shown[0];
     maximizedBeforeZen = maximizedPaneId;
-    setZen(true, target?.id ?? maximizedPaneId);
+    setZen(true, target ?? maximizedPaneId);
     document.documentElement.requestFullscreen()
         .then(() => keyboardLock()?.lock(['Escape']))
         .catch(() => undefined);
@@ -162,9 +169,12 @@ export function closePane(pane: PaneView): void {
 }
 
 function closeFocused(): void {
-    const { focusedPaneId, app } = useUi.getState();
-    const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
-    if (pane) {
+    const state = useUi.getState();
+    const workspace = selectedWorkspace(state);
+    const pane = state.app?.panes.find((entry) => entry.id === state.focusedPaneId);
+    if (workspace && pane && shownPaneIds(state).includes(pane.id)) {
+        removeFromWorkspace(workspace.id, pane.id);
+    } else if (pane) {
         closePane(pane);
     }
 }
@@ -175,10 +185,10 @@ export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyB', keys: '⌃⌥B', label: 'Show or hide the sidebar', run: () => useUi.getState().toggleSidebar() },
     { code: 'KeyZ', keys: '⌃⌥Z', label: 'Zen mode: the focused pane, full screen, nothing else (⇧Esc leaves)', run: toggleZen },
     { code: 'KeyN', keys: '⌃⌥N', label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
-    { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous session', run: () => stepSession(-1) },
-    { code: 'ArrowDown', keys: '⌃⌥↓', label: 'Next session', run: () => stepSession(1) },
-    { code: 'ArrowLeft', keys: '⌃⌥←', label: 'Previous pane in this session', run: () => stepPane(-1) },
-    { code: 'ArrowRight', keys: '⌃⌥→', label: 'Next pane in this session', run: () => stepPane(1) },
+    { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous workspace or session', run: () => stepSession(-1) },
+    { code: 'ArrowDown', keys: '⌃⌥↓', label: 'Next workspace or session', run: () => stepSession(1) },
+    { code: 'ArrowLeft', keys: '⌃⌥←', label: 'Previous pane on screen', run: () => stepPane(-1) },
+    { code: 'ArrowRight', keys: '⌃⌥→', label: 'Next pane on screen', run: () => stepPane(1) },
     { code: 'Backslash', keys: '⌃⌥\\', label: 'Split the focused pane to the right with a shell', run: () => splitFocused('horizontal') },
     { code: 'Minus', keys: '⌃⌥-', label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
     {
@@ -192,7 +202,7 @@ export const SHORTCUTS: Shortcut[] = [
             }
         },
     },
-    { code: 'KeyW', keys: '⌃⌥W', label: 'Close the focused pane', run: closeFocused },
+    { code: 'KeyW', keys: '⌃⌥W', label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
     { code: 'Slash', keys: '⌃⌥/', label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
 ];
 
@@ -203,9 +213,8 @@ function isPaletteKey(event: KeyboardEvent): boolean {
 }
 
 export function visibleFocusedPane(): string | null {
-    const { app, focusedPaneId, selectedSessionId } = useUi.getState();
-    const pane = app?.panes.find((entry) => entry.id === focusedPaneId);
-    return pane && pane.sessionId === selectedSessionId ? pane.id : null;
+    const state = useUi.getState();
+    return state.focusedPaneId && shownPaneIds(state).includes(state.focusedPaneId) ? state.focusedPaneId : null;
 }
 
 function findablePane(): string | null {

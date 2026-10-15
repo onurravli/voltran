@@ -296,7 +296,7 @@ export function PaneMenu() {
 
     const create = (spec: PaneSpec): void => {
         openPaneMenu(null);
-        api.createPane(target.sessionId, { ...spec, splitFrom: target.splitFrom, direction: target.direction })
+        api.createPane(target.sessionId, { ...spec, splitFrom: target.splitFrom, direction: target.direction, workspaceId: target.workspaceId })
             .then((pane) => useUi.getState().focusPane(pane.id))
             .catch(reportError);
     };
