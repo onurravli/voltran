@@ -51,6 +51,7 @@ const app = {
     sessions: [session('one', 'Fix flaky total'), session('two', 'Old spike', true)],
     panes: [pane('a', 'one', 'Claude', 'needs-input'), pane('b', 'one', 'tests', 'running'), pane('c', 'two', 'zsh', 'idle')],
     workspaces: [],
+    git: {},
     adapters: [],
 } as AppState;
 

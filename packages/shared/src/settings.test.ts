@@ -10,6 +10,7 @@ describe('parseSettings', () => {
             ui: { fontFamily: 'Inter', fontSize: 14 },
             sidebar: { position: 'right' },
             editor: { command: 'nvim -p' },
+            git: { pullRequests: false },
         };
         expect(parseSettings(raw)).toEqual({ settings: raw, problems: [] });
     });
@@ -27,6 +28,7 @@ describe('parseSettings', () => {
             ui: { fontFamily: 12, fontSize: 24 },
             sidebar: { position: 'top' },
             editor: { command: 'vim\nrm -rf ~' },
+            git: { pullRequests: 'no' },
         });
         expect(settings).toEqual(DEFAULT_SETTINGS);
         expect(problems).toEqual([
@@ -38,6 +40,7 @@ describe('parseSettings', () => {
             `"ui.fontSize" must be a whole number from ${MIN_UI_FONT_SIZE} to ${MAX_UI_FONT_SIZE}`,
             '"sidebar.position" must be "left" or "right"',
             `"editor.command" must be a command on one line, at most ${MAX_EDITOR_COMMAND_LENGTH} characters`,
+            '"git.pullRequests" must be true or false',
         ]);
     });
 

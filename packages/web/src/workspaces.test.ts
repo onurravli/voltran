@@ -15,6 +15,7 @@ const app = {
     sessions: [session('a', row('a1', 'a2')), session('b', leaf('b1')), session('c', column('c1', 'c2', 'c3'))],
     panes: [pane('a1', 'a'), pane('a2', 'a'), pane('b1', 'b', 'needs-input'), pane('c1', 'c'), pane('c2', 'c', 'working'), pane('c3', 'c')],
     workspaces: [],
+    git: {},
     adapters: [],
 } as AppState;
 

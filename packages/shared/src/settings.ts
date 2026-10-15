@@ -8,6 +8,7 @@ export interface Settings {
     ui: { fontFamily: string; fontSize: number };
     sidebar: { position: SidebarPosition };
     editor: { command: string };
+    git: { pullRequests: boolean };
 }
 
 export interface SettingsPatch {
@@ -17,6 +18,7 @@ export interface SettingsPatch {
     ui?: Partial<Settings['ui']>;
     sidebar?: Partial<Settings['sidebar']>;
     editor?: Partial<Settings['editor']>;
+    git?: Partial<Settings['git']>;
 }
 
 export interface SettingsState {
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
     ui: { fontFamily: '', fontSize: 13 },
     sidebar: { position: 'left' },
     editor: { command: '' },
+    git: { pullRequests: true },
 };
 
 type Check = (value: unknown) => string | null;
@@ -76,6 +79,8 @@ const editorCommand: Check = (value) =>
         ? null
         : `must be a command on one line, at most ${MAX_EDITOR_COMMAND_LENGTH} characters`;
 
+const flag: Check = (value) => (typeof value === 'boolean' ? null : 'must be true or false');
+
 type Path = [string] | [string, string];
 
 const LEAVES: { path: Path; check: Check }[] = [
@@ -88,6 +93,7 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['ui', 'fontSize'], check: fontSize(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE) },
     { path: ['sidebar', 'position'], check: oneOf(SIDEBAR_POSITIONS) },
     { path: ['editor', 'command'], check: editorCommand },
+    { path: ['git', 'pullRequests'], check: flag },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -149,6 +155,7 @@ export function applySettingsPatch(settings: Settings, patch: SettingsPatch): Se
         ui: { ...settings.ui, ...patch.ui },
         sidebar: { ...settings.sidebar, ...patch.sidebar },
         editor: { ...settings.editor, ...patch.editor },
+        git: { ...settings.git, ...patch.git },
     };
 }
 

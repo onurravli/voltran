@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -7,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
 import { loadConfig } from './config.ts';
+import { commandRunner } from './git.ts';
 import { buildDaemon, type Daemon } from './main.ts';
 
 // Stands in for the real CLI: runs the exact UserPromptSubmit hook command Voltran handed it
@@ -23,6 +25,14 @@ let base: string;
 let home: string;
 let port: number;
 const opened: string[] = [];
+const realGit = commandRunner(process.env);
+const FAKE_PULL_REQUEST = JSON.stringify({
+    number: 42,
+    url: 'https://github.com/example/repo/pull/42',
+    state: 'OPEN',
+    isDraft: false,
+    statusCheckRollup: [{ __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+});
 
 const freePort = (): Promise<number> => new Promise((resolvePort) => {
     const probe = createServer();
@@ -68,6 +78,7 @@ beforeAll(async () => {
         path: `${fakeBin}:${dirname(process.execPath)}:/usr/bin:/bin`,
         baseEnv: process.env,
         openFile: (path) => opened.push(path),
+        gitRunner: (command, args, cwd) => (command === 'gh' ? Promise.resolve({ ok: true, stdout: FAKE_PULL_REQUEST }) : realGit(command, args, cwd)),
     });
     await new Promise<void>((resolveListen) => daemon.server.listen(port, '127.0.0.1', resolveListen));
 });
@@ -331,6 +342,38 @@ describe('workspaces', () => {
 
         await api('DELETE', `/api/workspaces/${left.id}`);
         await api('DELETE', `/api/workspaces/${right.id}`);
+    });
+});
+
+describe('git status', () => {
+    it('tells open windows the branch, changes and pull request of each session folder', async () => {
+        const dir = mkdtempSync(join(home, 'git-project-'));
+        const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+        execFileSync('git', ['init', '-b', 'feat/status'], { cwd: dir, stdio: 'ignore', env });
+        execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'start'], { cwd: dir, stdio: 'ignore', env });
+        writeFileSync(join(dir, 'notes.md'), 'draft\n');
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: dir });
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'git' });
+
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        await until(async () => Boolean((await api<AppState>('GET', '/api/state')).body.git[session.cwd]));
+        expect((await api<AppState>('GET', '/api/state')).body.git[session.cwd]).toEqual({
+            branch: 'feat/status',
+            commit: expect.stringMatching(/^[0-9a-f]{7}$/),
+            upstream: null,
+            ahead: 0,
+            behind: 0,
+            changed: 1,
+            staged: 0,
+            unstaged: 0,
+            untracked: 1,
+            conflicted: 0,
+            pullRequest: { number: 42, url: 'https://github.com/example/repo/pull/42', state: 'open', checks: 'passing' },
+        });
+
+        socket.close();
+        await api('DELETE', `/api/projects/${project.id}`);
     });
 });
 

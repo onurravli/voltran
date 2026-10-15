@@ -52,6 +52,27 @@ export interface Session {
     updatedAt: number;
 }
 
+export interface PullRequest {
+    number: number;
+    url: string;
+    state: 'open' | 'draft' | 'merged' | 'closed';
+    checks: 'passing' | 'failing' | 'pending' | null;
+}
+
+export interface GitStatus {
+    branch: string | null;
+    commit: string | null;
+    upstream: string | null;
+    ahead: number;
+    behind: number;
+    changed: number;
+    staged: number;
+    unstaged: number;
+    untracked: number;
+    conflicted: number;
+    pullRequest: PullRequest | null;
+}
+
 export interface Workspace {
     id: string;
     title: string;
@@ -119,6 +140,7 @@ export interface AppState {
     sessions: Session[];
     panes: PaneView[];
     workspaces: Workspace[];
+    git: Record<string, GitStatus>;
     adapters: AdapterInfo[];
 }
 

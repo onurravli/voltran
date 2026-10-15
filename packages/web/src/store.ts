@@ -162,6 +162,7 @@ function shownSettings(state: UiState): Settings {
         ui: { fontFamily: state.uiFont.family, fontSize: state.uiFont.size },
         sidebar: { position: state.sidebarPosition },
         editor: state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor,
+        git: state.settingsFile?.settings.git ?? DEFAULT_SETTINGS.git,
     };
 }
 

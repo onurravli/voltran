@@ -30,6 +30,7 @@ import {
     type Workspace,
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent } from './adapters.ts';
+import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PaneManager } from './panes.ts';
 import type { Store } from './store.ts';
 
@@ -51,6 +52,8 @@ export interface HubOptions {
     shell: string;
     path: string;
     baseEnv: NodeJS.ProcessEnv;
+    gitRunner?: GitRunner;
+    pullRequests?: () => boolean;
 }
 
 type Listener = (event: ServerEvent) => void;
@@ -91,6 +94,7 @@ const optionalLink = (value: unknown): string | null => {
 
 export class Hub {
     readonly panes: PaneManager;
+    private readonly git: GitWatcher;
     private readonly store: Store;
     private readonly adapters: AdapterInfo[];
     private listeners = new Set<Listener>();
@@ -116,6 +120,12 @@ export class Hub {
             this.panes.load(pane);
         }
         this.pruneWorkspaces();
+        this.git = new GitWatcher({
+            folders: () => [...new Set(this.store.listSessions().filter((session) => !session.archived).map((session) => session.cwd))],
+            onChange: () => this.scheduleBroadcast(),
+            pullRequests: options.pullRequests ?? (() => false),
+            run: options.gitRunner ?? commandRunner({ ...options.baseEnv, PATH: options.path }),
+        });
     }
 
     state(): AppState {
@@ -124,6 +134,7 @@ export class Hub {
             sessions: this.store.listSessions(),
             panes: this.panes.views(),
             workspaces: this.store.listWorkspaces(),
+            git: this.git.snapshot(),
             adapters: this.adapters,
         };
     }
@@ -138,7 +149,13 @@ export class Hub {
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
-        return () => this.listeners.delete(listener);
+        this.git.start();
+        return () => {
+            this.listeners.delete(listener);
+            if (this.listeners.size === 0) {
+                this.git.pause();
+            }
+        };
     }
 
     shutdown(): Promise<void> {
@@ -147,6 +164,7 @@ export class Hub {
             this.broadcastTimer = null;
         }
         this.listeners.clear();
+        this.git.stop();
         return this.panes.shutdown();
     }
 
@@ -240,6 +258,7 @@ export class Hub {
             previous = pane.id;
         });
         this.store.updateSession(session.id, { layout });
+        this.refreshGitSoon(session.cwd);
         this.scheduleBroadcast();
         return this.mustGetSession(session.id);
     }
@@ -423,7 +442,20 @@ export class Hub {
         if (!isClaudeHookEvent(event) || !payload || typeof payload !== 'object') {
             return false;
         }
-        return this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
+        const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
+        if (handled && (event === 'PostToolUse' || event === 'Stop')) {
+            const session = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '');
+            if (session) {
+                this.refreshGitSoon(session.cwd);
+            }
+        }
+        return handled;
+    }
+
+    private refreshGitSoon(folder: string): void {
+        if (this.listeners.size > 0) {
+            this.git.refreshSoon(folder);
+        }
     }
 
     private validatePaneSpec(spec: PaneSpec): void {

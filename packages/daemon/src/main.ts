@@ -6,6 +6,7 @@ import { startDaemonProcess } from './cli.ts';
 import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
 import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
+import type { GitRunner } from './git.ts';
 import { createVoltranServer, openInEditor } from './server.ts';
 import { SettingsFile } from './settings.ts';
 import { Store } from './store.ts';
@@ -17,6 +18,7 @@ export interface DaemonOptions {
     baseEnv: NodeJS.ProcessEnv;
     onShutdown?: (restart: boolean) => void;
     openFile?: (path: string) => void;
+    gitRunner?: GitRunner;
 }
 
 export interface Daemon {
@@ -52,6 +54,8 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         shell: options.shell,
         path: options.path,
         baseEnv: options.baseEnv,
+        gitRunner: options.gitRunner,
+        pullRequests: () => settings.state().settings.git.pullRequests,
     });
     const guard = new Guard(config, token);
     const settings = new SettingsFile(config.settingsFile, (state) => hub.publish({ type: 'settings', ...state }));
