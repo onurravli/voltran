@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { AppState, LayoutDirection, PaneView, Session, Settings, SettingsPatch, SettingsState, SidebarPosition, VersionInfo } from '@voltran/shared';
 import { DEFAULT_SETTINGS, SIDEBAR_POSITIONS, applySettingsPatch, needsAttention } from '@voltran/shared';
 import { api } from './api.ts';
-import { DEFAULT_FONT, parseFont, type TerminalFont } from './fonts.ts';
+import { DEFAULT_FONT, DEFAULT_UI_FONT, parseFont, parseUiFont, type TerminalFont, type UiFont } from './fonts.ts';
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from './sidebar.ts';
 import { parseThemeChoice, parseThemeId, schemeOf, themeById, type Appearance, type Scheme } from './themes.ts';
 
@@ -46,6 +46,7 @@ export interface UiState {
     sidebarPosition: SidebarPosition;
     zen: boolean;
     terminalFont: TerminalFont;
+    uiFont: UiFont;
     appearance: Appearance;
     themeIds: Record<Scheme, string>;
     settingsFile: SettingsState | null;
@@ -71,6 +72,7 @@ export interface UiState {
     setSidebarWidth: (width: number) => void;
     setZen: (zen: boolean, maximizedPaneId: string | null) => void;
     setTerminalFont: (font: TerminalFont) => void;
+    setUiFont: (font: UiFont) => void;
     setAppearance: (appearance: Appearance) => void;
     setTheme: (id: string) => void;
     applySettings: (state: SettingsState) => void;
@@ -92,6 +94,7 @@ interface Persisted {
     sidebarWidth: number;
     sidebarPosition: SidebarPosition;
     terminalFont: TerminalFont;
+    uiFont: UiFont;
     appearance: Appearance;
     themeIds: Record<Scheme, string>;
 }
@@ -109,6 +112,7 @@ function readPersisted(): Persisted {
                 sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
                 sidebarPosition: SIDEBAR_POSITIONS.find((position) => position === parsed.sidebarPosition) ?? DEFAULT_SETTINGS.sidebar.position,
                 terminalFont: parseFont(parsed.terminalFont),
+                uiFont: parseUiFont(parsed.uiFont),
                 ...parseThemeChoice(parsed),
             };
         }
@@ -123,6 +127,7 @@ function readPersisted(): Persisted {
         sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
         sidebarPosition: DEFAULT_SETTINGS.sidebar.position,
         terminalFont: DEFAULT_FONT,
+        uiFont: DEFAULT_UI_FONT,
         ...parseThemeChoice({}),
     };
 }
@@ -141,6 +146,7 @@ function shownSettings(state: UiState): Settings {
         appearance: state.appearance,
         theme: { ...state.themeIds },
         terminal: { fontFamily: state.terminalFont.family, fontSize: state.terminalFont.size },
+        ui: { fontFamily: state.uiFont.family, fontSize: state.uiFont.size },
         sidebar: { position: state.sidebarPosition },
         editor: state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor,
     };
@@ -196,6 +202,7 @@ export const useUi = create<UiState>((set, get) => ({
     setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
     setZen: (zen, maximizedPaneId) => set({ zen, maximizedPaneId }),
     setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
+    setUiFont: (font) => set({ uiFont: parseUiFont(font) }),
     setAppearance: (appearance) => get().saveSettings({ appearance }),
     setTheme: (id) => {
         const theme = themeById(id);
@@ -218,6 +225,7 @@ export const useUi = create<UiState>((set, get) => ({
             appearance: settings.appearance,
             themeIds: { dark: parseThemeId(settings.theme.dark, 'dark'), light: parseThemeId(settings.theme.light, 'light') },
             terminalFont: parseFont({ family: settings.terminal.fontFamily, size: settings.terminal.fontSize }),
+            uiFont: parseUiFont({ family: settings.ui.fontFamily, size: settings.ui.fontSize }),
             sidebarPosition: settings.sidebar.position,
         });
         if (state.problems.length > 0 && state.problems.join('\n') !== previous?.problems.join('\n')) {
@@ -230,6 +238,7 @@ export const useUi = create<UiState>((set, get) => ({
             appearance: settings.appearance,
             themeIds: { ...settings.theme },
             terminalFont: parseFont({ family: settings.terminal.fontFamily, size: settings.terminal.fontSize }),
+            uiFont: parseUiFont({ family: settings.ui.fontFamily, size: settings.ui.fontSize }),
             sidebarPosition: settings.sidebar.position,
         });
         api.updateSettings(patch)
@@ -267,6 +276,7 @@ useUi.subscribe((state) => {
         sidebarWidth: state.sidebarWidth,
         sidebarPosition: state.sidebarPosition,
         terminalFont: state.terminalFont,
+        uiFont: state.uiFont,
         appearance: state.appearance,
         themeIds: state.themeIds,
     };

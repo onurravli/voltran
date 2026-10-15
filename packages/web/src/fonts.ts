@@ -1,12 +1,18 @@
-import { DEFAULT_SETTINGS, MAX_FONT_FAMILY_LENGTH, MAX_FONT_SIZE, MIN_FONT_SIZE } from '@voltran/shared';
+import { DEFAULT_SETTINGS, MAX_FONT_FAMILY_LENGTH, MAX_FONT_SIZE, MAX_UI_FONT_SIZE, MIN_FONT_SIZE, MIN_UI_FONT_SIZE } from '@voltran/shared';
 
 export interface TerminalFont {
     family: string;
     size: number;
 }
 
+export interface UiFont {
+    family: string;
+    size: number;
+}
+
 export const DEFAULT_FONT: TerminalFont = { family: DEFAULT_SETTINGS.terminal.fontFamily, size: DEFAULT_SETTINGS.terminal.fontSize };
-export { MAX_FONT_SIZE, MIN_FONT_SIZE };
+export const DEFAULT_UI_FONT: UiFont = { family: DEFAULT_SETTINGS.ui.fontFamily, size: DEFAULT_SETTINGS.ui.fontSize };
+export { MAX_FONT_SIZE, MAX_UI_FONT_SIZE, MIN_FONT_SIZE, MIN_UI_FONT_SIZE };
 
 export const FONT_CANDIDATES = [
     'JetBrains Mono',
@@ -27,11 +33,40 @@ export const FONT_CANDIDATES = [
     'Courier New',
 ];
 
-export function clampFontSize(size: number): number {
+export const UI_FONT_CANDIDATES = [
+    'Inter',
+    'Helvetica Neue',
+    'Helvetica',
+    'Arial',
+    'Avenir Next',
+    'Geneva',
+    'Verdana',
+    'Lucida Grande',
+    'IBM Plex Sans',
+    'Source Sans 3',
+    'Roboto',
+    'Noto Sans',
+    'Open Sans',
+    'Fira Sans',
+    'Ubuntu',
+    'Geist',
+];
+
+const SYSTEM_UI_STACK = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif";
+
+function clamp(size: number, min: number, max: number, fallback: number): number {
     if (!Number.isFinite(size)) {
-        return DEFAULT_FONT.size;
+        return fallback;
     }
-    return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)));
+    return Math.min(max, Math.max(min, Math.round(size)));
+}
+
+export function clampFontSize(size: number): number {
+    return clamp(size, MIN_FONT_SIZE, MAX_FONT_SIZE, DEFAULT_FONT.size);
+}
+
+export function clampUiFontSize(size: number): number {
+    return clamp(size, MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE, DEFAULT_UI_FONT.size);
 }
 
 export function cleanFamily(family: string): string {
@@ -42,6 +77,11 @@ export function fontStack(family: string): string {
     const clean = cleanFamily(family);
     const fallback = '"SF Mono", ui-monospace, Menlo, monospace';
     return clean ? `"${clean}", ${fallback}` : fallback;
+}
+
+export function uiFontStack(family: string): string {
+    const clean = cleanFamily(family);
+    return clean ? `"${clean}", ${SYSTEM_UI_STACK}` : SYSTEM_UI_STACK;
 }
 
 export function parseFont(value: unknown): TerminalFont {
@@ -56,10 +96,27 @@ export function parseFont(value: unknown): TerminalFont {
     };
 }
 
+export function parseUiFont(value: unknown): UiFont {
+    if (!value || typeof value !== 'object') {
+        return DEFAULT_UI_FONT;
+    }
+    const { family, size } = value as Partial<Record<keyof UiFont, unknown>>;
+    return {
+        family: typeof family === 'string' ? cleanFamily(family) : DEFAULT_UI_FONT.family,
+        size: typeof size === 'number' ? clampUiFontSize(size) : DEFAULT_UI_FONT.size,
+    };
+}
+
 export function fontChoices(current: string, installed: (family: string) => boolean = isFontInstalled): string[] {
     const choices = FONT_CANDIDATES.filter(installed);
     const known = choices.some((family) => family.toLowerCase() === current.toLowerCase());
     return known ? choices : [current, ...choices];
+}
+
+export function uiFontChoices(current: string, installed: (family: string) => boolean = isFontInstalled): string[] {
+    const choices = UI_FONT_CANDIDATES.filter(installed);
+    const known = current === '' || choices.some((family) => family.toLowerCase() === current.toLowerCase());
+    return known ? ['', ...choices] : ['', current, ...choices];
 }
 
 const SAMPLE = 'mmmmmmmmmmlli10WQ@#';

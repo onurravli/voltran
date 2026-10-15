@@ -3,11 +3,13 @@ import { createRoot } from 'react-dom/client';
 import '@xterm/xterm/css/xterm.css';
 import './styles.css';
 import { App } from './App.tsx';
+import { uiFontStack, type UiFont } from './fonts.ts';
 import { watchInstallOffer } from './install.ts';
 import { activeThemeId, useUi, type UiState } from './store.ts';
 import { themeById, themeProperties } from './themes.ts';
 
 const THEME_CACHE_KEY = 'voltran.theme';
+const STYLESHEET_FONT_SIZE = 13;
 
 function applyTheme(state: UiState): void {
     const properties = themeProperties(themeById(activeThemeId(state)));
@@ -27,6 +29,18 @@ applyTheme(useUi.getState());
 useUi.subscribe((state, previous) => {
     if (activeThemeId(state) !== activeThemeId(previous) || state.appearance !== previous.appearance || state.themeIds !== previous.themeIds) {
         applyTheme(state);
+    }
+});
+
+function applyUiFont(font: UiFont): void {
+    document.documentElement.style.setProperty('--font-ui', uiFontStack(font.family));
+    document.documentElement.style.setProperty('--ui-scale', String(font.size / STYLESHEET_FONT_SIZE));
+}
+
+applyUiFont(useUi.getState().uiFont);
+useUi.subscribe((state, previous) => {
+    if (state.uiFont !== previous.uiFont) {
+        applyUiFont(state.uiFont);
     }
 });
 

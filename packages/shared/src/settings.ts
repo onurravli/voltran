@@ -5,6 +5,7 @@ export interface Settings {
     appearance: Appearance;
     theme: { dark: string; light: string };
     terminal: { fontFamily: string; fontSize: number };
+    ui: { fontFamily: string; fontSize: number };
     sidebar: { position: SidebarPosition };
     editor: { command: string };
 }
@@ -13,6 +14,7 @@ export interface SettingsPatch {
     appearance?: Appearance;
     theme?: Partial<Settings['theme']>;
     terminal?: Partial<Settings['terminal']>;
+    ui?: Partial<Settings['ui']>;
     sidebar?: Partial<Settings['sidebar']>;
     editor?: Partial<Settings['editor']>;
 }
@@ -30,6 +32,8 @@ export const DARK_THEME_IDS: readonly string[] = ['voltran', 'tokyo-night', 'cat
 export const LIGHT_THEME_IDS: readonly string[] = ['catppuccin-latte', 'solarized-light', 'github-light'];
 export const MIN_FONT_SIZE = 9;
 export const MAX_FONT_SIZE = 28;
+export const MIN_UI_FONT_SIZE = 11;
+export const MAX_UI_FONT_SIZE = 18;
 export const MAX_FONT_FAMILY_LENGTH = 100;
 export const MAX_EDITOR_COMMAND_LENGTH = 200;
 
@@ -37,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
     appearance: 'system',
     theme: { dark: 'voltran', light: 'github-light' },
     terminal: { fontFamily: 'JetBrains Mono', fontSize: 13 },
+    ui: { fontFamily: '', fontSize: 13 },
     sidebar: { position: 'left' },
     editor: { command: '' },
 };
@@ -51,15 +56,20 @@ const quoted = (options: readonly string[]): string => {
 const oneOf = (options: readonly string[]): Check => (value) =>
     typeof value === 'string' && options.includes(value) ? null : `must be ${quoted(options)}`;
 
-const fontSize: Check = (value) =>
-    typeof value === 'number' && Number.isInteger(value) && value >= MIN_FONT_SIZE && value <= MAX_FONT_SIZE
+const fontSize = (min: number, max: number): Check => (value) =>
+    typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
         ? null
-        : `must be a whole number from ${MIN_FONT_SIZE} to ${MAX_FONT_SIZE}`;
+        : `must be a whole number from ${min} to ${max}`;
 
 const fontFamily: Check = (value) =>
     typeof value === 'string' && value.trim() !== '' && value.length <= MAX_FONT_FAMILY_LENGTH
         ? null
         : `must be the name of a font, at most ${MAX_FONT_FAMILY_LENGTH} characters`;
+
+const uiFontFamily: Check = (value) =>
+    typeof value === 'string' && value.length <= MAX_FONT_FAMILY_LENGTH
+        ? null
+        : `must be the name of a font, or empty for the system font, at most ${MAX_FONT_FAMILY_LENGTH} characters`;
 
 const editorCommand: Check = (value) =>
     typeof value === 'string' && value.length <= MAX_EDITOR_COMMAND_LENGTH && !/[\r\n]/.test(value)
@@ -73,7 +83,9 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['theme', 'dark'], check: oneOf(DARK_THEME_IDS) },
     { path: ['theme', 'light'], check: oneOf(LIGHT_THEME_IDS) },
     { path: ['terminal', 'fontFamily'], check: fontFamily },
-    { path: ['terminal', 'fontSize'], check: fontSize },
+    { path: ['terminal', 'fontSize'], check: fontSize(MIN_FONT_SIZE, MAX_FONT_SIZE) },
+    { path: ['ui', 'fontFamily'], check: uiFontFamily },
+    { path: ['ui', 'fontSize'], check: fontSize(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE) },
     { path: ['sidebar', 'position'], check: oneOf(SIDEBAR_POSITIONS) },
     { path: ['editor', 'command'], check: editorCommand },
 ];
@@ -134,6 +146,7 @@ export function applySettingsPatch(settings: Settings, patch: SettingsPatch): Se
         appearance: patch.appearance ?? settings.appearance,
         theme: { ...settings.theme, ...patch.theme },
         terminal: { ...settings.terminal, ...patch.terminal },
+        ui: { ...settings.ui, ...patch.ui },
         sidebar: { ...settings.sidebar, ...patch.sidebar },
         editor: { ...settings.editor, ...patch.editor },
     };

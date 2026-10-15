@@ -122,9 +122,11 @@ of the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the wo
 each have their own theme, which colours the whole app and every terminal: ⌘K → **Dark theme…** picks
 from Voltran (the default), Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, One Dark and
 Rosé Pine, and ⌘K → **Light theme…** from GitHub Light (the default), Catppuccin Latte and Solarized
-Light. ⌘K → **Font family…** lists the common monospace fonts
-installed on your Mac or takes any installed font by name, and the font size commands make terminal
-text bigger or smaller. Moving
+Light. ⌘K → **Terminal font family…** lists the common monospace fonts
+installed on your Mac or takes any installed font by name, and the terminal font size commands make
+terminal text bigger or smaller. ⌘K → **UI font family…** and the UI font size commands do the same
+for the rest of the window (sidebar, bars, dialogs), from 11 to 18 pixels; the UI uses the system font
+until you pick another. Moving
 through a list previews each choice, ↩ keeps it and Esc goes back. Status lamps take their colours
 from the theme, so the hues above can differ. ⌘K → **Move the sidebar to the right** (or left) puts the
 project list on the other side.
@@ -143,6 +145,7 @@ instead. The file takes comments and trailing commas, like VS Code's:
     "appearance": "system",          // "system", "dark" or "light"
     "theme": { "dark": "voltran", "light": "github-light" },
     "terminal": { "fontFamily": "JetBrains Mono", "fontSize": 13 },
+    "ui": { "fontFamily": "", "fontSize": 13 }, // "" is the system font
     "sidebar": { "position": "left" }, // "left" or "right"
     "editor": { "command": "" }        // such as "nvim"
 }

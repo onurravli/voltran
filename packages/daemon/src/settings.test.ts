@@ -100,7 +100,7 @@ describe('SettingsFile', () => {
     });
 
     it('writes a template that reads back as the same settings', () => {
-        const settings = { ...DEFAULT_SETTINGS, editor: { command: 'nvim' } };
+        const settings = { ...DEFAULT_SETTINGS, ui: { fontFamily: 'Inter', fontSize: 15 }, editor: { command: 'nvim' } };
         expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({ settings, problems: [] });
     });
 

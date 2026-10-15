@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FONT, MAX_FONT_SIZE, MIN_FONT_SIZE, clampFontSize, fontChoices, fontStack, parseFont } from './fonts.ts';
+import {
+    DEFAULT_FONT,
+    DEFAULT_UI_FONT,
+    MAX_FONT_SIZE,
+    MAX_UI_FONT_SIZE,
+    MIN_FONT_SIZE,
+    MIN_UI_FONT_SIZE,
+    clampFontSize,
+    clampUiFontSize,
+    fontChoices,
+    fontStack,
+    parseFont,
+    parseUiFont,
+    uiFontChoices,
+    uiFontStack,
+} from './fonts.ts';
 
 describe('clampFontSize', () => {
     it('keeps sizes inside the supported range', () => {
@@ -55,5 +70,43 @@ describe('fontChoices', () => {
 
     it('matches the current font without regard to case', () => {
         expect(fontChoices('fira code', installed)).toEqual(['SF Mono', 'Menlo', 'Fira Code']);
+    });
+});
+
+describe('clampUiFontSize', () => {
+    it('keeps sizes inside the UI range, which is narrower than the terminal one', () => {
+        expect(clampUiFontSize(15)).toBe(15);
+        expect(clampUiFontSize(MIN_UI_FONT_SIZE - 1)).toBe(MIN_UI_FONT_SIZE);
+        expect(clampUiFontSize(MAX_UI_FONT_SIZE + 1)).toBe(MAX_UI_FONT_SIZE);
+        expect(clampUiFontSize(Number.NaN)).toBe(DEFAULT_UI_FONT.size);
+    });
+});
+
+describe('parseUiFont', () => {
+    it('keeps an empty family, which means the system font', () => {
+        expect(parseUiFont({ family: '', size: 14 })).toEqual({ family: '', size: 14 });
+        expect(parseUiFont({ family: 'Inter', size: 40 })).toEqual({ family: 'Inter', size: MAX_UI_FONT_SIZE });
+        expect(parseUiFont(undefined)).toEqual(DEFAULT_UI_FONT);
+        expect(parseUiFont({ family: 3, size: '14' })).toEqual(DEFAULT_UI_FONT);
+    });
+});
+
+describe('uiFontStack', () => {
+    it('puts the family in front of the system font, or uses the system font alone', () => {
+        expect(uiFontStack('Inter')).toBe(`"Inter", -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif`);
+        expect(uiFontStack('')).toBe(`-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif`);
+    });
+});
+
+describe('uiFontChoices', () => {
+    const installed = (family: string): boolean => ['Inter', 'Helvetica'].includes(family);
+
+    it('lists the system font first, then the installed candidates', () => {
+        expect(uiFontChoices('', installed)).toEqual(['', 'Inter', 'Helvetica']);
+        expect(uiFontChoices('inter', installed)).toEqual(['', 'Inter', 'Helvetica']);
+    });
+
+    it('keeps a custom current font right after the system font', () => {
+        expect(uiFontChoices('Avenir', installed)).toEqual(['', 'Avenir', 'Inter', 'Helvetica']);
     });
 });

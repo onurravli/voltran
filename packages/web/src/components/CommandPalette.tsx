@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PaneStatus } from '@voltran/shared';
-import { DEFAULT_FONT, cleanFamily, clampFontSize, fontChoices, fontStack, isFontInstalled, type TerminalFont } from '../fonts.ts';
+import {
+    DEFAULT_FONT,
+    DEFAULT_UI_FONT,
+    cleanFamily,
+    clampFontSize,
+    clampUiFontSize,
+    fontChoices,
+    fontStack,
+    isFontInstalled,
+    uiFontChoices,
+    uiFontStack,
+    type TerminalFont,
+    type UiFont,
+} from '../fonts.ts';
 import { installApp } from '../install.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
@@ -22,17 +35,22 @@ interface Item {
     run: () => void;
 }
 
-type Mode = 'commands' | 'fonts' | 'appearance' | Scheme;
+type FontTarget = 'terminal' | 'ui';
+
+type Mode = 'commands' | 'terminal-fonts' | 'ui-fonts' | 'appearance' | Scheme;
 
 const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
     commands: { placeholder: 'Type a command, or a session or pane name', empty: 'No matching commands, sessions or panes' },
-    fonts: { title: 'Font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
+    'terminal-fonts': { title: 'Terminal font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
+    'ui-fonts': { title: 'UI font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
     appearance: { title: 'Appearance', placeholder: 'Follow the system, or always use dark or light', empty: 'No matching appearance' },
     dark: { title: 'Dark theme', placeholder: 'Pick the theme for dark appearance', empty: 'No matching themes' },
     light: { title: 'Light theme', placeholder: 'Pick the theme for light appearance', empty: 'No matching themes' },
 };
 
 const APPEARANCE_LABELS: Record<Appearance, string> = { system: 'System', dark: 'Dark', light: 'Light' };
+
+const SYSTEM_FONT_LABEL = 'System font';
 
 function themesOf(scheme: Scheme): Theme[] {
     return THEMES.filter((theme) => theme.scheme === scheme);
@@ -42,14 +60,21 @@ function sameFamily(a: string, b: string): boolean {
     return a.toLowerCase() === b.toLowerCase();
 }
 
-function restore(font: TerminalFont | null): void {
+function restore(fonts: { terminal: TerminalFont; ui: UiFont } | null): void {
     const state = useUi.getState();
     if (state.previewThemeId) {
         state.setPreviewTheme(null);
     }
-    if (font && state.terminalFont !== font) {
-        state.setTerminalFont(font);
+    if (fonts && state.terminalFont !== fonts.terminal) {
+        state.setTerminalFont(fonts.terminal);
     }
+    if (fonts && state.uiFont !== fonts.ui) {
+        state.setUiFont(fonts.ui);
+    }
+}
+
+function uiFontLabel(family: string): string {
+    return family === '' ? SYSTEM_FONT_LABEL : family;
 }
 
 function ThemeSwatch({ theme }: { theme: Theme }) {
@@ -63,6 +88,7 @@ function ThemeSwatch({ theme }: { theme: Theme }) {
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
     const font = useUi((state) => state.terminalFont);
+    const uiFont = useUi((state) => state.uiFont);
     const appearance = useUi((state) => state.appearance);
     const setAppearance = useUi((state) => state.setAppearance);
     const themeIds = useUi((state) => state.themeIds);
@@ -76,7 +102,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const [families, setFamilies] = useState<string[]>([]);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(0);
-    const committedFont = useRef<TerminalFont | null>(null);
+    const committedFont = useRef<{ terminal: TerminalFont; ui: UiFont } | null>(null);
     const input = useRef<HTMLInputElement>(null);
     const list = useRef<HTMLUListElement>(null);
 
@@ -91,16 +117,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     }, []);
 
     const enterList = (next: Exclude<Mode, 'commands'>, index: number): void => {
-        committedFont.current = font;
+        committedFont.current = { terminal: font, ui: uiFont };
         setMode(next);
         setQuery('');
         setActive(Math.max(0, index));
     };
 
-    const enterFonts = (): void => {
-        const choices = fontChoices(font.family);
+    const enterFonts = (target: FontTarget): void => {
+        const current = target === 'terminal' ? font.family : uiFont.family;
+        const choices = target === 'terminal' ? fontChoices(current) : uiFontChoices(current);
         setFamilies(choices);
-        enterList('fonts', choices.findIndex((family) => sameFamily(family, font.family)));
+        enterList(`${target}-fonts`, choices.findIndex((family) => sameFamily(family, current)));
     };
 
     const enterAppearance = (): void => enterList('appearance', APPEARANCES.indexOf(appearance));
@@ -115,9 +142,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         setActive(0);
     };
 
-    const chooseFamily = (family: string): void => {
+    const chooseFamily = (target: FontTarget, family: string): void => {
         committedFont.current = null;
-        saveSettings({ terminal: { fontFamily: family } });
+        saveSettings(target === 'terminal' ? { terminal: { fontFamily: family } } : { ui: { fontFamily: family } });
         onClose();
     };
 
@@ -136,6 +163,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const appearanceLabel = (option: Appearance): string => (option === 'system' ? `System (${systemScheme})` : APPEARANCE_LABELS[option]);
 
     const resize = (size: number): void => saveSettings({ terminal: { fontSize: clampFontSize(size) } });
+    const resizeUi = (size: number): void => saveSettings({ ui: { fontSize: clampUiFontSize(size) } });
     const otherSide = sidebarPosition === 'left' ? 'right' : 'left';
 
     let items: Item[];
@@ -155,10 +183,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'appearance', label: 'Appearance…', keywords: 'system dark light mode', hint: appearanceLabel(appearance), keepOpen: true, run: enterAppearance },
             { id: 'theme-dark', label: 'Dark theme…', hint: themeById(themeIds.dark).name, keepOpen: true, run: () => enterThemes('dark') },
             { id: 'theme-light', label: 'Light theme…', hint: themeById(themeIds.light).name, keepOpen: true, run: () => enterThemes('light') },
-            { id: 'font-family', label: 'Font family…', hint: font.family, keepOpen: true, run: enterFonts },
-            { id: 'font-bigger', label: 'Font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
-            { id: 'font-smaller', label: 'Font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
-            { id: 'font-reset', label: 'Font size: reset', hint: `${DEFAULT_FONT.size}px`, keepOpen: true, run: () => resize(DEFAULT_FONT.size) },
+            { id: 'font-family', label: 'Terminal font family…', hint: font.family, keepOpen: true, run: () => enterFonts('terminal') },
+            { id: 'font-bigger', label: 'Terminal font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
+            { id: 'font-smaller', label: 'Terminal font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
+            { id: 'font-reset', label: 'Terminal font size: reset', hint: `${DEFAULT_FONT.size}px`, keepOpen: true, run: () => resize(DEFAULT_FONT.size) },
+            { id: 'ui-font-family', label: 'UI font family…', keywords: 'interface', hint: uiFontLabel(uiFont.family), keepOpen: true, run: () => enterFonts('ui') },
+            { id: 'ui-font-bigger', label: 'UI font size: bigger', keywords: 'interface', hint: `${uiFont.size}px`, keepOpen: true, run: () => resizeUi(uiFont.size + 1) },
+            { id: 'ui-font-smaller', label: 'UI font size: smaller', keywords: 'interface', hint: `${uiFont.size}px`, keepOpen: true, run: () => resizeUi(uiFont.size - 1) },
+            { id: 'ui-font-reset', label: 'UI font size: reset', keywords: 'interface', hint: `${DEFAULT_UI_FONT.size}px`, keepOpen: true, run: () => resizeUi(DEFAULT_UI_FONT.size) },
             { id: 'sidebar-side', label: `Move the sidebar to the ${otherSide}`, keywords: 'sidebar position left right', run: () => saveSettings({ sidebar: { position: otherSide } }) },
             { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
             { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
@@ -185,13 +217,16 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             run: () => chooseTheme(theme.id),
         })), query);
     } else {
-        const current = committedFont.current?.family ?? font.family;
+        const target: FontTarget = mode === 'terminal-fonts' ? 'terminal' : 'ui';
+        const current = target === 'terminal'
+            ? committedFont.current?.terminal.family ?? font.family
+            : committedFont.current?.ui.family ?? uiFont.family;
         items = filterItems<Item>(families.map((family) => ({
             id: `family:${family}`,
-            label: family,
+            label: target === 'terminal' ? family : uiFontLabel(family),
             family,
-            hint: !sameFamily(family, current) ? undefined : isFontInstalled(family) ? 'current' : 'current, not installed',
-            run: () => chooseFamily(family),
+            hint: !sameFamily(family, current) ? undefined : family === '' || isFontInstalled(family) ? 'current' : 'current, not installed',
+            run: () => chooseFamily(target, family),
         })), query);
         const custom = cleanFamily(query);
         if (custom && !families.some((family) => sameFamily(family, custom))) {
@@ -199,24 +234,26 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 id: 'family:custom',
                 label: `Use “${custom}”`,
                 hint: isFontInstalled(custom) ? undefined : 'not installed',
-                run: () => chooseFamily(custom),
+                run: () => chooseFamily(target, custom),
             });
         }
     }
 
     const selected = Math.min(active, Math.max(0, items.length - 1));
-    const preview = mode === 'fonts' ? items[selected]?.family : undefined;
+    const preview = mode === 'terminal-fonts' || mode === 'ui-fonts' ? items[selected]?.family : undefined;
     const previewTheme = mode !== 'commands' ? items[selected]?.themeId : undefined;
 
     useEffect(() => {
-        if (!preview) {
+        if (preview === undefined) {
             return;
         }
-        const current = useUi.getState().terminalFont;
-        if (current.family !== preview) {
-            useUi.getState().setTerminalFont({ ...current, family: preview });
+        const state = useUi.getState();
+        if (mode === 'terminal-fonts' && state.terminalFont.family !== preview) {
+            state.setTerminalFont({ ...state.terminalFont, family: preview });
+        } else if (mode === 'ui-fonts' && state.uiFont.family !== preview) {
+            state.setUiFont({ ...state.uiFont, family: preview });
         }
-    }, [preview]);
+    }, [preview, mode]);
 
     useEffect(() => {
         if (previewTheme) {
@@ -309,7 +346,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                             >
                                 {item.themeId && <ThemeSwatch theme={themeById(item.themeId)} />}
                                 {item.status !== undefined && <StatusLamp status={item.status} size="sm" />}
-                                <span className="palette__label" style={item.family ? { fontFamily: fontStack(item.family) } : undefined}>{item.label}</span>
+                                <span className="palette__label" style={item.family === undefined ? undefined : { fontFamily: mode === 'ui-fonts' ? uiFontStack(item.family) : fontStack(item.family) }}>{item.label}</span>
                                 {item.keys ? <kbd>{item.keys}</kbd> : item.hint && <span className="palette__hint">{item.hint}</span>}
                             </li>
                         ))}

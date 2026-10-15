@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, MAX_EDITOR_COMMAND_LENGTH, MAX_FONT_SIZE, applySettingsPatch, parseSettings, parseSettingsPatch, settingsEdits } from './settings.ts';
+import { DEFAULT_SETTINGS, MAX_EDITOR_COMMAND_LENGTH, MAX_FONT_FAMILY_LENGTH, MAX_FONT_SIZE, MAX_UI_FONT_SIZE, MIN_UI_FONT_SIZE, applySettingsPatch, parseSettings, parseSettingsPatch, settingsEdits } from './settings.ts';
 
 describe('parseSettings', () => {
     it('reads every setting from nested sections', () => {
@@ -7,6 +7,7 @@ describe('parseSettings', () => {
             appearance: 'dark',
             theme: { dark: 'nord', light: 'solarized-light' },
             terminal: { fontFamily: 'Menlo', fontSize: 15 },
+            ui: { fontFamily: 'Inter', fontSize: 14 },
             sidebar: { position: 'right' },
             editor: { command: 'nvim -p' },
         };
@@ -23,6 +24,7 @@ describe('parseSettings', () => {
             appearance: 'dim',
             theme: { dark: 'github-light' },
             terminal: { fontSize: '15', fontFamily: '  ' },
+            ui: { fontFamily: 12, fontSize: 24 },
             sidebar: { position: 'top' },
             editor: { command: 'vim\nrm -rf ~' },
         });
@@ -32,6 +34,8 @@ describe('parseSettings', () => {
             expect.stringMatching(/^"theme\.dark" must be "voltran", .* or "rose-pine"$/),
             expect.stringMatching(/^"terminal\.fontFamily" must be the name of a font/),
             `"terminal.fontSize" must be a whole number from 9 to ${MAX_FONT_SIZE}`,
+            expect.stringMatching(/^"ui\.fontFamily" must be the name of a font, or empty for the system font/),
+            `"ui.fontSize" must be a whole number from ${MIN_UI_FONT_SIZE} to ${MAX_UI_FONT_SIZE}`,
             '"sidebar.position" must be "left" or "right"',
             `"editor.command" must be a command on one line, at most ${MAX_EDITOR_COMMAND_LENGTH} characters`,
         ]);
@@ -46,6 +50,15 @@ describe('parseSettings', () => {
         for (const fontSize of [8, MAX_FONT_SIZE + 1, 13.5, Number.NaN]) {
             expect(parseSettings({ terminal: { fontSize } }).settings.terminal.fontSize).toBe(DEFAULT_SETTINGS.terminal.fontSize);
         }
+    });
+
+    it('accepts an empty UI font family, which means the system font, and its own size range', () => {
+        expect(parseSettings({ ui: { fontFamily: '' } })).toEqual({ settings: DEFAULT_SETTINGS, problems: [] });
+        expect(parseSettings({ ui: { fontFamily: 'x'.repeat(MAX_FONT_FAMILY_LENGTH + 1) } }).problems).toHaveLength(1);
+        for (const fontSize of [MIN_UI_FONT_SIZE - 1, MAX_UI_FONT_SIZE + 1, 13.5]) {
+            expect(parseSettings({ ui: { fontSize } }).settings.ui.fontSize).toBe(DEFAULT_SETTINGS.ui.fontSize);
+        }
+        expect(parseSettings({ ui: { fontSize: MAX_UI_FONT_SIZE } }).settings.ui.fontSize).toBe(MAX_UI_FONT_SIZE);
     });
 
     it('names unknown settings and sections that are not objects', () => {
