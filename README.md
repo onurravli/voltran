@@ -9,8 +9,8 @@ terminal windows, you get one window with your projects, a session per piece of 
 panes for the agents, shells and dev servers in it. Voltran tells you which agent is waiting on you.
 
 It works with any folder and any agent CLI. Claude Code gets first-class status through its hooks,
-including the subagents it runs; other agents (Codex, Gemini CLI, anything else) get status from
-terminal activity.
+including the subagents it runs, and OpenCode through a plugin Voltran gives it; other agents (Codex,
+Gemini CLI, anything else) get status from terminal activity.
 
 ## Requirements
 
@@ -52,12 +52,14 @@ again after switching Node versions.
 - **Project**: a folder or repository you work in.
 - **Session**: one piece of work inside a project, such as a ticket, a branch or an investigation.
   It can carry a link to its ticket or pull request.
-- **Pane**: a terminal inside a session, which runs an agent (Claude Code, Codex, Gemini CLI), a
-  shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A command
-  that starts with `claude`, such as `claude --plugin-dir ./my-plugin`, opens a Claude Code pane
-  with those arguments, so it keeps its status, subagents and resume. Quotes work as in a shell but
-  nothing is expanded (`~`, `$VAR`), and Voltran sets `--settings`, `--session-id`, `--resume` and
-  `--continue` itself.
+- **Pane**: a terminal inside a session, which runs an agent (Claude Code, OpenCode, Codex, Gemini
+  CLI), a shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A
+  command that starts with `claude`, such as `claude --plugin-dir ./my-plugin`, opens a Claude Code
+  pane with those arguments, so it keeps its status, subagents and resume. Quotes work as in a shell
+  but nothing is expanded (`~`, `$VAR`), and Voltran sets `--settings`, `--session-id`, `--resume`
+  and `--continue` itself. A command that starts with `opencode`, such as `opencode --auto` or
+  `opencode mini --model anthropic/claude-sonnet-4-5`, does the same for OpenCode; Voltran sets
+  `--standalone`, `--server`, `--session`, `--continue` and `--fork` there.
 - **Workspace**: a named screen that shows panes from any projects side by side, such as two agents
   from one repository next to the dev server of another. It only points at the panes: they keep
   running in their own sessions and show there too.
@@ -93,9 +95,9 @@ files. A detached head shows its commit. When the GitHub CLI (`gh`) is installed
 branch's pull request appears next to it with its state and checks, and opens on click; set
 `git.pullRequests` to `false` to stop asking GitHub. The project's row in the sidebar shows the
 branch too. Voltran reads the status every 10 seconds while a window is open, and a second after a
-Claude Code pane uses a tool, so an agent's edits show up straight away. It runs `git status` with
-`core.fsmonitor` off and without optional locks, so it neither runs a command a repository
-configures nor holds `index.lock` while an agent commits.
+Claude Code or OpenCode pane uses a tool, so an agent's edits show up straight away. It runs
+`git status` with `core.fsmonitor` off and without optional locks, so it neither runs a command a
+repository configures nor holds `index.lock` while an agent commits.
 
 ### Status
 
@@ -202,8 +204,9 @@ packages/
   has caught up with its last output.
 - **Restarts.** Stopping the daemon ends the processes (there is no tmux underneath). On the next
   start, panes come back asleep with their scrollback and start when you open them. Claude Code
-  panes come back with `claude --resume <session>`, so the conversation continues. Open windows
-  reconnect on their own.
+  panes come back with `claude --resume <session>` and OpenCode panes with
+  `opencode --session <session>`, so the conversation continues. Open windows reconnect on their
+  own.
 - **Updates.** A build records a hash of the UI's source and of the shared protocol code in
   `dist/version.json`. When the UI is rebuilt, open windows offer to reload. When the build and the
   running daemon come from different protocol code, they say whether to rebuild the UI or restart
@@ -223,6 +226,12 @@ packages/
 - **Subagents.** The hooks give each subagent's id, and Claude writes its transcript next to the
   parent session's (`<session>/subagents/agent-<id>.jsonl`). A subagent pane runs a small viewer
   that follows that file; the daemon tells it when the subagent stops.
+- **OpenCode status.** Each OpenCode pane runs its own OpenCode server (`--standalone`), and Voltran
+  adds a small plugin to it through `OPENCODE_CONFIG_CONTENT`, which adds to your configuration
+  files instead of replacing them. The plugin follows OpenCode's events (prompts, tools, permission
+  prompts and questions, including a subagent's, and the end of each turn) and reports them to the
+  daemon with the pane's secret. Voltran picks the session id, so the pane resumes the same
+  conversation, or the one you switched to inside it.
 - **Other agents.** Status comes from the terminal: streaming output means working, a quiet period
   after work means finished, and a terminal bell means the agent needs input.
 

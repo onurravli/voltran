@@ -63,9 +63,16 @@ are easy to get wrong here:
 
 **Agent status** comes from two places. Claude Code panes are launched with `--settings` pointing at a
 generated file (`adapters.ts` → `claudeHookSettings`) whose hooks `curl` `/api/hooks/:pane/:event`
-with a secret unique to that pane's process; `status.ts` maps hook events to statuses. Other agents
-use `ActivityTracker` (output streaming / quiet / bell heuristics). Adapters (`claude`, `codex`,
-`gemini`, `shell`, `command`, `subagent`) are defined in `adapters.ts`.
+with a secret unique to that pane's process; `status.ts` maps hook events to statuses. OpenCode V2
+runs plugins in a background service shared by every client, so an OpenCode pane runs
+`opencode --standalone` (a private server that inherits the pane's environment) with
+`OPENCODE_CONFIG_CONTENT` adding `daemon/src/opencode-plugin/` (a folder plugin OpenCode loads with
+Bun; keep it free of daemon imports). The plugin's `Reporter` turns OpenCode events into the
+`OPENCODE_EVENTS` it posts to the same hook route, dropping child (subagent) sessions except for their
+permission prompts and questions; `OpencodeStatus` maps them and counts the open prompts. Voltran picks
+the `ses_…` id and always passes `--session`, which creates the session or continues it. Other agents
+use `ActivityTracker` (output streaming / quiet / bell heuristics). Adapters (`claude`, `opencode`,
+`codex`, `gemini`, `shell`, `command`, `subagent`) are defined in `adapters.ts`.
 
 **Subagents.** `subagents.ts` tracks each Claude pane's running subagents from hooks: `SubagentStart`
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
@@ -90,11 +97,12 @@ take a `PaneHost` (session or workspace); a pane's own session still decides whe
 
 **Git status.** `daemon/src/git.ts` (`GitWatcher`) runs `git status --porcelain=v2` for every
 folder an open session works in, one command at a time with a timeout, every 10 s while a window is
-open and a second after a Claude pane's `PostToolUse`/`Stop`; `AppState.git` is keyed by folder.
-Keep `core.fsmonitor=false` and `--no-optional-locks` in `STATUS_ARGS`: the first stops a repository
-from running a command through `git status`, the second keeps polling off `index.lock`. Pull
-requests come from `gh pr view`, cached per branch for two minutes and skipped when
-`git.pullRequests` is off or `gh` is missing. Tests inject a `GitRunner` instead of the real `gh`.
+open and a second after a Claude pane's `PostToolUse`/`Stop` or an OpenCode pane's
+`ToolEnd`/`TurnEnd`; `AppState.git` is keyed by folder. Keep `core.fsmonitor=false` and
+`--no-optional-locks` in `STATUS_ARGS`: the first stops a repository from running a command through
+`git status`, the second keeps polling off `index.lock`. Pull requests come from `gh pr view`,
+cached per branch for two minutes and skipped when `git.pullRequests` is off or `gh` is missing.
+Tests inject a `GitRunner` instead of the real `gh`.
 
 **Web app** (`packages/web/src`): a zustand store (`store.ts`; view state such as the selected session
 and the sidebar width persisted in `localStorage` under `voltran.ui`, settings from the daemon),
