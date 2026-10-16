@@ -10,7 +10,7 @@ panes for the agents, shells and dev servers in it. Voltran tells you which agen
 
 It works with any folder and any agent CLI. Claude Code gets first-class status through its hooks,
 including the subagents it runs, and OpenCode through a plugin Voltran gives it; other agents (Codex,
-Gemini CLI, anything else) get status from terminal activity.
+Antigravity, anything else) get status from terminal activity.
 
 ## Requirements
 
@@ -52,8 +52,8 @@ again after switching Node versions.
 - **Project**: a folder or repository you work in.
 - **Session**: one piece of work inside a project, such as a ticket, a branch or an investigation.
   It can carry a link to its ticket or pull request.
-- **Pane**: a terminal inside a session, which runs an agent (Claude Code, OpenCode, Codex, Gemini
-  CLI), a shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A
+- **Pane**: a terminal inside a session, which runs an agent (Claude Code, OpenCode, Codex,
+  Antigravity), a shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A
   command that starts with `claude`, such as `claude --plugin-dir ./my-plugin`, opens a Claude Code
   pane with those arguments, so it keeps its status, subagents and resume. Quotes work as in a shell
   but nothing is expanded (`~`, `$VAR`), and Voltran sets `--settings`, `--session-id`, `--resume`

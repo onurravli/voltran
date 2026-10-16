@@ -72,7 +72,7 @@ Bun; keep it free of daemon imports). The plugin's `Reporter` turns OpenCode eve
 permission prompts and questions; `OpencodeStatus` maps them and counts the open prompts. Voltran picks
 the `ses_…` id and always passes `--session`, which creates the session or continues it. Other agents
 use `ActivityTracker` (output streaming / quiet / bell heuristics). Adapters (`claude`, `opencode`,
-`codex`, `gemini`, `shell`, `command`, `subagent`) are defined in `adapters.ts`.
+`codex`, `antigravity`, `shell`, `command`, `subagent`) are defined in `adapters.ts`.
 
 **Subagents.** `subagents.ts` tracks each Claude pane's running subagents from hooks: `SubagentStart`
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
