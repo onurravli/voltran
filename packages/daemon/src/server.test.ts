@@ -6,17 +6,27 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
+import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
 import { loadConfig } from './config.ts';
 import { commandRunner } from './git.ts';
 import { buildDaemon, type Daemon } from './main.ts';
 
-// Stands in for the real CLI: runs the exact UserPromptSubmit hook command Voltran handed it
-// through --settings, so the env plumbing and the per-pane secret are exercised end to end.
+// Stands in for the real CLI: runs the exact hook commands Voltran handed it through --settings,
+// so the env plumbing and the per-pane secret are exercised end to end. With --notes-test it also
+// starts a session and writes the pane's notes the way Claude's Write tool would.
 const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
-cmd=$(node -e 'const s=require(process.argv[1]); process.stdout.write(s.hooks.UserPromptSubmit[0].hooks[0].command)' "$2")
-printf '{"session_id":"fake-session-1","prompt":"hi from fake claude"}' | sh -c "$cmd"
+settings=$2
+hook() { node -e 'const s=require(process.argv[1]); process.stdout.write(s.hooks[process.argv[2]][Number(process.argv[3])].hooks[0].command)' "$settings" "$1" "$2"; }
+printf '{"session_id":"fake-session-1","prompt":"hi from fake claude"}' | sh -c "$(hook UserPromptSubmit 0)"
+case "$*" in *--notes-test*)
+    sh -c "$(hook SessionStart 1)" < /dev/null
+    call='{"session_id":"fake-session-1","tool_name":"Write","tool_input":{"file_path":"'"$VOLTRAN_NOTES"'"}}'
+    printf '%s' "$call" | sh -c "$(hook PreToolUse 0)"
+    sleep 1
+    printf 'agent progress\\n' > "$VOLTRAN_NOTES"
+    printf '%s' "$call" | sh -c "$(hook PostToolUse 0)"
+;; esac
 sleep 30
 `;
 
@@ -431,6 +441,44 @@ describe('agent panes', () => {
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
     });
 
+    it('give Claude the pane notes and hold them while Claude edits them', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: state.projects[0].id,
+            title: 'notes hooks',
+            panes: [{ adapter: 'claude', command: '--notes-test' }],
+        });
+        const [paneId] = paneIds(session.layout);
+        const notesFile = join(home, 'data', 'notes', paneId, 'notes.md');
+
+        let output = '';
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneId}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        socket.on('message', (data, isBinary) => {
+            if (isBinary) {
+                output += data.toString();
+            }
+        });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 200, rows: 40 }));
+
+        const meta = async (): Promise<NotesMeta | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((pane) => pane.id === paneId)?.notes;
+        await until(async () => (await meta())?.lock === 'agent');
+        const { body: shown } = await api<PaneNotes>('GET', `/api/panes/${paneId}/notes`);
+        expect((await api('POST', `/api/panes/${paneId}/notes/lock`, { holder: 'window-cccc', version: shown.version })).status).toBe(409);
+
+        await until(async () => {
+            const notes = await meta();
+            return notes?.updatedBy === 'agent' && notes.lock === null;
+        });
+        expect((await meta())?.size).toBe(15);
+        expect((await api<PaneNotes>('GET', `/api/panes/${paneId}/notes`)).body.content).toBe('agent progress\n');
+        await until(() => output.replace(/\s+/g, ' ').includes(`Notes file: ${notesFile}`));
+        expect(output).toContain('# Voltran pane notes');
+
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
+    });
+
     it('track OpenCode status through the plugin Voltran adds to its own server', async () => {
         const { body: state } = await api<AppState>('GET', '/api/state');
         const projectId = state.projects[0].id;
@@ -466,6 +514,44 @@ describe('agent panes', () => {
 
         socket.close();
         await api('DELETE', `/api/sessions/${session.id}`);
+    });
+});
+
+describe('notes', () => {
+    it('keeps a note per pane that only the window holding the lock can save, and tells every window', async () => {
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'notes-')) });
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'notes', panes: [{ adapter: 'shell' }] });
+        const [paneId] = paneIds(session.layout);
+        const events: ServerEvent[] = [];
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        socket.on('message', (data) => events.push(JSON.parse(data.toString()) as ServerEvent));
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        const meta = async (): Promise<NotesMeta | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((pane) => pane.id === paneId)?.notes;
+
+        const { body: empty } = await api<PaneNotes>('GET', `/api/panes/${paneId}/notes`);
+        expect(empty.content).toBe('');
+        expect((await api('PUT', `/api/panes/${paneId}/notes`, { content: 'x', version: empty.version, holder: 'window-aaaa' })).status).toBe(409);
+        expect((await api('POST', `/api/panes/${paneId}/notes/lock`, { holder: '../x', version: empty.version })).status).toBe(400);
+
+        const locked = await api<NotesMeta>('POST', `/api/panes/${paneId}/notes/lock`, { holder: 'window-aaaa', version: empty.version });
+        expect(locked).toMatchObject({ status: 200, body: { lock: 'user', holder: 'window-aaaa' } });
+        expect((await api('POST', `/api/panes/${paneId}/notes/lock`, { holder: 'window-bbbb', version: empty.version })).status).toBe(409);
+
+        const saved = await api<PaneNotes>('PUT', `/api/panes/${paneId}/notes`, { content: '# Plan\n', version: empty.version, holder: 'window-aaaa' });
+        expect(saved).toMatchObject({ status: 200, body: { content: '# Plan\n' } });
+        await until(() => events.some((event) => event.type === 'notes' && event.paneId === paneId && event.content === '# Plan\n'));
+        await until(async () => (await meta())?.size === 7);
+        expect(await meta()).toMatchObject({ updatedBy: 'user', lock: 'user', holder: 'window-aaaa' });
+        expect((await api('PUT', `/api/panes/${paneId}/notes`, { content: 'old', version: empty.version, holder: 'window-aaaa' })).status).toBe(409);
+
+        await api('POST', `/api/panes/${paneId}/notes/unlock`, { holder: 'window-aaaa' });
+        await until(async () => (await meta())?.lock === null);
+        expect((await api<PaneNotes>('GET', `/api/panes/${paneId}/notes`)).body).toEqual(saved.body);
+        expect((await api('GET', '/api/panes/missing/notes')).status).toBe(404);
+
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
+        expect(existsSync(join(home, 'data', 'notes', paneId))).toBe(false);
     });
 });
 

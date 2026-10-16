@@ -3,6 +3,7 @@ import type { AppState, LayoutDirection, PaneView, Session, Settings, SettingsPa
 import { DEFAULT_SETTINGS, SIDEBAR_POSITIONS, applySettingsPatch, needsAttention, paneIds } from '@voltran/shared';
 import { api } from './api.ts';
 import { DEFAULT_FONT, DEFAULT_UI_FONT, parseFont, parseUiFont, type TerminalFont, type UiFont } from './fonts.ts';
+import { markNotesSeen } from './notes.ts';
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from './sidebar.ts';
 import { parseThemeChoice, parseThemeId, schemeOf, themeById, type Appearance, type Scheme } from './themes.ts';
 
@@ -44,6 +45,8 @@ export interface UiState {
     findStep: { direction: 'next' | 'previous'; token: number } | null;
     collapsedProjects: Record<string, boolean>;
     expandedSessions: Record<string, boolean>;
+    notesOpen: Record<string, boolean>;
+    notesFocus: { paneId: string; token: number } | null;
     showArchived: boolean;
     sidebarHidden: boolean;
     sidebarWidth: number;
@@ -74,6 +77,7 @@ export interface UiState {
     stepFind: (direction: 'next' | 'previous') => void;
     toggleProject: (id: string) => void;
     toggleSessionPanes: (id: string) => void;
+    toggleNotes: (paneId: string) => void;
     setShowArchived: (value: boolean) => void;
     toggleSidebar: () => void;
     setSidebarWidth: (width: number) => void;
@@ -98,6 +102,7 @@ interface Persisted {
     selectedWorkspaceId: string | null;
     collapsedProjects: Record<string, boolean>;
     expandedSessions: Record<string, boolean>;
+    notesOpen: Record<string, boolean>;
     showArchived: boolean;
     sidebarHidden: boolean;
     sidebarWidth: number;
@@ -118,6 +123,7 @@ function readPersisted(): Persisted {
                 selectedWorkspaceId: typeof parsed.selectedWorkspaceId === 'string' ? parsed.selectedWorkspaceId : null,
                 collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
                 expandedSessions: parsed.expandedSessions && typeof parsed.expandedSessions === 'object' ? parsed.expandedSessions : {},
+                notesOpen: parsed.notesOpen && typeof parsed.notesOpen === 'object' ? parsed.notesOpen : {},
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
                 sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
@@ -135,6 +141,7 @@ function readPersisted(): Persisted {
         selectedWorkspaceId: null,
         collapsedProjects: {},
         expandedSessions: {},
+        notesOpen: {},
         showArchived: false,
         sidebarHidden: false,
         sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -185,6 +192,7 @@ export const useUi = create<UiState>((set, get) => ({
     findPaneId: null,
     findToken: 0,
     findStep: null,
+    notesFocus: null,
     zen: false,
     dialog: null,
     paneMenu: null,
@@ -192,12 +200,14 @@ export const useUi = create<UiState>((set, get) => ({
     installable: false,
 
     setApp: (app) => {
-        const { selectedSessionId, selectedWorkspaceId, focusedPaneId, maximizedPaneId } = get();
+        const { selectedSessionId, selectedWorkspaceId, focusedPaneId, maximizedPaneId, notesOpen } = get();
         const workspaceExists = selectedWorkspaceId !== null && app.workspaces.some((workspace) => workspace.id === selectedWorkspaceId);
         const sessionExists = selectedSessionId !== null && app.sessions.some((session) => session.id === selectedSessionId);
         const paneIds = new Set(app.panes.map((pane) => pane.id));
+        const staleNotes = Object.keys(notesOpen).some((id) => !paneIds.has(id));
         set({
             app,
+            notesOpen: staleNotes ? Object.fromEntries(Object.entries(notesOpen).filter(([id]) => paneIds.has(id))) : notesOpen,
             selectedWorkspaceId: workspaceExists ? selectedWorkspaceId : null,
             selectedSessionId: workspaceExists ? null : sessionExists ? selectedSessionId : firstOpenSession(app)?.id ?? null,
             focusedPaneId: focusedPaneId && paneIds.has(focusedPaneId) ? focusedPaneId : null,
@@ -217,6 +227,13 @@ export const useUi = create<UiState>((set, get) => ({
     stepFind: (direction) => set({ findStep: { direction, token: (get().findStep?.token ?? 0) + 1 } }),
     toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
     toggleSessionPanes: (id) => set({ expandedSessions: { ...get().expandedSessions, [id]: !get().expandedSessions[id] } }),
+    toggleNotes: (paneId) => {
+        markNotesSeen(paneId);
+        const { [paneId]: open, ...rest } = get().notesOpen;
+        set(open
+            ? { notesOpen: rest, notesFocus: null }
+            : { notesOpen: { ...rest, [paneId]: true }, notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 } });
+    },
     setShowArchived: (value) => set({ showArchived: value }),
     toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),
     setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -293,6 +310,7 @@ useUi.subscribe((state) => {
         selectedWorkspaceId: state.selectedWorkspaceId,
         collapsedProjects: state.collapsedProjects,
         expandedSessions: state.expandedSessions,
+        notesOpen: state.notesOpen,
         showArchived: state.showArchived,
         sidebarHidden: state.sidebarHidden,
         sidebarWidth: state.sidebarWidth,

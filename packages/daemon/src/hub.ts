@@ -18,9 +18,13 @@ import {
     type CreateWorkspaceBody,
     type Layout,
     type MovePaneBody,
+    type NotesLockBody,
+    type NotesMeta,
     type Pane,
+    type PaneNotes,
     type PaneSpec,
     type Project,
+    type SaveNotesBody,
     type ServerEvent,
     type Session,
     type UpdatePaneBody,
@@ -31,6 +35,7 @@ import {
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
+import { NotesRefused, NotesStore } from './notes.ts';
 import { PaneManager } from './panes.ts';
 import type { Store } from './store.ts';
 
@@ -47,6 +52,7 @@ export interface HubOptions {
     store: Store;
     adapters: AdapterInfo[];
     scrollbackDir: string;
+    notesDir: string;
     claudeSettingsFile: string;
     url: string;
     shell: string;
@@ -61,6 +67,7 @@ type Listener = (event: ServerEvent) => void;
 const BROADCAST_DELAY_MS = 30;
 const MAX_TITLE = 200;
 const MAX_COMMAND = 4000;
+const NOTES_HOLDER = /^[A-Za-z0-9-]{8,64}$/;
 
 const requireString = (value: unknown, field: string, max: number): string => {
     if (typeof value !== 'string' || !value.trim()) {
@@ -71,6 +78,13 @@ const requireString = (value: unknown, field: string, max: number): string => {
         throw new HttpError(400, `${field} must be at most ${max} characters`);
     }
     return trimmed;
+};
+
+const notesHolder = (value: unknown): string => {
+    if (typeof value !== 'string' || !NOTES_HOLDER.test(value)) {
+        throw new HttpError(400, 'holder must be 8 to 64 letters, digits or dashes');
+    }
+    return value;
 };
 
 const optionalLink = (value: unknown): string | null => {
@@ -92,9 +106,21 @@ const optionalLink = (value: unknown): string | null => {
     return url.toString();
 };
 
+function refusedAsHttp<T>(action: () => T): T {
+    try {
+        return action();
+    } catch (error) {
+        if (error instanceof NotesRefused) {
+            throw new HttpError(error.status, error.message);
+        }
+        throw error;
+    }
+}
+
 export class Hub {
     readonly panes: PaneManager;
     private readonly git: GitWatcher;
+    private readonly notes: NotesStore;
     private readonly store: Store;
     private readonly adapters: AdapterInfo[];
     private listeners = new Set<Listener>();
@@ -104,6 +130,11 @@ export class Hub {
     constructor(options: HubOptions) {
         this.store = options.store;
         this.adapters = options.adapters;
+        this.notes = new NotesStore({
+            dir: options.notesDir,
+            onChange: (change) => this.emit({ type: 'notes', ...change }),
+            onMeta: () => this.scheduleBroadcast(),
+        });
         this.panes = new PaneManager({
             scrollbackDir: options.scrollbackDir,
             claudeSettingsFile: options.claudeSettingsFile,
@@ -115,10 +146,13 @@ export class Hub {
             onPaneRecord: (pane) => this.store.updatePane(pane.id, pane),
             onAttention: (pane, status, body) => this.attention(pane, status, body),
             onExit: (pane, exitCode) => this.exited(pane, exitCode),
+            notes: { guide: this.notes.guide, file: (pane) => (pane.adapter === 'subagent' ? null : this.notes.file(pane.id)) },
         });
         for (const pane of this.store.listPanes()) {
             this.panes.load(pane);
         }
+        this.notes.load(this.store.listPanes().map((pane) => pane.id));
+        this.notes.watch();
         this.pruneWorkspaces();
         this.git = new GitWatcher({
             folders: () => [...new Set(this.store.listSessions().filter((session) => !session.archived).map((session) => session.cwd))],
@@ -132,7 +166,7 @@ export class Hub {
         return {
             projects: this.store.listProjects(),
             sessions: this.store.listSessions(),
-            panes: this.panes.views(),
+            panes: this.panes.views().map((view) => ({ ...view, notes: this.notes.meta(view.id) })),
             workspaces: this.store.listWorkspaces(),
             git: this.git.snapshot(),
             adapters: this.adapters,
@@ -159,6 +193,7 @@ export class Hub {
     }
 
     shutdown(): Promise<void> {
+        this.notes.close();
         if (this.broadcastTimer) {
             clearTimeout(this.broadcastTimer);
             this.broadcastTimer = null;
@@ -358,6 +393,7 @@ export class Hub {
         const session = this.store.getSession(pane.sessionId);
         this.closeOnCleanExit.delete(id);
         this.panes.remove(id);
+        this.notes.remove(id);
         this.store.deletePane(id);
         if (session) {
             this.store.updateSession(session.id, { layout: removePane(session.layout, id) });
@@ -443,6 +479,9 @@ export class Hub {
             return false;
         }
         const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
+        if (handled) {
+            this.trackNotesEdit(paneId, event, payload as Record<string, unknown>);
+        }
         if (handled && (event === 'PostToolUse' || event === 'Stop' || event === 'ToolEnd' || event === 'TurnEnd')) {
             const session = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '');
             if (session) {
@@ -450,6 +489,56 @@ export class Hub {
             }
         }
         return handled;
+    }
+
+    paneNotes(id: string): PaneNotes {
+        this.mustGetPane(id);
+        return this.notes.read(id);
+    }
+
+    lockNotes(id: string, body: NotesLockBody): NotesMeta {
+        this.mustGetPane(id);
+        const holder = notesHolder(body?.holder);
+        if (body.version !== undefined && typeof body.version !== 'string') {
+            throw new HttpError(400, 'version must be a string');
+        }
+        return refusedAsHttp(() => this.notes.lock(id, holder, body.version));
+    }
+
+    unlockNotes(id: string, body: NotesLockBody): void {
+        this.mustGetPane(id);
+        this.notes.unlock(id, notesHolder(body?.holder));
+    }
+
+    saveNotes(id: string, body: SaveNotesBody): PaneNotes {
+        this.mustGetPane(id);
+        const holder = notesHolder(body?.holder);
+        if (typeof body.content !== 'string' || typeof body.version !== 'string') {
+            throw new HttpError(400, 'content and version are required');
+        }
+        return refusedAsHttp(() => this.notes.save(id, holder, body.version, body.content));
+    }
+
+    // Claude names the file it is about to edit, so the drawer can wait instead of racing it. Other
+    // agents give no notice; their writes show up through the notes watcher.
+    private trackNotesEdit(paneId: string, event: string, payload: Record<string, unknown>): void {
+        if (event === 'Stop' || event === 'SessionEnd') {
+            this.notes.agentDone(paneId);
+            return;
+        }
+        if (event !== 'PreToolUse' && event !== 'PostToolUse') {
+            return;
+        }
+        const input = payload.tool_input;
+        const file = input && typeof input === 'object' ? (input as Record<string, unknown>).file_path : undefined;
+        if ((payload.tool_name !== 'Edit' && payload.tool_name !== 'Write') || !this.notes.isFile(paneId, file)) {
+            return;
+        }
+        if (event === 'PreToolUse') {
+            this.notes.agentEditing(paneId);
+        } else {
+            this.notes.agentDone(paneId);
+        }
     }
 
     private refreshGitSoon(folder: string): void {
@@ -533,6 +622,7 @@ export class Hub {
         for (const pane of this.store.panesOfSession(sessionId)) {
             this.closeOnCleanExit.delete(pane.id);
             this.panes.remove(pane.id);
+            this.notes.remove(pane.id);
         }
     }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pane } from '@voltran/shared';
-import { adapterFor, claudeArgsProblem, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, voltranSessionId } from './adapters.ts';
+import { adapterFor, childEnv, claudeArgsProblem, claudeHookSettings, NOTES_HOOK, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, voltranSessionId } from './adapters.ts';
 
 describe('splitArgs', () => {
     it('splits on whitespace and honours quotes and backslashes without expanding anything', () => {
@@ -44,7 +44,7 @@ describe('claude adapter', () => {
         createdAt: 0,
         ...overrides,
     });
-    const launch = (overrides: Partial<Pane>) => adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv: {} });
+    const launch = (overrides: Partial<Pane>) => adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv: {}, notesFile: null, notesGuide: null });
 
     it('passes its arguments after the ones Voltran sets, on resume too', () => {
         expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', '/s.json', '--resume', 'abc', '--plugin-dir', './a b']);
@@ -84,8 +84,8 @@ describe('opencode adapter', () => {
         createdAt: 0,
         ...overrides,
     });
-    const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}) =>
-        adapterFor('opencode').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv });
+    const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}, notesFile: string | null = null) =>
+        adapterFor('opencode').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv, notesFile, notesGuide: '/n/GUIDE.md' });
 
     it('runs its own server on the pane session, with the arguments after the ones Voltran sets', () => {
         expect(launch({}).args).toEqual(['--standalone', '--session', 'ses_abc']);
@@ -95,6 +95,39 @@ describe('opencode adapter', () => {
 
     it('adds the Voltran plugin to the configuration it passes', () => {
         expect(JSON.parse(launch({}).env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({ plugins: [OPENCODE_PLUGIN] });
+    });
+
+    it('gives OpenCode the notes guide and the pane\'s notes as instructions, after the user\'s own', () => {
+        const config = JSON.parse(launch({}, { OPENCODE_CONFIG_CONTENT: '{"instructions":["mine.md"]}' }, '/n/p/notes.md').env?.OPENCODE_CONFIG_CONTENT ?? '');
+        expect(config).toEqual({ instructions: ['mine.md', '/n/GUIDE.md', '/n/p/notes.md'], plugins: [OPENCODE_PLUGIN] });
+    });
+});
+
+describe('claudeHookSettings', () => {
+    const settings = claudeHookSettings("/home/o'b/.voltran/notes") as { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>; permissions: { allow: string[] } };
+
+    it('adds the notes hooks after the status reports, quoting their paths', () => {
+        const hook = `'${NOTES_HOOK.replace(/'/g, `'\\''`)}'`;
+        const guide = `'/home/o'\\''b/.voltran/notes/GUIDE.md'`;
+        expect(settings.hooks.SessionStart.map((entry) => entry.hooks[0].command)).toEqual([
+            expect.stringContaining('/api/hooks/$VOLTRAN_PANE_ID/SessionStart'),
+            `sh ${hook} session-start ${guide}; exit 0`,
+        ]);
+        expect(settings.hooks.UserPromptSubmit[1].hooks[0].command).toBe(`sh ${hook} prompt ${guide}; exit 0`);
+        expect(settings.hooks.PreToolUse[1]).toMatchObject({ matcher: 'Edit|Write', hooks: [{ command: `sh ${hook} pre-tool-use ${guide}; exit 0` }] });
+        expect(settings.hooks.Stop).toHaveLength(1);
+    });
+
+    it('lets Claude read and edit the notes without asking', () => {
+        expect(settings.permissions.allow).toEqual(["Read(//home/o'b/.voltran/notes/**)", "Edit(//home/o'b/.voltran/notes/**)"]);
+    });
+});
+
+describe('childEnv', () => {
+    it('does not pass on the notes of the pane that started the daemon', () => {
+        const env = childEnv({ VOLTRAN_NOTES: '/elsewhere/notes.md', HOME: '/h' }, '/bin');
+        expect(env.VOLTRAN_NOTES).toBeUndefined();
+        expect(env.HOME).toBe('/h');
     });
 });
 

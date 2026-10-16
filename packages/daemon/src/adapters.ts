@@ -4,6 +4,7 @@ import { accessSync, constants, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
+import { notesGuidePath } from './notes.ts';
 
 export interface LaunchSpec {
     file: string;
@@ -17,10 +18,13 @@ export interface LaunchContext {
     claudeSettingsFile: string;
     subagentRunning: boolean;
     baseEnv: NodeJS.ProcessEnv;
+    notesFile: string | null;
+    notesGuide: string | null;
 }
 
 const SUBAGENT_VIEWER = fileURLToPath(new URL('./subagent-view.ts', import.meta.url));
 export const OPENCODE_PLUGIN = fileURLToPath(new URL('./opencode-plugin', import.meta.url));
+export const NOTES_HOOK = fileURLToPath(new URL('./notes-hook.sh', import.meta.url));
 
 interface AdapterDefinition {
     id: AdapterId;
@@ -58,14 +62,15 @@ const DEFINITIONS: AdapterDefinition[] = [
         statusSource: 'hooks',
         resumable: true,
         binary: 'opencode',
-        launch: ({ pane, baseEnv }) => {
+        launch: ({ pane, baseEnv, notesFile, notesGuide }) => {
             const args = splitArgs(pane.command ?? '') ?? [];
             const subcommand = args[0] === 'mini' ? args.splice(0, 1) : [];
             const session = pane.agentSessionId ? ['--session', pane.agentSessionId] : [];
+            const instructions = notesFile && notesGuide ? [notesGuide, notesFile] : [];
             return {
                 file: 'opencode',
                 args: [...subcommand, '--standalone', ...session, ...args],
-                env: { OPENCODE_CONFIG_CONTENT: opencodeConfigContent(baseEnv.OPENCODE_CONFIG_CONTENT) },
+                env: { OPENCODE_CONFIG_CONTENT: opencodeConfigContent(baseEnv.OPENCODE_CONFIG_CONTENT, instructions) },
             };
         },
     },
@@ -213,7 +218,7 @@ function ownedFlagProblem(args: string[], flags: string[]): string | null {
 
 // OPENCODE_CONFIG_CONTENT adds to the user's own configuration files rather than replacing them, so
 // the plugin reaches only the panes Voltran starts. A value the user already set is kept.
-export function opencodeConfigContent(existing: string | undefined): string {
+export function opencodeConfigContent(existing: string | undefined, instructions: string[] = []): string {
     let config: Record<string, unknown> = {};
     if (existing) {
         try {
@@ -226,7 +231,12 @@ export function opencodeConfigContent(existing: string | undefined): string {
         }
     }
     const plugins = Array.isArray(config.plugins) ? config.plugins : [];
-    return JSON.stringify({ ...config, plugins: [...plugins, OPENCODE_PLUGIN] });
+    const listed = Array.isArray(config.instructions) ? config.instructions : [];
+    return JSON.stringify({
+        ...config,
+        plugins: [...plugins, OPENCODE_PLUGIN],
+        ...(instructions.length > 0 ? { instructions: [...listed, ...instructions] } : {}),
+    });
 }
 
 export function voltranSessionId(adapter: AdapterId): string | null {
@@ -320,6 +330,7 @@ const SESSION_SCOPED_ENV = [
     'VOLTRAN_PANE_ID',
     'VOLTRAN_HOOK_SECRET',
     'VOLTRAN_URL',
+    'VOLTRAN_NOTES',
 ];
 
 export function childEnv(base: NodeJS.ProcessEnv, path: string, extra: Record<string, string> = {}): Record<string, string> {
@@ -380,9 +391,12 @@ export function isOpencodeEvent(value: string): value is OpencodeEvent {
     return (OPENCODE_EVENTS as readonly string[]).includes(value);
 }
 
+const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
 // Hooks must never slow down or block the agent: short curl timeout, no output, always exit 0.
-// The per-pane secret only authorizes status reports for that one pane.
-export function claudeHookSettings(): object {
+// The per-pane secret only authorizes status reports for that one pane. The notes hooks print the
+// pane's notes into Claude's context and refuse its edits while the user is typing in them.
+export function claudeHookSettings(notesDir: string): object {
     const hooks: Record<string, unknown[]> = {};
     for (const event of CLAUDE_HOOK_EVENTS) {
         const command = `[ -n "$VOLTRAN_PANE_ID" ] && curl -s -m 2 -o /dev/null -X POST `
@@ -390,9 +404,17 @@ export function claudeHookSettings(): object {
             + `--data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"; exit 0`;
         hooks[event] = [{ hooks: [{ type: 'command', command, timeout: 5 }] }];
     }
-    return { hooks };
+    const notes = (mode: string): object => ({
+        type: 'command',
+        command: `sh ${shellQuote(NOTES_HOOK)} ${mode} ${shellQuote(notesGuidePath(notesDir))}; exit 0`,
+        timeout: 5,
+    });
+    hooks.SessionStart.push({ hooks: [notes('session-start')] });
+    hooks.UserPromptSubmit.push({ hooks: [notes('prompt')] });
+    hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: [notes('pre-tool-use')] });
+    return { hooks, permissions: { allow: [`Read(/${notesDir}/**)`, `Edit(/${notesDir}/**)`] } };
 }
 
-export function writeClaudeSettings(file: string): void {
-    writeFileSync(file, `${JSON.stringify(claudeHookSettings(), null, 2)}\n`, { mode: 0o600 });
+export function writeClaudeSettings(file: string, notesDir: string): void {
+    writeFileSync(file, `${JSON.stringify(claudeHookSettings(notesDir), null, 2)}\n`, { mode: 0o600 });
 }

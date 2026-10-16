@@ -179,6 +179,17 @@ function closeFocused(): void {
     }
 }
 
+function toggleFocusedNotes(): void {
+    const state = useUi.getState();
+    const paneId = visibleFocusedPane();
+    const pane = state.app?.panes.find((entry) => entry.id === paneId);
+    if (!pane || pane.adapter === 'subagent') {
+        state.showToast('Focus a terminal pane to see its notes');
+        return;
+    }
+    state.toggleNotes(pane.id);
+}
+
 export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyK', keys: '⌘K', label: 'Open the command palette', run: togglePalette },
     { code: 'KeyJ', keys: '⌃⌥J', label: 'Jump to the next pane that needs you', run: jumpToAttention },
@@ -203,6 +214,7 @@ export const SHORTCUTS: Shortcut[] = [
         },
     },
     { code: 'KeyW', keys: '⌃⌥W', label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
+    { code: 'KeyE', keys: '⌃⌥E', label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
     { code: 'Slash', keys: '⌃⌥/', label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
 ];
 

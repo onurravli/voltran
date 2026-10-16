@@ -42,13 +42,14 @@ function readPreviousWindows(file: string): number {
 export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     ensureHome(config);
     const token = readOrCreateToken(config);
-    writeClaudeSettings(config.claudeSettingsFile);
+    writeClaudeSettings(config.claudeSettingsFile, config.notesDir);
 
     const store = new Store(config.dbFile);
     const hub = new Hub({
         store,
         adapters: describeAdapters(options.path),
         scrollbackDir: config.scrollbackDir,
+        notesDir: config.notesDir,
         claudeSettingsFile: config.claudeSettingsFile,
         url: config.url,
         shell: options.shell,

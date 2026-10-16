@@ -124,7 +124,22 @@ export interface PaneRuntimeState {
     subagents: SubagentView[];
 }
 
-export type PaneView = Pane & PaneRuntimeState;
+export type NotesAuthor = 'user' | 'agent';
+
+export interface NotesMeta {
+    size: number;
+    updatedAt: number | null;
+    updatedBy: NotesAuthor | null;
+    lock: NotesAuthor | null;
+    holder: string | null;
+}
+
+export interface PaneNotes {
+    content: string;
+    version: string;
+}
+
+export type PaneView = Pane & PaneRuntimeState & { notes: NotesMeta };
 
 export interface AdapterInfo {
     id: AdapterId;
@@ -198,6 +213,17 @@ export interface MovePaneBody {
     sessionId: string;
 }
 
+export interface SaveNotesBody {
+    content: string;
+    version: string;
+    holder: string;
+}
+
+export interface NotesLockBody {
+    version?: string;
+    holder: string;
+}
+
 export interface EditSettingsBody {
     sessionId: string;
     splitFrom?: string;
@@ -214,6 +240,7 @@ export type ServerEvent =
     | { type: 'state'; state: AppState }
     | ({ type: 'settings' } & SettingsState)
     | ({ type: 'version' } & VersionInfo)
+    | ({ type: 'notes'; paneId: string; by: NotesAuthor; holder: string | null } & PaneNotes)
     | {
         type: 'attention';
         paneId: string;

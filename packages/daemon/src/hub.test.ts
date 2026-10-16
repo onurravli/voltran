@@ -18,6 +18,7 @@ function open(dir: string): { store: Store; hub: Hub } {
         store,
         adapters: [],
         scrollbackDir: dir,
+        notesDir: join(dir, 'notes'),
         claudeSettingsFile: join(dir, 'claude-settings.json'),
         url: 'http://127.0.0.1:1',
         shell: '/bin/sh',

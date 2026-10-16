@@ -1,5 +1,6 @@
 import type { ServerEvent } from '@voltran/shared';
 import { wsUrl } from './api.ts';
+import { applyNotesEvent } from './notes.ts';
 import { notifyAttention } from './notify.ts';
 import { useUi } from './store.ts';
 
@@ -80,6 +81,8 @@ export function connectEvents(): () => void {
                 useUi.getState().setVersion({ ui: event.ui, behind: event.behind });
             } else if (event.type === 'attention') {
                 notifyAttention(event);
+            } else if (event.type === 'notes') {
+                applyNotesEvent(event.paneId, { content: event.content, version: event.version }, event.holder);
             }
         };
         current.onclose = () => {

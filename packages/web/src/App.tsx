@@ -3,6 +3,7 @@ import { connectEvents } from './events.ts';
 import { syncAttentionBadge } from './notify.ts';
 import { installShortcuts } from './shortcuts.ts';
 import { selectedWorkspace, useUi } from './store.ts';
+import { disposeNotesExcept, flushNotesOnExit } from './notes.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
 import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
 import { FolderIcon, VoltranMark } from './components/Icons.tsx';
@@ -66,16 +67,20 @@ export function App() {
         const stopEvents = connectEvents();
         const stopShortcuts = installShortcuts();
         const stopBadge = syncAttentionBadge();
+        window.addEventListener('pagehide', flushNotesOnExit);
         return () => {
             stopEvents();
             stopShortcuts();
             stopBadge();
+            window.removeEventListener('pagehide', flushNotesOnExit);
         };
     }, []);
 
     useEffect(() => {
         if (app) {
-            disposeTerminalsExcept(new Set(app.panes.map((pane) => pane.id)));
+            const live = new Set(app.panes.map((pane) => pane.id));
+            disposeTerminalsExcept(live);
+            disposeNotesExcept(live);
         }
     }, [app]);
 

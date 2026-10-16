@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import * as nodePty from 'node-pty';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
-import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneStatus, PaneView } from '@voltran/shared';
+import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneStatus } from '@voltran/shared';
 import { adapterFor, childEnv, isClaudeHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type OpencodeEvent } from './adapters.ts';
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, OpencodeStatus, type StatusChange } from './status.ts';
@@ -53,6 +53,7 @@ export interface PaneManagerOptions {
     onPaneRecord: (pane: Pane) => void;
     onAttention: (pane: Pane, status: AttentionStatus, body: string) => void;
     onExit?: (pane: Pane, exitCode: number) => void;
+    notes?: { guide: string; file: (pane: Pane) => string | null };
     heuristicQuietMs?: number;
     hooksSilenceMs?: number;
     startupPromptMs?: number;
@@ -105,7 +106,7 @@ export class PaneManager {
         return this.runtimes.has(id);
     }
 
-    views(): PaneView[] {
+    views(): (Pane & PaneRuntimeState)[] {
         return [...this.runtimes.values()].map((runtime) => ({ ...runtime.pane, ...runtime.state }));
     }
 
@@ -399,16 +400,21 @@ export class PaneManager {
         const generation = ++runtime.generation;
         const secret = adapter.statusSource === 'hooks' ? randomBytes(24).toString('hex') : null;
         const subagentRunning = pane.adapter === 'subagent' && this.isFollowedTranscript(pane.command);
+        const notesFile = this.options.notes?.file(pane) ?? null;
         const spec = adapter.launch({
             pane,
             shell: this.options.shell,
             claudeSettingsFile: this.options.claudeSettingsFile,
             subagentRunning,
             baseEnv: this.options.baseEnv,
+            notesFile,
+            notesGuide: this.options.notes?.guide ?? null,
         });
-        const extraEnv: Record<string, string> = secret
-            ? { ...spec.env, VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_URL: this.options.url }
-            : { ...spec.env };
+        const extraEnv: Record<string, string> = {
+            ...spec.env,
+            ...(notesFile ? { VOLTRAN_NOTES: notesFile } : {}),
+            ...(secret ? { VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_URL: this.options.url } : {}),
+        };
         runtime.opencode?.reset();
 
         let pty: nodePty.IPty;

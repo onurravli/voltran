@@ -203,6 +203,13 @@ export function createVoltranServer(options: ServerOptions): Server {
         hub.seenPane(id);
         sendJson(res, 200, { ok: true });
     });
+    route('GET', '/api/panes/:id/notes', (_req, res, [id]) => sendJson(res, 200, hub.paneNotes(id)));
+    route('PUT', '/api/panes/:id/notes', async (req, res, [id]) => sendJson(res, 200, hub.saveNotes(id, await readJson(req))));
+    route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) => sendJson(res, 200, hub.lockNotes(id, await readJson(req))));
+    route('POST', '/api/panes/:id/notes/unlock', async (req, res, [id]) => {
+        hub.unlockNotes(id, await readJson(req));
+        sendJson(res, 200, { ok: true });
+    });
 
     const hookPattern = /^\/api\/hooks\/([^/]+)\/([A-Za-z]+)$/;
 

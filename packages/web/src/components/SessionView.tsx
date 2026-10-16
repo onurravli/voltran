@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import type { DropEdge, GitStatus, Layout, PaneView, Project, Session } from '@voltran/shared';
+import type { AdapterInfo, DropEdge, GitStatus, Layout, PaneView, Project, Session } from '@voltran/shared';
 import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
 import { gitLabels, linkLabel, pullRequestLabel, shortPath } from '../labels.ts';
+import { notesFresh } from '../notes.ts';
 import { closePane } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
@@ -16,6 +17,7 @@ import {
     CloseIcon,
     LinkIcon,
     MaximizeIcon,
+    NotesIcon,
     PlusIcon,
     RestartIcon,
     RestoreIcon,
@@ -25,6 +27,7 @@ import {
     StopIcon,
 } from './Icons.tsx';
 import { InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
+import { NotesDrawer } from './NotesDrawer.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
 function paneSummary(pane: PaneView, kind: 'agent' | 'shell' | 'process' | undefined): string {
@@ -126,6 +129,16 @@ function FindBar({ paneId }: { paneId: string }) {
     );
 }
 
+function notesHint(adapter: AdapterInfo | undefined): string {
+    if (adapter?.statusSource === 'hooks') {
+        return `Notes for this pane. ${adapter.label} reads them when a session starts and keeps them up to date.`;
+    }
+    if (adapter?.kind === 'agent') {
+        return `Notes for this pane. ${adapter.label} finds them at $VOLTRAN_NOTES.`;
+    }
+    return 'Notes for this pane, kept until the pane is closed.';
+}
+
 function dropLabel(edge: DropEdge, joining: boolean): string {
     if (edge === 'swap') {
         return joining ? 'Place on the right' : 'Swap panes';
@@ -145,6 +158,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const dragging = useUi((state) => state.draggingPaneId);
     const draggingSession = useUi((state) => state.draggingSessionId);
     const finding = useUi((state) => state.findPaneId === pane.id);
+    const hasNotes = pane.adapter !== 'subagent';
+    const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
     const [link, setLink] = useState<LinkState>('connecting');
     const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
     const pressedOn = useRef<Element | null>(null);
@@ -189,7 +204,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
             return;
         }
         const terminal = peekTerminal(pane.id);
-        if (terminal && document.activeElement !== terminal.term.textarea) {
+        if (terminal && document.activeElement !== terminal.term.textarea && !document.activeElement?.closest('.notes')) {
             terminal.focus();
         }
     }, [focused, pane.id]);
@@ -271,6 +286,17 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     onSave={(title) => api.updatePane(pane.id, { title })}
                 />
                 <span className="pane__summary" title={pane.detail ?? undefined}>{paneSummary(pane, adapter?.kind)}</span>
+                {hasNotes ? (
+                    <button
+                        type="button"
+                        className={`icon-button pane__notes-toggle${pane.notes.size > 0 ? ' has-notes' : ''}${!notesOpen && notesFresh(pane.id, pane.notes) ? ' is-fresh' : ''}`}
+                        aria-expanded={notesOpen}
+                        title={notesOpen ? 'Hide notes (⌃⌥E)' : 'Show notes (⌃⌥E)'}
+                        onClick={() => useUi.getState().toggleNotes(pane.id)}
+                    >
+                        <NotesIcon size={14} />
+                    </button>
+                ) : null}
                 <div className="pane__actions">
                     <button type="button" className="icon-button" title="Split right" onClick={(event) => split(event, 'horizontal')}>
                         <SplitRightIcon size={14} />
@@ -299,12 +325,13 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     </button>
                 </div>
             </div>
-            <div className="pane__body">
+            <div className={`pane__body${notesOpen ? ' pane__body--notes' : ''}`}>
                 {archived ? (
                     <div className="pane__placeholder">Archived. Restore the session to resume this pane.</div>
                 ) : (
                     <div className="pane__terminal" ref={containerRef} />
                 )}
+                {notesOpen ? <NotesDrawer pane={pane} agent={adapter?.kind === 'agent' ? adapter.label : null} hint={notesHint(adapter)} /> : null}
                 {finding && !archived ? <FindBar paneId={pane.id} /> : null}
                 {canDrop ? (
                     <div

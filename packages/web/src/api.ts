@@ -5,8 +5,12 @@ import type {
     CreateWorkspaceBody,
     EditSettingsBody,
     MovePaneBody,
+    NotesLockBody,
+    NotesMeta,
     Pane,
+    PaneNotes,
     Project,
+    SaveNotesBody,
     Session,
     SettingsPatch,
     SettingsState,
@@ -26,12 +30,13 @@ export class ApiError extends Error {
     }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
     const init: RequestInit = {
         method,
         credentials: 'same-origin',
         headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
+        keepalive,
     };
 
     let response: Response;
@@ -74,6 +79,10 @@ export const api = {
     restartPane: (id: string) => request<void>('POST', `/api/panes/${id}/restart`),
     killPane: (id: string) => request<void>('POST', `/api/panes/${id}/kill`),
     seenPane: (id: string) => request<void>('POST', `/api/panes/${id}/seen`),
+    paneNotes: (id: string) => request<PaneNotes>('GET', `/api/panes/${id}/notes`),
+    saveNotes: (id: string, body: SaveNotesBody, keepalive = false) => request<PaneNotes>('PUT', `/api/panes/${id}/notes`, body, keepalive),
+    lockNotes: (id: string, body: NotesLockBody) => request<NotesMeta>('POST', `/api/panes/${id}/notes/lock`, body),
+    unlockNotes: (id: string, body: NotesLockBody) => request<void>('POST', `/api/panes/${id}/notes/unlock`, body),
     updateSettings: (patch: SettingsPatch) => request<SettingsState>('PATCH', '/api/settings', patch),
     openSettings: () => request<{ path: string }>('POST', '/api/settings/open'),
     editSettings: (body: EditSettingsBody) => request<Pane>('POST', '/api/settings/edit', body),

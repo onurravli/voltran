@@ -13,6 +13,7 @@ export interface Config {
     pidFile: string;
     logFile: string;
     scrollbackDir: string;
+    notesDir: string;
     claudeSettingsFile: string;
     settingsFile: string;
     windowsFile: string;
@@ -48,6 +49,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         pidFile: join(home, 'daemon.pid'),
         logFile: join(home, 'daemon.log'),
         scrollbackDir: join(home, 'scrollback'),
+        notesDir: join(home, 'notes'),
         claudeSettingsFile: join(home, 'claude-settings.json'),
         settingsFile: join(home, 'settings.json'),
         windowsFile: join(home, 'windows'),
@@ -61,6 +63,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 export function ensureHome(config: Config): void {
     mkdirSync(config.home, { recursive: true, mode: 0o700 });
     mkdirSync(config.scrollbackDir, { recursive: true, mode: 0o700 });
+    mkdirSync(config.notesDir, { recursive: true, mode: 0o700 });
 }
 
 export function readOrCreateToken(config: Config): string {
