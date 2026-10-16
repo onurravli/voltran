@@ -502,12 +502,16 @@ kbd {
 
 .project__actions {
     display: flex;
+    width: 0;
+    overflow: hidden;
     opacity: 0;
     transition: opacity 100ms ease;
 }
 
 .project__header:hover .project__actions,
 .project__actions:focus-within {
+    width: auto;
+    overflow: visible;
     opacity: 1;
 }
 
