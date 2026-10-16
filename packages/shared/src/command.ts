@@ -1,10 +1,11 @@
 import type { PaneSpec } from './types.ts';
 
 export function commandPane(command: string): PaneSpec {
-    const claude = /^\s*claude(?:\s+([\s\S]*))?$/.exec(command);
-    if (!claude) {
+    const agent = /^\s*(claude|opencode)(?:\s+([\s\S]*))?$/.exec(command);
+    if (!agent) {
         return { adapter: 'command', command: command.trim() };
     }
-    const args = claude[1]?.trim();
-    return args ? { adapter: 'claude', command: args } : { adapter: 'claude' };
+    const adapter = agent[1] === 'claude' ? 'claude' : 'opencode';
+    const args = agent[2]?.trim();
+    return args ? { adapter, command: args } : { adapter };
 }

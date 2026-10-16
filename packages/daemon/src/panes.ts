@@ -5,9 +5,9 @@ import * as nodePty from 'node-pty';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
 import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneStatus, PaneView } from '@voltran/shared';
-import { adapterFor, childEnv, resolveBinary, type ClaudeHookEvent } from './adapters.ts';
+import { adapterFor, childEnv, isClaudeHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type OpencodeEvent } from './adapters.ts';
 import { safeEqual } from './security.ts';
-import { ActivityTracker, claudeTransition, type StatusChange } from './status.ts';
+import { ActivityTracker, claudeTransition, OpencodeStatus, type StatusChange } from './status.ts';
 import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
 import { readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
 
@@ -33,6 +33,7 @@ interface Runtime {
     state: PaneRuntimeState;
     attachments: Set<Attachment>;
     tracker: ActivityTracker | null;
+    opencode: OpencodeStatus | null;
     subagents: SubagentTracker;
     cols: number;
     rows: number;
@@ -238,12 +239,23 @@ export class PaneManager {
         }
     }
 
-    hook(id: string, secret: string, event: ClaudeHookEvent, payload: Record<string, unknown>): boolean {
+    hook(id: string, secret: string, event: string, payload: Record<string, unknown>): boolean {
         const runtime = this.runtimes.get(id);
         if (!runtime?.hookSecret || !safeEqual(secret, runtime.hookSecret)) {
             return false;
         }
+        if (runtime.pane.adapter === 'claude' && isClaudeHookEvent(event)) {
+            this.claudeHook(runtime, event, payload);
+            return true;
+        }
+        if (runtime.opencode && isOpencodeEvent(event)) {
+            this.opencodeHook(runtime, runtime.opencode, event, payload);
+            return true;
+        }
+        return false;
+    }
 
+    private claudeHook(runtime: Runtime, event: ClaudeHookEvent, payload: Record<string, unknown>): void {
         const sessionId = typeof payload.session_id === 'string' ? payload.session_id : null;
         if (sessionId && sessionId !== runtime.pane.agentSessionId) {
             this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: false });
@@ -265,7 +277,26 @@ export class PaneManager {
         if (!change || subagentsChanged) {
             this.options.onChange();
         }
-        return true;
+    }
+
+    // The plugin reports subagents' sessions only for their prompts, so any other session it names is
+    // one the user opened in the pane, which is the one to resume.
+    private opencodeHook(runtime: Runtime, status: OpencodeStatus, event: OpencodeEvent, payload: Record<string, unknown>): void {
+        const sessionId = typeof payload.session_id === 'string' && payload.session_id.startsWith('ses') ? payload.session_id : null;
+        let recordChanged = false;
+        if (sessionId && sessionId !== runtime.pane.agentSessionId) {
+            this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: true });
+            recordChanged = true;
+        } else if (event === 'PromptSubmit' && !runtime.pane.agentResumable) {
+            this.updateRecord(runtime, { agentResumable: true });
+            recordChanged = true;
+        }
+        const change = status.transition(event, payload, runtime.state.status);
+        if (change) {
+            this.setStatus(runtime, change);
+        } else if (recordChanged) {
+            this.options.onChange();
+        }
     }
 
     subagent(id: string, agentId: string): SubagentTranscript | null {
@@ -341,6 +372,7 @@ export class PaneManager {
             },
             attachments: new Set(),
             tracker: null,
+            opencode: pane.adapter === 'opencode' ? new OpencodeStatus() : null,
             subagents: new SubagentTracker(locateSubagent),
             cols: 120,
             rows: 32,
@@ -366,11 +398,18 @@ export class PaneManager {
         const adapter = adapterFor(pane.adapter);
         const generation = ++runtime.generation;
         const secret = adapter.statusSource === 'hooks' ? randomBytes(24).toString('hex') : null;
-        const extraEnv: Record<string, string> = secret
-            ? { VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_URL: this.options.url }
-            : {};
         const subagentRunning = pane.adapter === 'subagent' && this.isFollowedTranscript(pane.command);
-        const spec = adapter.launch({ pane, shell: this.options.shell, claudeSettingsFile: this.options.claudeSettingsFile, subagentRunning });
+        const spec = adapter.launch({
+            pane,
+            shell: this.options.shell,
+            claudeSettingsFile: this.options.claudeSettingsFile,
+            subagentRunning,
+            baseEnv: this.options.baseEnv,
+        });
+        const extraEnv: Record<string, string> = secret
+            ? { ...spec.env, VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_URL: this.options.url }
+            : { ...spec.env };
+        runtime.opencode?.reset();
 
         let pty: nodePty.IPty;
         try {
@@ -424,6 +463,7 @@ export class PaneManager {
             runtime.hookSecret = null;
             this.updateRecord(runtime, { ended: true });
             runtime.tracker?.reset('exited');
+            runtime.opencode?.reset();
             runtime.state.exitCode = exitCode;
             runtime.state.pid = null;
             runtime.state.foreground = null;
@@ -453,6 +493,7 @@ export class PaneManager {
             runtime.pty = null;
         }
         runtime.state.pid = null;
+        runtime.opencode?.reset();
         this.clearSubagents(runtime);
     }
 

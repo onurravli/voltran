@@ -29,7 +29,7 @@ import {
     type UpdateWorkspaceBody,
     type Workspace,
 } from '@voltran/shared';
-import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent } from './adapters.ts';
+import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PaneManager } from './panes.ts';
 import type { Store } from './store.ts';
@@ -439,11 +439,11 @@ export class Hub {
     }
 
     hook(paneId: string, event: string, secret: string, payload: unknown): boolean {
-        if (!isClaudeHookEvent(event) || !payload || typeof payload !== 'object') {
+        if (!(isClaudeHookEvent(event) || isOpencodeEvent(event)) || !payload || typeof payload !== 'object') {
             return false;
         }
         const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
-        if (handled && (event === 'PostToolUse' || event === 'Stop')) {
+        if (handled && (event === 'PostToolUse' || event === 'Stop' || event === 'ToolEnd' || event === 'TurnEnd')) {
             const session = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '');
             if (session) {
                 this.refreshGitSoon(session.cwd);
@@ -468,8 +468,9 @@ export class Hub {
         if (spec.adapter === 'command') {
             requireString(spec.command, 'command', MAX_COMMAND);
         }
-        if (spec.adapter === 'claude' && spec.command !== undefined) {
-            const problem = claudeArgsProblem(requireString(spec.command, 'command', MAX_COMMAND));
+        if ((spec.adapter === 'claude' || spec.adapter === 'opencode') && spec.command !== undefined) {
+            const command = requireString(spec.command, 'command', MAX_COMMAND);
+            const problem = spec.adapter === 'claude' ? claudeArgsProblem(command) : opencodeArgsProblem(command);
             if (problem) {
                 throw new HttpError(400, problem);
             }
@@ -481,15 +482,16 @@ export class Hub {
 
     private insertPaneRecord(session: Session, spec: PaneSpec): Pane {
         const adapter = adapterFor(spec.adapter);
-        const command = spec.adapter === 'command' || spec.adapter === 'subagent' || spec.adapter === 'claude' ? spec.command?.trim() || null : null;
+        const takesArgs = spec.adapter === 'claude' || spec.adapter === 'opencode';
+        const command = spec.adapter === 'command' || spec.adapter === 'subagent' || takesArgs ? spec.command?.trim() || null : null;
         const pane: Pane = {
             id: randomUUID(),
             sessionId: session.id,
             adapter: spec.adapter,
-            title: spec.title?.trim() || (command && spec.adapter !== 'claude' ? command.slice(0, 40) : adapter.label),
+            title: spec.title?.trim() || (command && !takesArgs ? command.slice(0, 40) : adapter.label),
             command,
             cwd: session.cwd,
-            agentSessionId: spec.adapter === 'claude' ? randomUUID() : null,
+            agentSessionId: voltranSessionId(spec.adapter),
             agentResumable: false,
             ended: false,
             createdAt: Date.now(),

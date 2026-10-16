@@ -20,6 +20,23 @@ printf '{"session_id":"fake-session-1","prompt":"hi from fake claude"}' | sh -c 
 sleep 30
 `;
 
+// Loads the real Voltran plugin from the configuration Voltran passed and feeds it OpenCode events
+// for the session it was told to open.
+const FAKE_OPENCODE = `#!/bin/sh
+echo "fake opencode $*"
+exec node -e '
+const { plugins } = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
+const session = process.argv[process.argv.indexOf("--session") + 1];
+const events = [
+    { type: "session.inbox.enqueued", data: { sessionID: session, item: { type: "user", payload: { text: "hi from fake opencode" } } } },
+    { type: "permission.asked", data: { id: "per_1", sessionID: session, action: "shell", resources: ["ls"] } },
+];
+const subscribe = async function* () { yield* events; await new Promise(() => {}); };
+import(plugins.at(-1) + "/index.ts").then((plugin) => plugin.default.setup({ event: { subscribe } }));
+setTimeout(() => {}, 30000);
+' -- "$@"
+`;
+
 let daemon: Daemon;
 let base: string;
 let home: string;
@@ -69,6 +86,8 @@ beforeAll(async () => {
     mkdirSync(fakeBin);
     writeFileSync(join(fakeBin, 'claude'), FAKE_CLAUDE);
     chmodSync(join(fakeBin, 'claude'), 0o755);
+    writeFileSync(join(fakeBin, 'opencode'), FAKE_OPENCODE);
+    chmodSync(join(fakeBin, 'opencode'), 0o755);
 
     port = await freePort();
     base = `http://127.0.0.1:${port}`;
@@ -410,6 +429,43 @@ describe('agent panes', () => {
         await api('DELETE', `/api/sessions/${session.id}`);
         const scrollback = join(home, 'data', 'scrollback');
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
+    });
+
+    it('track OpenCode status through the plugin Voltran adds to its own server', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const projectId = state.projects[0].id;
+        expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'opencode', command: '--session ses_x' }] })).status).toBe(400);
+        expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'opencode', command: 'run hi' }] })).status).toBe(400);
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId,
+            title: 'opencode',
+            panes: [{ adapter: 'opencode', command: "--model 'a b'" }],
+        });
+        const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+
+        let output = '';
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneId}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        socket.on('message', (data, isBinary) => {
+            if (isBinary) {
+                output += data.toString();
+            }
+        });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
+
+        const pane = async (): Promise<PaneView | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((entry) => entry.id === paneId);
+        await until(async () => (await pane())?.status === 'needs-input');
+
+        const view = await pane();
+        expect(view).toMatchObject({ title: 'OpenCode', detail: 'Allow shell: ls', agentResumable: true });
+        expect(view?.agentSessionId).toMatch(/^ses_voltran[0-9a-f]{24}$/);
+        expect(output).toContain(`fake opencode --standalone --session ${view?.agentSessionId} --model a b`);
+
+        const forged = await fetch(`${base}/api/hooks/${paneId}/TurnEnd`, { method: 'POST', headers: { Authorization: `Bearer ${daemon.token}` }, body: '{}' });
+        expect(forged.status).toBe(403);
+
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
     });
 });
 

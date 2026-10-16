@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { accessSync, constants, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@volt
 export interface LaunchSpec {
     file: string;
     args: string[];
+    env?: Record<string, string>;
 }
 
 export interface LaunchContext {
@@ -14,9 +16,11 @@ export interface LaunchContext {
     shell: string;
     claudeSettingsFile: string;
     subagentRunning: boolean;
+    baseEnv: NodeJS.ProcessEnv;
 }
 
 const SUBAGENT_VIEWER = fileURLToPath(new URL('./subagent-view.ts', import.meta.url));
+export const OPENCODE_PLUGIN = fileURLToPath(new URL('./opencode-plugin', import.meta.url));
 
 interface AdapterDefinition {
     id: AdapterId;
@@ -45,6 +49,24 @@ const DEFINITIONS: AdapterDefinition[] = [
             }
             args.push(...(splitArgs(pane.command ?? '') ?? []));
             return { file: 'claude', args };
+        },
+    },
+    {
+        id: 'opencode',
+        label: 'OpenCode',
+        kind: 'agent',
+        statusSource: 'hooks',
+        resumable: true,
+        binary: 'opencode',
+        launch: ({ pane, baseEnv }) => {
+            const args = splitArgs(pane.command ?? '') ?? [];
+            const subcommand = args[0] === 'mini' ? args.splice(0, 1) : [];
+            const session = pane.agentSessionId ? ['--session', pane.agentSessionId] : [];
+            return {
+                file: 'opencode',
+                args: [...subcommand, '--standalone', ...session, ...args],
+                env: { OPENCODE_CONFIG_CONTENT: opencodeConfigContent(baseEnv.OPENCODE_CONFIG_CONTENT) },
+            };
         },
     },
     {
@@ -165,8 +187,56 @@ export function claudeArgsProblem(text: string): string | null {
     if (!args) {
         return 'the Claude arguments have an unterminated quote';
     }
-    const owned = args.find((arg) => CLAUDE_OWNED_FLAGS.some((flag) => arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`))));
+    return ownedFlagProblem(args, CLAUDE_OWNED_FLAGS);
+}
+
+const OPENCODE_OWNED_FLAGS = ['--standalone', '--server', '--session', '-s', '--continue', '-c', '--fork'];
+
+export function opencodeArgsProblem(text: string): string | null {
+    const args = splitArgs(text);
+    if (!args) {
+        return 'the OpenCode arguments have an unterminated quote';
+    }
+    const first = args[0];
+    if (first !== undefined && first !== 'mini' && !first.startsWith('-')) {
+        return /^[.~/]|\//.test(first)
+            ? `OpenCode starts in the session's folder; leave out ${first}`
+            : `opencode ${first} does not open OpenCode's interface; run it as a command instead`;
+    }
+    return ownedFlagProblem(args, OPENCODE_OWNED_FLAGS);
+}
+
+function ownedFlagProblem(args: string[], flags: string[]): string | null {
+    const owned = args.find((arg) => flags.some((flag) => arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`))));
     return owned ? `${owned.split('=')[0]} is set by Voltran` : null;
+}
+
+// OPENCODE_CONFIG_CONTENT adds to the user's own configuration files rather than replacing them, so
+// the plugin reaches only the panes Voltran starts. A value the user already set is kept.
+export function opencodeConfigContent(existing: string | undefined): string {
+    let config: Record<string, unknown> = {};
+    if (existing) {
+        try {
+            const parsed: unknown = JSON.parse(existing);
+            if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                config = parsed as Record<string, unknown>;
+            }
+        } catch {
+            // not JSON: OpenCode would refuse it too
+        }
+    }
+    const plugins = Array.isArray(config.plugins) ? config.plugins : [];
+    return JSON.stringify({ ...config, plugins: [...plugins, OPENCODE_PLUGIN] });
+}
+
+export function voltranSessionId(adapter: AdapterId): string | null {
+    if (adapter === 'claude') {
+        return randomUUID();
+    }
+    if (adapter === 'opencode') {
+        return `ses_voltran${randomBytes(12).toString('hex')}`;
+    }
+    return null;
 }
 
 function findOnPath(binary: string, path: string): string | null {
@@ -235,6 +305,10 @@ const SESSION_SCOPED_ENV = [
     'CLAUDE_CODE_SESSION_ATTENDED',
     'CLAUDE_CODE_MESSAGING_SOCKET',
     'CLAUDE_CODE_MESSAGING_TOKEN',
+    'OPENCODE',
+    'OPENCODE_SESSION_ID',
+    'OPENCODE_TERMINAL',
+    'AGENT',
     'TERM_SESSION_ID',
     'TERM_PROGRAM_VERSION',
     'TERM_FEATURES',
@@ -283,6 +357,27 @@ export type ClaudeHookEvent = (typeof CLAUDE_HOOK_EVENTS)[number];
 
 export function isClaudeHookEvent(value: string): value is ClaudeHookEvent {
     return (CLAUDE_HOOK_EVENTS as readonly string[]).includes(value);
+}
+
+// Sent by opencode-plugin/index.ts.
+export const OPENCODE_EVENTS = [
+    'Ready',
+    'SessionCreated',
+    'PromptSubmit',
+    'TurnStart',
+    'ToolStart',
+    'ToolEnd',
+    'Permission',
+    'PermissionReplied',
+    'Question',
+    'QuestionAnswered',
+    'TurnEnd',
+] as const;
+
+export type OpencodeEvent = (typeof OPENCODE_EVENTS)[number];
+
+export function isOpencodeEvent(value: string): value is OpencodeEvent {
+    return (OPENCODE_EVENTS as readonly string[]).includes(value);
 }
 
 // Hooks must never slow down or block the agent: short curl timeout, no output, always exit 0.

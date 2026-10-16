@@ -1,5 +1,5 @@
 import type { PaneStatus } from '@voltran/shared';
-import type { ClaudeHookEvent } from './adapters.ts';
+import type { ClaudeHookEvent, OpencodeEvent } from './adapters.ts';
 
 export interface StatusChange {
     status: PaneStatus;
@@ -39,6 +39,63 @@ export function claudeTransition(event: ClaudeHookEvent, payload: Record<string,
         case 'SubagentStop':
         case 'SessionEnd':
             return null;
+    }
+}
+
+// A subagent's permission prompt or question can be open next to the main session's, so the pane
+// needs input until every one of them is answered.
+export class OpencodeStatus {
+    private readonly pending = new Map<string, string>();
+
+    transition(event: OpencodeEvent, payload: Record<string, unknown>, current: PaneStatus): StatusChange | null {
+        switch (event) {
+            case 'Ready':
+                return current === 'starting' ? { status: 'idle', detail: null } : null;
+            case 'SessionCreated':
+            case 'ToolEnd':
+                return null;
+            case 'PromptSubmit':
+                return { status: 'working', detail: oneLine(payload.prompt, 160) };
+            case 'TurnStart':
+                return current === 'working' || current === 'needs-input' ? null : { status: 'working', detail: null };
+            case 'ToolStart':
+                return this.pending.size > 0 ? null : { status: 'working', detail: oneLine(payload.tool_name, 80) };
+            case 'Permission': {
+                const resources = Array.isArray(payload.resources) ? payload.resources.filter((value) => typeof value === 'string').join(' ') : '';
+                const action = oneLine(payload.action, 40) ?? 'a tool';
+                return this.ask(payload.request_id, oneLine(resources ? `Allow ${action}: ${resources}` : `Allow ${action}?`, 200) ?? '');
+            }
+            case 'Question':
+                return this.ask(payload.request_id, oneLine(payload.message, 200) ?? 'OpenCode has a question');
+            case 'PermissionReplied':
+            case 'QuestionAnswered': {
+                if (typeof payload.request_id !== 'string' || !this.pending.delete(payload.request_id) || current !== 'needs-input') {
+                    return null;
+                }
+                const next = [...this.pending.values()][0];
+                return next === undefined ? { status: 'working', detail: null } : { status: 'needs-input', detail: next };
+            }
+            case 'TurnEnd':
+                this.pending.clear();
+                if (payload.outcome === 'interrupted') {
+                    return { status: 'idle', detail: null };
+                }
+                if (payload.outcome === 'failed') {
+                    return { status: 'done', detail: oneLine(`Failed: ${typeof payload.message === 'string' ? payload.message : 'unknown error'}`, 280) };
+                }
+                return { status: 'done', detail: oneLine(payload.message, 280) };
+        }
+    }
+
+    reset(): void {
+        this.pending.clear();
+    }
+
+    private ask(requestId: unknown, detail: string): StatusChange {
+        if (typeof requestId === 'string') {
+            this.pending.set(requestId, detail);
+        }
+        return { status: 'needs-input', detail };
     }
 }
 

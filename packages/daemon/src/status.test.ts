@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ActivityTracker, claudeTransition, ringsBell, visibleText, type StatusChange } from './status.ts';
+import { ActivityTracker, claudeTransition, OpencodeStatus, ringsBell, visibleText, type StatusChange } from './status.ts';
 
 describe('claudeTransition', () => {
     it('maps the hook lifecycle to statuses', () => {
@@ -25,6 +25,42 @@ describe('claudeTransition', () => {
         const change = claudeTransition('Stop', { last_assistant_message: 'x'.repeat(500) });
         expect(change?.detail).toHaveLength(280);
         expect(change?.detail?.endsWith('…')).toBe(true);
+    });
+});
+
+describe('OpencodeStatus', () => {
+    it('maps a turn to statuses', () => {
+        const status = new OpencodeStatus();
+        expect(status.transition('Ready', {}, 'starting')).toEqual({ status: 'idle', detail: null });
+        expect(status.transition('PromptSubmit', { prompt: 'fix   the\nbanner' }, 'idle')).toEqual({ status: 'working', detail: 'fix the banner' });
+        expect(status.transition('TurnStart', {}, 'working')).toBeNull();
+        expect(status.transition('ToolStart', { tool_name: 'shell' }, 'working')).toEqual({ status: 'working', detail: 'shell' });
+        expect(status.transition('ToolEnd', {}, 'working')).toBeNull();
+        expect(status.transition('TurnEnd', { outcome: 'succeeded', message: 'Done.' }, 'working')).toEqual({ status: 'done', detail: 'Done.' });
+    });
+
+    it('does not let a second plugin load reset a working pane', () => {
+        expect(new OpencodeStatus().transition('Ready', {}, 'working')).toBeNull();
+    });
+
+    it('needs input until every permission prompt and question is answered', () => {
+        const status = new OpencodeStatus();
+        expect(status.transition('Permission', { request_id: 'per_1', action: 'shell', resources: ['echo hi'] }, 'working'))
+            .toEqual({ status: 'needs-input', detail: 'Allow shell: echo hi' });
+        expect(status.transition('Question', { request_id: 'frm_1', message: 'Red or blue?' }, 'needs-input'))
+            .toEqual({ status: 'needs-input', detail: 'Red or blue?' });
+        expect(status.transition('ToolStart', { tool_name: 'read' }, 'needs-input')).toBeNull();
+        expect(status.transition('PermissionReplied', { request_id: 'per_1' }, 'needs-input')).toEqual({ status: 'needs-input', detail: 'Red or blue?' });
+        expect(status.transition('QuestionAnswered', { request_id: 'frm_1' }, 'needs-input')).toEqual({ status: 'working', detail: null });
+        expect(status.transition('QuestionAnswered', { request_id: 'frm_1' }, 'working')).toBeNull();
+    });
+
+    it('reports failures and treats an interruption as idle', () => {
+        const status = new OpencodeStatus();
+        status.transition('Permission', { request_id: 'per_1', action: 'edit' }, 'working');
+        expect(status.transition('TurnEnd', { outcome: 'interrupted' }, 'needs-input')).toEqual({ status: 'idle', detail: null });
+        expect(status.transition('PermissionReplied', { request_id: 'per_1' }, 'needs-input')).toBeNull();
+        expect(status.transition('TurnEnd', { outcome: 'failed', message: 'rate limited' }, 'working')).toEqual({ status: 'done', detail: 'Failed: rate limited' });
     });
 });
 
