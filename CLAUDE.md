@@ -84,6 +84,20 @@ by agent id; the derived path stays the subagent's identity. A `subagent` pane r
 `subagent-view.ts` as its process, which renders the transcript with `subagent-render.ts`; the daemon
 sends it `SIGUSR2` when the subagent stops. Claude's transcript format is internal and may change.
 
+**Notes.** `daemon/src/notes.ts` (`NotesStore`) keeps each pane's notes in
+`~/.voltran/notes/<pane>/notes.md`, one folder per pane so a lock can make the folder read-only as
+well: a write through a temp file and a rename replaces a read-only file. The drawer
+(`web/src/notes.ts`, `NotesEditor`) takes a lease (`POST …/notes/lock` with the version it shows) on
+the first keystroke, renews it while typing, saves with `PUT …/notes` and gives it back three
+seconds after the last keystroke; while it is held the folder is 0500 and the file 0400. The store
+watches the folder and reports every write it did not make as the agent's, and Claude's
+`PreToolUse`/`PostToolUse` on the notes file hold an agent lock that refuses the drawer's. Every
+pane but subagent viewers gets `VOLTRAN_NOTES`. Claude's settings add `notes-hook.sh` (the notes into
+context on `SessionStart`, again on `UserPromptSubmit` after a drawer save marks `<pane>.changed`, and
+a `PreToolUse` deny while the folder is read-only) and Read/Edit permission for the folder; OpenCode
+gets `GUIDE.md` and the notes as `instructions`. `NOTES_GUIDE` is the one copy of what agents are
+told. A daemon start restores permissions and deletes the notes of panes that no longer exist.
+
 **Layout** is a tree in `shared/src/layout.ts` (`insertPane`, `removePane`, `movePane`). The web app
 edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hub rejects a layout
 whose set of panes differs from the session's. Moving a pane to another session is a separate

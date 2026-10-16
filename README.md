@@ -123,6 +123,24 @@ Claude pane: a read-only view laid out like Claude Code's own view of a subagent
 tool calls and their results, and its final report. It follows the subagent live and marks when it
 has finished.
 
+### Notes
+
+Every pane has notes of its own: ⌃⌥E or the note button in its title bar opens them in a drawer on
+the right of the terminal. They save as you type and stay until the pane is closed, across restarts.
+A dot on the button means the pane has notes; it turns blue when an agent changed them since you
+last looked.
+
+The agent in the pane shares them. Claude Code gets them when a session starts, resumes or compacts,
+and again on your next prompt after you change them, and it writes its decisions, progress and next
+steps there. OpenCode reads them as instructions and is told when they change. Every pane has their
+path in `$VOLTRAN_NOTES`, so another agent or a script can use them too.
+
+While you type, the notes are yours alone: Voltran makes the file and its folder read-only, so no
+agent can write them, and Claude is told to wait. The lock lifts three seconds after you stop typing
+or when you leave the drawer. While Claude is editing them, the drawer waits for it instead. If a
+save is refused anyway, for example because the notes are open in another window, your text stays
+and you choose between keeping it and loading the other version.
+
 ### Shortcuts
 
 Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The exceptions are ⌘K
@@ -141,6 +159,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 | ⌃⌥\ / ⌃⌥- | Split the focused pane right / down with a shell |
 | ⌃⌥↩ | Maximize or restore the focused pane |
 | ⌃⌥W | Close the focused pane; in a workspace, take it out of the workspace |
+| ⌃⌥E | Show or hide the notes of the focused pane |
 | ⌃⌥/ | Show all shortcuts |
 
 In terminals, Option types the characters of your keyboard layout (such as @ and { on Turkish Q), as
@@ -232,6 +251,11 @@ packages/
   prompts and questions, including a subagent's, and the end of each turn) and reports them to the
   daemon with the pane's secret. Voltran picks the session id, so the pane resumes the same
   conversation, or the one you switched to inside it.
+- **Notes.** Each pane's notes are `~/.voltran/notes/<pane>/notes.md`. Claude Code panes get hooks
+  that print them into Claude's context and refuse its edits while you type, and permission to read
+  and edit that folder without asking (so a Claude pane could also edit another pane's notes).
+  OpenCode panes get them, with a short guide, as instructions. The lock while you type makes the
+  file and its folder read-only on disk and expires if the window goes away.
 - **Other agents.** Status comes from the terminal: streaming output means working, a quiet period
   after work means finished, and a terminal bell means the agent needs input.
 
