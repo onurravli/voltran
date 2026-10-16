@@ -94,6 +94,8 @@ export class Store {
         this.db = new DatabaseSync(file);
         this.db.exec('pragma journal_mode = wal; pragma foreign_keys = on;');
         this.db.exec(SCHEMA);
+        // Gemini CLI panes from before Antigravity replaced it would name an adapter that no longer exists.
+        this.db.exec(`update panes set adapter = 'antigravity' where adapter = 'gemini'`);
         this.db.exec(`pragma user_version = ${SCHEMA_VERSION}`);
     }
 

@@ -79,13 +79,13 @@ const DEFINITIONS: AdapterDefinition[] = [
         launch: () => ({ file: 'codex', args: [] }),
     },
     {
-        id: 'gemini',
-        label: 'Gemini CLI',
+        id: 'antigravity',
+        label: 'Antigravity',
         kind: 'agent',
         statusSource: 'heuristic',
         resumable: false,
-        binary: 'gemini',
-        launch: () => ({ file: 'gemini', args: [] }),
+        binary: 'agy',
+        launch: () => ({ file: 'agy', args: [] }),
     },
     {
         id: 'shell',

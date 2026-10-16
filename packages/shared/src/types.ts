@@ -1,6 +1,6 @@
 import type { SettingsState } from './settings.ts';
 
-export type AdapterId = 'claude' | 'opencode' | 'codex' | 'gemini' | 'shell' | 'command' | 'subagent';
+export type AdapterId = 'claude' | 'opencode' | 'codex' | 'antigravity' | 'shell' | 'command' | 'subagent';
 
 export type PaneKind = 'agent' | 'shell' | 'process';
 
