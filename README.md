@@ -12,6 +12,10 @@ It works with any folder and any agent CLI. Claude Code gets first-class status 
 including the subagents it runs, and OpenCode through a plugin Voltran gives it; other agents (Codex,
 Antigravity, anything else) get status from terminal activity.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Voltran with a Claude Code session, its subagent, a shell and a webhook listener side by side" width="1000">
+</p>
+
 ## Requirements
 
 - macOS (Linux should work; untested)
