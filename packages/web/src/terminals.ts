@@ -253,16 +253,15 @@ export class TerminalSession {
             } catch {
                 return;
             }
+            // The xterm betas parse every queued write before resizing, so a resize called here lands
+            // where it arrives in the output stream. Calling it from a write callback instead makes the
+            // flush drop the rest of the queue.
             if (parsed.type === 'snapshot') {
-                const { cols, rows } = parsed;
-                this.term.write('', () => {
-                    this.term.reset();
-                    this.term.resize(cols, rows);
-                });
+                this.term.write('\x1bc');
+                this.term.resize(parsed.cols, parsed.rows);
                 this.term.write(parsed.data);
             } else if (parsed.type === 'resize') {
-                const { cols, rows } = parsed;
-                this.term.write('', () => this.term.resize(cols, rows));
+                this.term.resize(parsed.cols, parsed.rows);
             }
         };
 
