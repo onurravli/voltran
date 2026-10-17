@@ -18,7 +18,7 @@ function Welcome() {
 
     return (
         <div className="welcome">
-            <VoltranMark size={56} />
+            <VoltranMark size={56} form />
             {hasProjects ? (
                 <>
                     <h1 className="welcome__title">Pick a session, or start one</h1>
@@ -43,7 +43,7 @@ function Welcome() {
 function SignedOut() {
     return (
         <div className="welcome welcome--full">
-            <VoltranMark size={56} />
+            <VoltranMark size={56} form />
             <h1 className="welcome__title">This window is not signed in</h1>
             <p className="welcome__body">Run <code>voltran up</code> in a terminal. It opens a signed-in window.</p>
         </div>

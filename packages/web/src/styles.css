@@ -2169,3 +2169,25 @@ kbd {
         display: none;
     }
 }
+
+/* ---------- mark ---------- */
+
+.mark--form path {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: mark-form 560ms cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+    animation-delay: calc(120ms + var(--order) * 80ms);
+}
+
+@keyframes mark-form {
+    from {
+        opacity: 0;
+        transform: translate(var(--from)) scale(0.6);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mark--form path {
+        animation: none;
+    }
+}

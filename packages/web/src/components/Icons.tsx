@@ -41,15 +41,27 @@ export const NotesIcon = (props: IconProps) => <Icon {...props}><path d="M4 2.5h
 export const StopIcon = (props: IconProps) => <Icon {...props}><rect x="4" y="4" width="8" height="8" rx="1.5" /></Icon>;
 export const MoreIcon = (props: IconProps) => <Icon {...props} strokeWidth={2.2}><path d="M3.5 8h.01M8 8h.01M12.5 8h.01" /></Icon>;
 
-export function VoltranMark({ size = 22 }: { size?: number }) {
+const MARK_STROKES = [
+    { d: 'M6 7l3.4 7.4', color: '#7aa2f7', from: '-7px, -9px' },
+    { d: 'M11 18l2.8 6.2', color: '#f7768e', from: '-6px, -4px' },
+    { d: 'M18.2 24.2 21 18', color: '#9ece6a', from: '6px, -4px' },
+    { d: 'M22.6 14.4 26 7', color: '#bb9af7', from: '7px, -9px' },
+    { d: 'M16 27.2v0', color: '#e0af68', from: '0px, 6px' },
+];
+
+// The five strokes fly in from around the V and lock together, once, when the mark first appears.
+export function VoltranMark({ size = 22, form = false }: { size?: number; form?: boolean }) {
     return (
-        <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+        <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className={form ? 'mark mark--form' : 'mark'}>
             <g strokeLinecap="round" strokeWidth="3.4">
-                <path d="M6 7l3.4 7.4" stroke="#7aa2f7" />
-                <path d="M11 18l2.8 6.2" stroke="#f7768e" />
-                <path d="M16 27.2v0" stroke="#e0af68" />
-                <path d="M18.2 24.2 21 18" stroke="#9ece6a" />
-                <path d="M22.6 14.4 26 7" stroke="#bb9af7" />
+                {MARK_STROKES.map((stroke, index) => (
+                    <path
+                        key={stroke.d}
+                        d={stroke.d}
+                        stroke={stroke.color}
+                        style={{ '--from': stroke.from, '--order': index } as React.CSSProperties}
+                    />
+                ))}
             </g>
         </svg>
     );
