@@ -32,12 +32,15 @@ import {
     type UpdateSessionBody,
     type UpdateWorkspaceBody,
     type Workspace,
+    type ProjectGit,
+    type WorktreeChoice,
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
 import { PaneManager } from './panes.ts';
 import type { Store } from './store.ts';
+import { WorktreeError, Worktrees, worktreeRunner, type WorktreeRunner } from './worktrees.ts';
 
 export class HttpError extends Error {
     readonly status: number;
@@ -60,6 +63,8 @@ export interface HubOptions {
     baseEnv: NodeJS.ProcessEnv;
     gitRunner?: GitRunner;
     pullRequests?: () => boolean;
+    worktreesDir: string;
+    worktreeRunner?: WorktreeRunner;
 }
 
 type Listener = (event: ServerEvent) => void;
@@ -121,6 +126,7 @@ export class Hub {
     readonly panes: PaneManager;
     private readonly git: GitWatcher;
     private readonly notes: NotesStore;
+    private readonly worktrees: Worktrees;
     private readonly store: Store;
     private readonly adapters: AdapterInfo[];
     private listeners = new Set<Listener>();
@@ -130,6 +136,7 @@ export class Hub {
     constructor(options: HubOptions) {
         this.store = options.store;
         this.adapters = options.adapters;
+        this.worktrees = new Worktrees(options.worktreesDir, options.worktreeRunner ?? worktreeRunner({ ...options.baseEnv, PATH: options.path }));
         this.notes = new NotesStore({
             dir: options.notesDir,
             onChange: (change) => this.emit({ type: 'notes', ...change }),
@@ -253,31 +260,52 @@ export class Hub {
         return this.mustGetProject(id);
     }
 
-    deleteProject(id: string): void {
-        this.mustGetProject(id);
-        for (const session of this.store.sessionsOfProject(id)) {
+    async projectGit(id: string): Promise<ProjectGit> {
+        return this.worktrees.describe(this.mustGetProject(id).path);
+    }
+
+    // Worktrees with uncommitted or untracked files stay on disk: deleting a project never loses work.
+    async deleteProject(id: string): Promise<void> {
+        const project = this.mustGetProject(id);
+        const sessions = this.store.sessionsOfProject(id);
+        for (const session of sessions) {
             this.removeSessionPanes(session.id);
         }
         this.store.deleteProject(id);
         this.pruneWorkspaces();
         this.scheduleBroadcast();
+        for (const session of sessions) {
+            if (session.worktree && (await this.worktrees.changes(session.worktree).catch(() => 1)) === 0) {
+                await this.worktrees.remove(project.path, session.worktree).catch(() => undefined);
+            }
+        }
     }
 
-    createSession(body: CreateSessionBody): Session {
+    async createSession(body: CreateSessionBody): Promise<Session> {
         const project = this.mustGetProject(body.projectId);
         const specs = Array.isArray(body.panes) && body.panes.length > 0 ? body.panes : [{ adapter: 'shell' as const }];
         if (specs.length > 8) {
             throw new HttpError(400, 'a session starts with at most 8 panes');
         }
         specs.forEach((spec) => this.validatePaneSpec(spec));
+        const title = requireString(body.title, 'title', MAX_TITLE);
+        const link = optionalLink(body.link);
+        const worktree = body.worktree === undefined ? null : await this.createWorktree(project, body.worktree);
+        if (!this.store.getProject(project.id)) {
+            if (worktree) {
+                await this.worktrees.remove(project.path, worktree.root).catch(() => undefined);
+            }
+            throw new HttpError(404, 'project not found');
+        }
 
         const now = Date.now();
         const session: Session = {
             id: randomUUID(),
             projectId: project.id,
-            title: requireString(body.title, 'title', MAX_TITLE),
-            link: optionalLink(body.link),
-            cwd: project.path,
+            title,
+            link,
+            cwd: worktree?.cwd ?? project.path,
+            worktree: worktree?.root ?? null,
             layout: null,
             archived: false,
             createdAt: now,
@@ -329,12 +357,33 @@ export class Hub {
         return this.mustGetSession(id);
     }
 
-    deleteSession(id: string): void {
-        this.mustGetSession(id);
+    // A worktree with uncommitted or untracked files is only removed when the caller says so, after
+    // the user has seen how many there are.
+    async deleteSession(id: string, choice: WorktreeChoice | null = null): Promise<void> {
+        const session = this.mustGetSession(id);
+        const project = this.mustGetProject(session.projectId);
+        let removeWorktree = session.worktree !== null && choice !== 'keep';
+        if (session.worktree && choice === null) {
+            const changes = await this.worktrees.changes(session.worktree).catch((error: unknown) => {
+                throw new HttpError(409, `${error instanceof Error ? error.message : String(error)}; choose whether to keep the worktree`);
+            });
+            if (changes > 0) {
+                throw new HttpError(409, `its worktree has ${changes} uncommitted ${changes === 1 ? 'change' : 'changes'}`);
+            }
+            removeWorktree = true;
+        }
+        if (!this.store.getSession(id)) {
+            return;
+        }
         this.removeSessionPanes(id);
         this.store.deleteSession(id);
         this.pruneWorkspaces();
         this.scheduleBroadcast();
+        if (removeWorktree && session.worktree) {
+            await this.worktrees.remove(project.path, session.worktree).catch((error: unknown) => {
+                throw new HttpError(500, `The session is deleted, but its worktree at ${session.worktree} is not: ${error instanceof Error ? error.message : String(error)}`);
+            });
+        }
     }
 
     createPane(sessionId: string, body: CreatePaneBody, options: { closeOnCleanExit?: boolean } = {}): Pane {
@@ -615,6 +664,22 @@ export class Hub {
                 const layout = missing.reduce<Layout | null>((rest, paneId) => removePane(rest, paneId), workspace.layout);
                 this.store.updateWorkspace(workspace.id, { layout });
             }
+        }
+    }
+
+    private async createWorktree(project: Project, spec: NonNullable<CreateSessionBody['worktree']>): Promise<{ root: string; cwd: string }> {
+        if (!spec || typeof spec !== 'object') {
+            throw new HttpError(400, 'worktree must be an object with a branch');
+        }
+        const branch = requireString(spec.branch, 'branch', MAX_TITLE);
+        const base = spec.base === undefined || spec.base === null || spec.base === '' ? undefined : requireString(spec.base, 'base', MAX_TITLE);
+        try {
+            return await this.worktrees.create(project.path, project.name, branch, base);
+        } catch (error) {
+            if (error instanceof WorktreeError) {
+                throw new HttpError(409, error.message);
+            }
+            throw error;
         }
     }
 

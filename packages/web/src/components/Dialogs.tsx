@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { commandPane, type AdapterId, type AdapterInfo, type PaneSpec } from '@voltran/shared';
+import { branchFromTitle, commandPane, type AdapterId, type AdapterInfo, type PaneSpec, type ProjectGit } from '@voltran/shared';
 import { api } from '../api.ts';
 import { FIND_KEYS, SHORTCUTS } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
@@ -95,8 +95,33 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
     const [link, setLink] = useState('');
     const [picks, setPicks] = useState<AdapterId[]>([]);
     const [command, setCommand] = useState('');
+    const [git, setGit] = useState<ProjectGit | null>(null);
+    const [worktree, setWorktree] = useState(false);
+    const [branch, setBranch] = useState<string | null>(null);
+    const [base, setBase] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const branchName = branch ?? branchFromTitle(title);
+
+    useEffect(() => {
+        let current = true;
+        setGit(null);
+        if (!project) {
+            return undefined;
+        }
+        api.projectGit(project)
+            .then((info) => {
+                if (current) {
+                    setGit(info);
+                    setWorktree(info.repository && useUi.getState().worktreeProjects[project] === true);
+                    setBase(info.branch ?? info.branches[0] ?? '');
+                }
+            })
+            .catch(() => undefined);
+        return () => {
+            current = false;
+        };
+    }, [project]);
 
     const toggle = (id: AdapterId): void => {
         setPicks((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
@@ -111,7 +136,17 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
         setBusy(true);
         setError(null);
         try {
-            const session = await api.createSession({ projectId: project, title: title.trim(), link: link.trim() || null, panes });
+            const own = git?.repository === true && worktree;
+            const session = await api.createSession({
+                projectId: project,
+                title: title.trim(),
+                link: link.trim() || null,
+                panes,
+                ...(own ? { worktree: { branch: branchName.trim(), ...(base ? { base } : {}) } } : {}),
+            });
+            if (git?.repository) {
+                useUi.getState().setWorktreeChoice(project, worktree);
+            }
             useUi.getState().selectSession(session.id);
             onClose();
         } catch (failure) {
@@ -150,6 +185,39 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
                         <input className="field__input" value={link} onChange={(event) => setLink(event.target.value)} placeholder="Ticket or PR URL" type="url" />
                     </label>
                 </div>
+                {git?.repository ? (
+                    <div className="worktree-fields">
+                        <label className="check">
+                            <input type="checkbox" checked={worktree} onChange={(event) => setWorktree(event.target.checked)} />
+                            <span>
+                                Work in its own worktree
+                                <span className="check__note">A new folder and branch, so agents in other sessions never touch its files</span>
+                            </span>
+                        </label>
+                        {worktree ? (
+                            <div className="field-row field-row--even">
+                                <label className="field">
+                                    <span className="field__label">Branch</span>
+                                    <input
+                                        className="field__input field__input--mono"
+                                        value={branchName}
+                                        onChange={(event) => setBranch(event.target.value)}
+                                        placeholder="fix-login-redirect"
+                                        spellCheck={false}
+                                        required
+                                    />
+                                </label>
+                                <label className="field">
+                                    <span className="field__label">From</span>
+                                    <select className="field__input field__input--mono" value={base} onChange={(event) => setBase(event.target.value)}>
+                                        {git.branches.length === 0 ? <option value="">HEAD</option> : null}
+                                        {git.branches.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
                 <fieldset className="field">
                     <legend className="field__label">Open with</legend>
                     <div className="chips">
@@ -171,8 +239,8 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
                 {error ? <p className="form__error" role="alert">{error}</p> : null}
                 <div className="form__actions">
                     <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
-                    <button type="submit" className="button button--primary" disabled={busy || !title.trim() || !project || (picks.length === 0 && !command.trim())}>
-                        Start session
+                    <button type="submit" className="button button--primary" disabled={busy || !title.trim() || !project || (picks.length === 0 && !command.trim()) || (git?.repository === true && worktree && !branchName.trim())}>
+                        {busy && git?.repository && worktree ? 'Creating the worktree…' : 'Start session'}
                     </button>
                 </div>
             </form>
@@ -198,10 +266,10 @@ function AdapterChip({ adapter, selected, onToggle }: { adapter: AdapterInfo; se
 
 function ConfirmDialog({ dialog, onClose }: { dialog: Extract<Dialog, { kind: 'confirm' }>; onClose: () => void }) {
     const [busy, setBusy] = useState(false);
-    const confirm = async (): Promise<void> => {
+    const confirm = async (action: () => void | Promise<void>): Promise<void> => {
         setBusy(true);
         try {
-            await dialog.onConfirm();
+            await action();
             onClose();
         } catch (failure) {
             reportError(failure);
@@ -213,7 +281,10 @@ function ConfirmDialog({ dialog, onClose }: { dialog: Extract<Dialog, { kind: 'c
             <p className="modal__body">{dialog.body}</p>
             <div className="form__actions">
                 <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
-                <button type="button" className="button button--danger" onClick={confirm} disabled={busy}>{dialog.action}</button>
+                {dialog.alternative ? (
+                    <button type="button" className="button" onClick={() => confirm(dialog.alternative!.onConfirm)} disabled={busy}>{dialog.alternative.action}</button>
+                ) : null}
+                <button type="button" className="button button--danger" onClick={() => confirm(dialog.onConfirm)} disabled={busy}>{dialog.action}</button>
             </div>
         </Modal>
     );

@@ -164,15 +164,20 @@ export function createVoltranServer(options: ServerOptions): Server {
 
     route('POST', '/api/projects', async (req, res) => sendJson(res, 201, hub.createProject(await readJson(req))));
     route('PATCH', '/api/projects/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateProject(id, await readJson(req))));
-    route('DELETE', '/api/projects/:id', (_req, res, [id]) => {
-        hub.deleteProject(id);
+    route('GET', '/api/projects/:id/git', async (_req, res, [id]) => sendJson(res, 200, await hub.projectGit(id)));
+    route('DELETE', '/api/projects/:id', async (_req, res, [id]) => {
+        await hub.deleteProject(id);
         sendJson(res, 200, { ok: true });
     });
 
-    route('POST', '/api/sessions', async (req, res) => sendJson(res, 201, hub.createSession(await readJson(req))));
+    route('POST', '/api/sessions', async (req, res) => sendJson(res, 201, await hub.createSession(await readJson(req))));
     route('PATCH', '/api/sessions/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateSession(id, await readJson(req))));
-    route('DELETE', '/api/sessions/:id', (_req, res, [id]) => {
-        hub.deleteSession(id);
+    route('DELETE', '/api/sessions/:id', async (req, res, [id]) => {
+        const worktree = new URL(req.url ?? '/', 'http://voltran').searchParams.get('worktree');
+        if (worktree !== null && worktree !== 'keep' && worktree !== 'remove') {
+            throw new HttpError(400, 'worktree must be "keep" or "remove"');
+        }
+        await hub.deleteSession(id, worktree);
         sendJson(res, 200, { ok: true });
     });
     route('POST', '/api/sessions/:id/panes', async (req, res, [id]) => sendJson(res, 201, hub.createPane(id, await readJson(req))));

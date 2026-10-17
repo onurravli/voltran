@@ -14,7 +14,14 @@ export type Dialog =
     | { kind: 'session'; projectId?: string }
     | { kind: 'shortcuts' }
     | { kind: 'palette' }
-    | { kind: 'confirm'; title: string; body: string; action: string; onConfirm: () => void | Promise<void> };
+    | {
+        kind: 'confirm';
+        title: string;
+        body: string;
+        action: string;
+        onConfirm: () => void | Promise<void>;
+        alternative?: { action: string; onConfirm: () => void | Promise<void> };
+    };
 
 export interface PaneMenuTarget {
     sessionId: string;
@@ -46,6 +53,7 @@ export interface UiState {
     collapsedProjects: Record<string, boolean>;
     expandedSessions: Record<string, boolean>;
     notesOpen: Record<string, boolean>;
+    worktreeProjects: Record<string, boolean>;
     notesFocus: { paneId: string; token: number } | null;
     showArchived: boolean;
     sidebarHidden: boolean;
@@ -78,6 +86,7 @@ export interface UiState {
     toggleProject: (id: string) => void;
     toggleSessionPanes: (id: string) => void;
     toggleNotes: (paneId: string) => void;
+    setWorktreeChoice: (projectId: string, on: boolean) => void;
     setShowArchived: (value: boolean) => void;
     toggleSidebar: () => void;
     setSidebarWidth: (width: number) => void;
@@ -103,6 +112,7 @@ interface Persisted {
     collapsedProjects: Record<string, boolean>;
     expandedSessions: Record<string, boolean>;
     notesOpen: Record<string, boolean>;
+    worktreeProjects: Record<string, boolean>;
     showArchived: boolean;
     sidebarHidden: boolean;
     sidebarWidth: number;
@@ -124,6 +134,7 @@ function readPersisted(): Persisted {
                 collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
                 expandedSessions: parsed.expandedSessions && typeof parsed.expandedSessions === 'object' ? parsed.expandedSessions : {},
                 notesOpen: parsed.notesOpen && typeof parsed.notesOpen === 'object' ? parsed.notesOpen : {},
+                worktreeProjects: parsed.worktreeProjects && typeof parsed.worktreeProjects === 'object' ? parsed.worktreeProjects : {},
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
                 sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
@@ -142,6 +153,7 @@ function readPersisted(): Persisted {
         collapsedProjects: {},
         expandedSessions: {},
         notesOpen: {},
+        worktreeProjects: {},
         showArchived: false,
         sidebarHidden: false,
         sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -234,6 +246,10 @@ export const useUi = create<UiState>((set, get) => ({
             ? { notesOpen: rest, notesFocus: null }
             : { notesOpen: { ...rest, [paneId]: true }, notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 } });
     },
+    setWorktreeChoice: (projectId, on) => {
+        const rest = Object.fromEntries(Object.entries(get().worktreeProjects).filter(([id]) => id !== projectId));
+        set({ worktreeProjects: on ? { ...rest, [projectId]: true } : rest });
+    },
     setShowArchived: (value) => set({ showArchived: value }),
     toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),
     setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -311,6 +327,7 @@ useUi.subscribe((state) => {
         collapsedProjects: state.collapsedProjects,
         expandedSessions: state.expandedSessions,
         notesOpen: state.notesOpen,
+        worktreeProjects: state.worktreeProjects,
         showArchived: state.showArchived,
         sidebarHidden: state.sidebarHidden,
         sidebarWidth: state.sidebarWidth,

@@ -474,10 +474,24 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     };
 
     const remove = (): void => {
+        const stops = 'Every process in this session stops and its scrollback is deleted. Agent conversations stay in their own history.';
+        const changes = git?.changed ?? 0;
+        const branch = git?.branch ? `the branch ${git.branch}` : 'its branch';
+        if (session.worktree && changes > 0) {
+            openDialog({
+                kind: 'confirm',
+                title: `Delete ${session.title}?`,
+                body: `${stops} Its worktree at ${shortPath(session.worktree)} has ${changes} uncommitted ${changes === 1 ? 'change' : 'changes'}. Keep the worktree to come back to it later, or delete it along with the changes. ${branch[0].toUpperCase()}${branch.slice(1)} stays either way.`,
+                action: 'Delete the changes too',
+                onConfirm: () => api.deleteSession(session.id, 'remove'),
+                alternative: { action: 'Keep the worktree', onConfirm: () => api.deleteSession(session.id, 'keep') },
+            });
+            return;
+        }
         openDialog({
             kind: 'confirm',
             title: `Delete ${session.title}?`,
-            body: 'Every process in this session stops and its scrollback is deleted. Agent conversations stay in their own history.',
+            body: session.worktree ? `${stops} Its worktree at ${shortPath(session.worktree)} is removed; ${branch} stays.` : stops,
             action: 'Delete session',
             onConfirm: () => api.deleteSession(session.id),
         });

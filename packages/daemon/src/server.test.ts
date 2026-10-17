@@ -404,6 +404,28 @@ describe('git status', () => {
         socket.close();
         await api('DELETE', `/api/projects/${project.id}`);
     });
+
+    it('starts a session in its own worktree and asks before deleting its changes', async () => {
+        const dir = mkdtempSync(join(home, 'worktree-project-'));
+        const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+        execFileSync('git', ['init', '-b', 'main'], { cwd: dir, stdio: 'ignore', env });
+        execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'start'], { cwd: dir, stdio: 'ignore', env });
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { name: 'Shop', path: dir });
+        expect((await api('GET', `/api/projects/${project.id}/git`)).body).toEqual({ repository: true, branch: 'main', branches: ['main'] });
+
+        const created = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'Cart', worktree: { branch: 'cart', base: 'main' } });
+        expect(created.status).toBe(201);
+        expect(created.body.worktree).toBe(join(home, 'data', 'worktrees', 'shop', 'cart'));
+        expect(created.body.cwd).toBe(created.body.worktree);
+        expect((await api('POST', '/api/sessions', { projectId: project.id, title: 'Again', worktree: { branch: 'cart' } })).status).toBe(409);
+
+        writeFileSync(join(created.body.cwd, 'cart.ts'), 'export {};\n');
+        expect((await api('DELETE', `/api/sessions/${created.body.id}?worktree=maybe`)).status).toBe(400);
+        expect(await api('DELETE', `/api/sessions/${created.body.id}`)).toEqual({ status: 409, body: { error: 'its worktree has 1 uncommitted change' } });
+        expect((await api('DELETE', `/api/sessions/${created.body.id}?worktree=remove`)).status).toBe(200);
+        expect(existsSync(created.body.worktree!)).toBe(false);
+        await api('DELETE', `/api/projects/${project.id}`);
+    });
 });
 
 describe('agent panes', () => {

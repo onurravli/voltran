@@ -10,7 +10,7 @@ import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
-import { BellIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
+import { BellIcon, BranchIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
 export function relativeTime(timestamp: number, now: number): string {
@@ -109,6 +109,7 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         const from = moving ? state.app?.sessions.find((entry) => entry.id === moving.sessionId) : undefined;
         return Boolean(moving && from && moving.sessionId !== session.id && !session.archived && from.projectId === session.projectId);
     });
+    const worktreeBranch = useUi((state) => (session.worktree ? state.app?.git[session.cwd]?.branch ?? null : null));
     const [over, setOver] = useState(false);
     const [renaming, setRenaming] = useState(false);
     const lead = leadPane(panes);
@@ -175,7 +176,14 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 <StatusLamp status={status} failed={failed} />
                 <span className="session-row__text">
                     <span className="session-row__title">{session.title}</span>
-                    {showDetail ? <span className="session-row__detail">{lead.detail}</span> : null}
+                    {showDetail ? (
+                        <span className="session-row__detail">{lead.detail}</span>
+                    ) : worktreeBranch ? (
+                        <span className="session-row__detail session-row__branch" title={`Works in its own worktree: ${session.worktree}`}>
+                            <BranchIcon size={11} />
+                            <span className="session-row__branch-name">{worktreeBranch}</span>
+                        </span>
+                    ) : null}
                 </span>
                 {session.link ? <LinkIcon size={13} className="session-row__link" /> : null}
             </button>
@@ -298,7 +306,9 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
         openDialog({
             kind: 'confirm',
             title: `Remove ${project.name}?`,
-            body: `Its ${sessions.length === 1 ? 'session' : `${sessions.length} sessions`} and every process in them stop. Files in ${project.path} are not touched.`,
+            body: `Its ${sessions.length === 1 ? 'session' : `${sessions.length} sessions`} and every process in them stop. Files in ${project.path} are not touched.${
+                sessions.some((session) => session.worktree) ? ' Session worktrees without uncommitted changes are removed; the others and every branch stay.' : ''
+            }`,
             action: 'Remove project',
             onConfirm: () => api.deleteProject(project.id),
         });

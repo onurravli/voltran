@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { AdapterId, Layout, Pane, Project, Session, Workspace } from '@voltran/shared';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
 create table if not exists projects (
@@ -18,6 +18,7 @@ create table if not exists sessions (
     title text not null,
     link text,
     cwd text not null,
+    worktree text,
     layout text,
     archived integer not null default 0,
     created_at integer not null,
@@ -60,6 +61,7 @@ const toSession = (row: Row): Session => ({
     title: String(row.title),
     link: row.link === null ? null : String(row.link),
     cwd: String(row.cwd),
+    worktree: row.worktree === null || row.worktree === undefined ? null : String(row.worktree),
     layout: row.layout ? (JSON.parse(String(row.layout)) as Layout) : null,
     archived: Number(row.archived) === 1,
     createdAt: Number(row.created_at),
@@ -94,6 +96,10 @@ export class Store {
         this.db = new DatabaseSync(file);
         this.db.exec('pragma journal_mode = wal; pragma foreign_keys = on;');
         this.db.exec(SCHEMA);
+        const sessionColumns = this.db.prepare('pragma table_info(sessions)').all() as Row[];
+        if (!sessionColumns.some((column) => column.name === 'worktree')) {
+            this.db.exec('alter table sessions add column worktree text');
+        }
         // Gemini CLI panes from before Antigravity replaced it would name an adapter that no longer exists.
         this.db.exec(`update panes set adapter = 'antigravity' where adapter = 'gemini'`);
         this.db.exec(`pragma user_version = ${SCHEMA_VERSION}`);
@@ -167,14 +173,15 @@ export class Store {
     }
 
     insertSession(session: Session): void {
-        this.db.prepare(`insert into sessions (id, project_id, title, link, cwd, layout, archived, created_at, updated_at)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        this.db.prepare(`insert into sessions (id, project_id, title, link, cwd, worktree, layout, archived, created_at, updated_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
             .run(
                 session.id,
                 session.projectId,
                 session.title,
                 session.link,
                 session.cwd,
+                session.worktree,
                 session.layout ? JSON.stringify(session.layout) : null,
                 session.archived ? 1 : 0,
                 session.createdAt,

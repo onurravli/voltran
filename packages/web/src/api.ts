@@ -10,6 +10,7 @@ import type {
     Pane,
     PaneNotes,
     Project,
+    ProjectGit,
     SaveNotesBody,
     Session,
     SettingsPatch,
@@ -19,6 +20,7 @@ import type {
     UpdateSessionBody,
     UpdateWorkspaceBody,
     Workspace,
+    WorktreeChoice,
 } from '@voltran/shared';
 
 export class ApiError extends Error {
@@ -66,9 +68,10 @@ export const api = {
     createProject: (body: CreateProjectBody) => request<Project>('POST', '/api/projects', body),
     updateProject: (id: string, body: UpdateProjectBody) => request<Project>('PATCH', `/api/projects/${id}`, body),
     deleteProject: (id: string) => request<void>('DELETE', `/api/projects/${id}`),
+    projectGit: (id: string) => request<ProjectGit>('GET', `/api/projects/${id}/git`),
     createSession: (body: CreateSessionBody) => request<Session>('POST', '/api/sessions', body),
     updateSession: (id: string, body: UpdateSessionBody) => request<Session>('PATCH', `/api/sessions/${id}`, body),
-    deleteSession: (id: string) => request<void>('DELETE', `/api/sessions/${id}`),
+    deleteSession: (id: string, worktree?: WorktreeChoice) => request<void>('DELETE', `/api/sessions/${id}${worktree ? `?worktree=${worktree}` : ''}`),
     createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/api/workspaces', body),
     updateWorkspace: (id: string, body: UpdateWorkspaceBody) => request<Workspace>('PATCH', `/api/workspaces/${id}`, body),
     deleteWorkspace: (id: string) => request<void>('DELETE', `/api/workspaces/${id}`),

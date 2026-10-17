@@ -597,6 +597,23 @@ kbd {
     white-space: nowrap;
 }
 
+.session-row__branch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: calc(11px * var(--ui-scale));
+}
+
+.session-row__branch svg {
+    flex: none;
+}
+
+.session-row__branch-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .session-row__link {
     flex: none;
     margin-top: calc(3px + (1.4em - 18.2px) / 2);
@@ -1741,6 +1758,35 @@ kbd {
     display: grid;
     grid-template-columns: 1fr 1.4fr;
     gap: 12px;
+}
+
+.field-row--even {
+    grid-template-columns: 1fr 1fr;
+}
+
+.worktree-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.check input {
+    margin: 2px 0 0;
+    accent-color: var(--focus);
+}
+
+.check__note {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-faint);
+    font-size: calc(12px * var(--ui-scale));
 }
 
 .field__label {

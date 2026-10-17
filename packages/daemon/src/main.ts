@@ -50,6 +50,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         adapters: describeAdapters(options.path),
         scrollbackDir: config.scrollbackDir,
         notesDir: config.notesDir,
+        worktreesDir: config.worktreesDir,
         claudeSettingsFile: config.claudeSettingsFile,
         url: config.url,
         shell: options.shell,

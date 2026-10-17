@@ -46,6 +46,7 @@ export interface Session {
     title: string;
     link: string | null;
     cwd: string;
+    worktree: string | null;
     layout: Layout | null;
     archived: boolean;
     createdAt: number;
@@ -181,7 +182,16 @@ export interface CreateSessionBody {
     title: string;
     link?: string | null;
     panes?: PaneSpec[];
+    worktree?: { branch: string; base?: string };
 }
+
+export interface ProjectGit {
+    repository: boolean;
+    branch: string | null;
+    branches: string[];
+}
+
+export type WorktreeChoice = 'keep' | 'remove';
 
 export interface UpdateSessionBody {
     title?: string;
