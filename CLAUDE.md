@@ -118,6 +118,13 @@ open and a second after a Claude pane's `PostToolUse`/`Stop` or an OpenCode pane
 cached per branch for two minutes and skipped when `git.pullRequests` is off or `gh` is missing.
 Tests inject a `GitRunner` instead of the real `gh`.
 
+**Worktrees.** A session created with `worktree: { branch, base? }` gets a `git worktree` under
+`~/.voltran/worktrees/<project>/<branch>` (`daemon/src/worktrees.ts`); `Session.worktree` is its
+root and `Session.cwd` the project's subfolder inside it, so panes and `GitWatcher` need nothing
+special. Deleting the session removes the worktree only when `git status` shows nothing to lose,
+otherwise the hub answers 409 until the client passes `?worktree=keep|remove`; deleting a project
+removes only the clean ones. Branches are never deleted.
+
 **Web app** (`packages/web/src`): a zustand store (`store.ts`; view state such as the selected session
 and the sidebar width persisted in `localStorage` under `voltran.ui`, settings from the daemon),
 `events.ts` for the state socket, `terminals.ts` (one

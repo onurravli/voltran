@@ -55,7 +55,7 @@ again after switching Node versions.
 
 - **Project**: a folder or repository you work in.
 - **Session**: one piece of work inside a project, such as a ticket, a branch or an investigation.
-  It can carry a link to its ticket or pull request.
+  It can carry a link to its ticket or pull request, and it can work in a git worktree of its own.
 - **Pane**: a terminal inside a session, which runs an agent (Claude Code, OpenCode, Codex,
   Antigravity), a shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A
   command that starts with `claude`, such as `claude --plugin-dir ./my-plugin`, opens a Claude Code
@@ -102,6 +102,24 @@ branch too. Voltran reads the status every 10 seconds while a window is open, an
 Claude Code or OpenCode pane uses a tool, so an agent's edits show up straight away. It runs
 `git status` with `core.fsmonitor` off and without optional locks, so it neither runs a command a
 repository configures nor holds `index.lock` while an agent commits.
+
+### Worktrees
+
+In a git repository, **Work in its own worktree** in the new session dialog gives the session a
+folder and a branch of its own, so agents in different sessions of one repository never touch each
+other's files. The branch is named after the session (edit it before starting) and starts from the
+branch you pick, the current one by default; an existing branch that is not checked out elsewhere is
+checked out as it is. The worktree lives in `~/.voltran/worktrees/<project>/<branch>`, outside your
+repository, and when the project is a subfolder of the repository, the session works in the same
+subfolder of the worktree. The dialog remembers the choice per project. A worktree session shows its
+branch under its name in the sidebar.
+
+Files that git does not track, such as `.env` or `node_modules`, are not copied into the worktree.
+
+Deleting the session removes its worktree when it has no uncommitted or untracked files; otherwise
+Voltran asks whether to keep the worktree or delete it with the changes. The branch stays either way.
+Removing a project removes the worktrees of its sessions that have nothing uncommitted and leaves
+the others.
 
 ### Status
 
@@ -305,7 +323,6 @@ experiments away from your real sessions.
 ## Roadmap
 
 - Session templates
-- A git worktree per session, so parallel agents on one repository never touch each other's files
 - Sending a prompt to one or many agents, and headless `claude -p` runs streamed into panes
 - An agent-to-agent message bus exposed as an MCP server
 - A native window (Tauri) with a dock badge and global shortcuts
