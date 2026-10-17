@@ -1814,6 +1814,17 @@ legend.field__label {
     background: var(--hull);
 }
 
+select.field__input {
+    appearance: none;
+    padding-right: 32px;
+    background-image:
+        linear-gradient(45deg, transparent calc(50% - 0.75px), var(--text-muted) calc(50% - 0.75px), var(--text-muted) calc(50% + 0.75px), transparent calc(50% + 0.75px)),
+        linear-gradient(-45deg, transparent calc(50% - 0.75px), var(--text-muted) calc(50% - 0.75px), var(--text-muted) calc(50% + 0.75px), transparent calc(50% + 0.75px));
+    background-position: right 18px center, right 12px center;
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+}
+
 .field__input:focus {
     border-color: var(--focus);
     outline: none;
