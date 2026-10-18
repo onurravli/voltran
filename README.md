@@ -9,8 +9,8 @@ terminal windows, you get one window with your projects, a session per piece of 
 panes for the agents, shells and dev servers in it. Voltran tells you which agent is waiting on you.
 
 It works with any folder and any agent CLI. Claude Code gets first-class status through its hooks,
-including the subagents it runs, and OpenCode through a plugin Voltran gives it; other agents (Codex,
-Antigravity, anything else) get status from terminal activity.
+including the subagents it runs, OpenCode through a plugin Voltran gives it, and Codex through hooks
+you trust once; other agents (Antigravity, anything else) get status from terminal activity.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Voltran with a Claude Code session, its subagent, a shell and a webhook listener side by side" width="1000">
@@ -278,6 +278,13 @@ packages/
   and edit that folder without asking (so a Claude pane could also edit another pane's notes).
   OpenCode panes get them, with a short guide, as instructions. The lock while you type makes the
   file and its folder read-only on disk and expires if the window goes away.
+- **Codex status.** Voltran starts Codex with its hooks as `-c` overrides, which add to your own
+  hooks. Codex runs a hook only after you trust it: the first Codex pane asks "Hooks need review",
+  and **Trust all and continue** lets every later pane report prompts, tools, approval requests
+  and the end of each turn. Until then, and when you decline, the pane gets its status from the
+  terminal like other agents, and a finished turn reminds you to trust the hooks in `/hooks`. With
+  overrides on its command line, Codex runs without its shared background server and says so as a
+  startup warning; the hooks need that, since they find their pane through its environment.
 - **Other agents.** Status comes from the terminal: streaming output means working, a quiet period
   after work means finished, and a terminal bell means the agent needs input.
 

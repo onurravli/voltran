@@ -70,9 +70,13 @@ runs plugins in a background service shared by every client, so an OpenCode pane
 Bun; keep it free of daemon imports). The plugin's `Reporter` turns OpenCode events into the
 `OPENCODE_EVENTS` it posts to the same hook route, dropping child (subagent) sessions except for their
 permission prompts and questions; `OpencodeStatus` maps them and counts the open prompts. Voltran picks
-the `ses_…` id and always passes `--session`, which creates the session or continues it. Other agents
-use `ActivityTracker` (output streaming / quiet / bell heuristics). Adapters (`claude`, `opencode`,
-`codex`, `antigravity`, `shell`, `command`, `subagent`) are defined in `adapters.ts`.
+the `ses_…` id and always passes `--session`, which creates the session or continues it. Codex panes
+pass the same hook command per event as `-c hooks.<Event>=…` (`codexHookArgs`): Codex runs it only
+once the user trusts it, and keeps that trust by the command's hash, so the command must stay the
+same for every pane. A Codex pane uses `ActivityTracker` until its first hook arrives and
+`codexTransition` after that. Other agents use `ActivityTracker` (output streaming / quiet / bell
+heuristics). Adapters (`claude`, `opencode`, `codex`, `antigravity`, `shell`, `command`, `subagent`)
+are defined in `adapters.ts`.
 
 **Subagents.** `subagents.ts` tracks each Claude pane's running subagents from hooks: `SubagentStart`
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
