@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ActivityTracker, claudeTransition, OpencodeStatus, ringsBell, visibleText, type StatusChange } from './status.ts';
+import { ActivityTracker, claudeTransition, codexTransition, OpencodeStatus, ringsBell, visibleText, type StatusChange } from './status.ts';
+
+describe('codexTransition', () => {
+    it('maps Codex hooks to statuses', () => {
+        expect(codexTransition('SessionStart', {}, 'starting')).toEqual({ status: 'idle', detail: null });
+        expect(codexTransition('SessionStart', {}, 'working')).toBeNull();
+        expect(codexTransition('UserPromptSubmit', { prompt: 'bump\n  postgres' }, 'idle')).toEqual({ status: 'working', detail: 'bump postgres' });
+        expect(codexTransition('PostToolUse', { tool_name: 'apply_patch' }, 'working')).toEqual({ status: 'working', detail: 'apply_patch' });
+        expect(codexTransition('PermissionRequest', { tool_name: 'shell', tool_input: { description: 'Run terraform plan' } }, 'working'))
+            .toEqual({ status: 'needs-input', detail: 'Run terraform plan' });
+        expect(codexTransition('PermissionRequest', { tool_name: 'shell', tool_input: {} }, 'working')).toEqual({ status: 'needs-input', detail: 'Allow shell?' });
+        expect(codexTransition('Stop', { last_assistant_message: 'Plan is clean.' }, 'working')).toEqual({ status: 'done', detail: 'Plan is clean.' });
+        expect(codexTransition('Interrupt', {}, 'working')).toEqual({ status: 'idle', detail: null });
+    });
+});
 
 describe('claudeTransition', () => {
     it('maps the hook lifecycle to statuses', () => {

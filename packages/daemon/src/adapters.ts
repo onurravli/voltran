@@ -32,6 +32,7 @@ interface AdapterDefinition {
     kind: PaneKind;
     statusSource: StatusSource;
     resumable: boolean;
+    reportsHooks: boolean;
     binary: string | null;
     launch(ctx: LaunchContext): LaunchSpec;
 }
@@ -43,6 +44,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'agent',
         statusSource: 'hooks',
         resumable: true,
+        reportsHooks: true,
         binary: 'claude',
         launch: ({ pane, claudeSettingsFile }) => {
             const args = ['--settings', claudeSettingsFile];
@@ -61,6 +63,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'agent',
         statusSource: 'hooks',
         resumable: true,
+        reportsHooks: true,
         binary: 'opencode',
         launch: ({ pane, baseEnv, notesFile, notesGuide }) => {
             const args = splitArgs(pane.command ?? '') ?? [];
@@ -80,8 +83,9 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'agent',
         statusSource: 'heuristic',
         resumable: false,
+        reportsHooks: true,
         binary: 'codex',
-        launch: () => ({ file: 'codex', args: [] }),
+        launch: () => ({ file: 'codex', args: codexHookArgs() }),
     },
     {
         id: 'antigravity',
@@ -89,6 +93,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'agent',
         statusSource: 'heuristic',
         resumable: false,
+        reportsHooks: false,
         binary: 'agy',
         launch: () => ({ file: 'agy', args: [] }),
     },
@@ -98,6 +103,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'shell',
         statusSource: 'process',
         resumable: false,
+        reportsHooks: false,
         binary: null,
         launch: ({ shell }) => ({ file: shell, args: ['-l'] }),
     },
@@ -107,6 +113,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'process',
         statusSource: 'process',
         resumable: false,
+        reportsHooks: false,
         binary: null,
         launch: ({ pane, shell }) => ({ file: shell, args: ['-l', '-c', pane.command ?? ''] }),
     },
@@ -116,6 +123,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         kind: 'process',
         statusSource: 'process',
         resumable: false,
+        reportsHooks: false,
         binary: null,
         launch: ({ pane, subagentRunning }) => ({
             file: process.execPath,
@@ -391,7 +399,36 @@ export function isOpencodeEvent(value: string): value is OpencodeEvent {
     return (OPENCODE_EVENTS as readonly string[]).includes(value);
 }
 
+export const CODEX_HOOK_EVENTS = [
+    'SessionStart',
+    'UserPromptSubmit',
+    'PreToolUse',
+    'PermissionRequest',
+    'PostToolUse',
+    'Stop',
+    'Interrupt',
+] as const;
+
+export type CodexHookEvent = (typeof CODEX_HOOK_EVENTS)[number];
+
+export function isCodexHookEvent(value: string): value is CodexHookEvent {
+    return (CODEX_HOOK_EVENTS as readonly string[]).includes(value);
+}
+
 const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
+function hookCommand(event: string): string {
+    return `[ -n "$VOLTRAN_PANE_ID" ] && curl -s -m 2 -o /dev/null -X POST `
+        + `-H "Authorization: Bearer $VOLTRAN_HOOK_SECRET" -H 'Content-Type: application/json' `
+        + `--data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"; exit 0`;
+}
+
+// Codex runs a hook only after the user has trusted it once in /hooks, and trust follows the
+// command's hash, so the command is the same for every pane and reads the pane from its environment.
+// The JSON string is also a valid TOML basic string, which is how -c parses the value.
+export function codexHookArgs(): string[] {
+    return CODEX_HOOK_EVENTS.flatMap((event) => ['-c', `hooks.${event}=[{hooks=[{type="command",command=${JSON.stringify(hookCommand(event))}}]}]`]);
+}
 
 // Hooks must never slow down or block the agent: short curl timeout, no output, always exit 0.
 // The per-pane secret only authorizes status reports for that one pane. The notes hooks print the
@@ -399,10 +436,7 @@ const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'
 export function claudeHookSettings(notesDir: string): object {
     const hooks: Record<string, unknown[]> = {};
     for (const event of CLAUDE_HOOK_EVENTS) {
-        const command = `[ -n "$VOLTRAN_PANE_ID" ] && curl -s -m 2 -o /dev/null -X POST `
-            + `-H "Authorization: Bearer $VOLTRAN_HOOK_SECRET" -H 'Content-Type: application/json' `
-            + `--data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"; exit 0`;
-        hooks[event] = [{ hooks: [{ type: 'command', command, timeout: 5 }] }];
+        hooks[event] = [{ hooks: [{ type: 'command', command: hookCommand(event), timeout: 5 }] }];
     }
     const notes = (mode: string): object => ({
         type: 'command',

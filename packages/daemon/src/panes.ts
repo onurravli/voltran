@@ -5,9 +5,9 @@ import * as nodePty from 'node-pty';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
 import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneStatus } from '@voltran/shared';
-import { adapterFor, childEnv, isClaudeHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type OpencodeEvent } from './adapters.ts';
+import { adapterFor, childEnv, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type CodexHookEvent, type OpencodeEvent } from './adapters.ts';
 import { safeEqual } from './security.ts';
-import { ActivityTracker, claudeTransition, OpencodeStatus, type StatusChange } from './status.ts';
+import { ActivityTracker, claudeTransition, codexTransition, OpencodeStatus, type StatusChange } from './status.ts';
 import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
 import { readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
 
@@ -23,6 +23,8 @@ interface Attachment {
     queue: (string | PaneServerMessage)[];
 }
 
+const CODEX_TRUST_HINT = 'Trust the Voltran hooks once in Codex with /hooks for exact status';
+
 interface Runtime {
     pane: Pane;
     term: headless.Terminal;
@@ -33,6 +35,7 @@ interface Runtime {
     state: PaneRuntimeState;
     attachments: Set<Attachment>;
     tracker: ActivityTracker | null;
+    hooked: boolean;
     opencode: OpencodeStatus | null;
     subagents: SubagentTracker;
     cols: number;
@@ -253,7 +256,25 @@ export class PaneManager {
             this.opencodeHook(runtime, runtime.opencode, event, payload);
             return true;
         }
+        if (runtime.pane.adapter === 'codex' && isCodexHookEvent(event)) {
+            this.codexHook(runtime, event, payload);
+            return true;
+        }
         return false;
+    }
+
+    // Codex runs Voltran's hooks only once the user has trusted them, so a Codex pane follows its
+    // output until the first hook arrives and its hooks from then on.
+    private codexHook(runtime: Runtime, event: CodexHookEvent, payload: Record<string, unknown>): void {
+        if (!runtime.hooked) {
+            runtime.hooked = true;
+            runtime.tracker?.dispose();
+            runtime.tracker = null;
+        }
+        const change = codexTransition(event, payload, runtime.state.status);
+        if (change) {
+            this.setStatus(runtime, change);
+        }
     }
 
     private claudeHook(runtime: Runtime, event: ClaudeHookEvent, payload: Record<string, unknown>): void {
@@ -373,6 +394,7 @@ export class PaneManager {
             },
             attachments: new Set(),
             tracker: null,
+            hooked: false,
             opencode: pane.adapter === 'opencode' ? new OpencodeStatus() : null,
             subagents: new SubagentTracker(locateSubagent),
             cols: 120,
@@ -383,22 +405,32 @@ export class PaneManager {
         };
 
         if (adapterFor(pane.adapter).statusSource === 'heuristic') {
-            runtime.tracker = new ActivityTracker({
-                quietMs: this.options.heuristicQuietMs ?? 5000,
-                echoWindowMs: ECHO_WINDOW_MS,
-                onChange: (change) => this.setStatus(runtime, change),
-            });
+            runtime.tracker = this.activityTracker(runtime);
         }
 
         this.runtimes.set(pane.id, runtime);
         return runtime;
     }
 
+    private activityTracker(runtime: Runtime): ActivityTracker {
+        return new ActivityTracker({
+            quietMs: this.options.heuristicQuietMs ?? 5000,
+            echoWindowMs: ECHO_WINDOW_MS,
+            onChange: (change) => this.setStatus(runtime, runtime.pane.adapter === 'codex' && change.status === 'done' && !change.detail
+                ? { ...change, detail: CODEX_TRUST_HINT }
+                : change),
+        });
+    }
+
     private spawn(runtime: Runtime): void {
         const { pane } = runtime;
         const adapter = adapterFor(pane.adapter);
         const generation = ++runtime.generation;
-        const secret = adapter.statusSource === 'hooks' ? randomBytes(24).toString('hex') : null;
+        const secret = adapter.reportsHooks ? randomBytes(24).toString('hex') : null;
+        runtime.hooked = false;
+        if (adapter.statusSource === 'heuristic' && !runtime.tracker) {
+            runtime.tracker = this.activityTracker(runtime);
+        }
         const subagentRunning = pane.adapter === 'subagent' && this.isFollowedTranscript(pane.command);
         const notesFile = this.options.notes?.file(pane) ?? null;
         const spec = adapter.launch({
@@ -599,7 +631,7 @@ export class PaneManager {
             }
             const adapter = adapterFor(runtime.pane.adapter);
             const quietFor = now - runtime.lastOutputAt;
-            if (adapter.statusSource === 'hooks' && runtime.state.status === 'working' && quietFor > silenceMs) {
+            if ((adapter.statusSource === 'hooks' || runtime.hooked) && runtime.state.status === 'working' && quietFor > silenceMs) {
                 this.setStatus(runtime, { status: 'idle', detail: 'No activity, possibly interrupted' });
             }
             // Prompts shown before the agent's first hook (folder trust, login, update notices) would

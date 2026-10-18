@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pane } from '@voltran/shared';
-import { adapterFor, childEnv, claudeArgsProblem, claudeHookSettings, NOTES_HOOK, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, voltranSessionId } from './adapters.ts';
+import { adapterFor, childEnv, claudeArgsProblem, claudeHookSettings, CODEX_HOOK_EVENTS, codexHookArgs, NOTES_HOOK, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, voltranSessionId } from './adapters.ts';
 
 describe('splitArgs', () => {
     it('splits on whitespace and honours quotes and backslashes without expanding anything', () => {
@@ -49,6 +49,23 @@ describe('claude adapter', () => {
     it('passes its arguments after the ones Voltran sets, on resume too', () => {
         expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', '/s.json', '--resume', 'abc', '--plugin-dir', './a b']);
         expect(launch({}).args).toEqual(['--settings', '/s.json', '--resume', 'abc']);
+    });
+});
+
+describe('codex adapter', () => {
+    it('adds the same hook command for every pane, one -c override per event', () => {
+        const args = codexHookArgs();
+        expect(args).toHaveLength(CODEX_HOOK_EVENTS.length * 2);
+        CODEX_HOOK_EVENTS.forEach((event, index) => {
+            expect(args[index * 2]).toBe('-c');
+            const match = /^hooks\.(\w+)=\[\{hooks=\[\{type="command",command=("(?:[^"\\]|\\.)*")\}\]\}\]$/.exec(args[index * 2 + 1]);
+            expect(match?.[1]).toBe(event);
+            const command = JSON.parse(match?.[2] ?? '""') as string;
+            expect(command).toContain(`"$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"`);
+            expect(command).toContain('Bearer $VOLTRAN_HOOK_SECRET');
+            expect(command).not.toMatch(/[\r\n]/);
+        });
+        expect(codexHookArgs()).toEqual(args);
     });
 });
 

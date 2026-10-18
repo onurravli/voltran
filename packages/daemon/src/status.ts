@@ -1,5 +1,5 @@
 import type { PaneStatus } from '@voltran/shared';
-import type { ClaudeHookEvent, OpencodeEvent } from './adapters.ts';
+import type { ClaudeHookEvent, CodexHookEvent, OpencodeEvent } from './adapters.ts';
 
 export interface StatusChange {
     status: PaneStatus;
@@ -39,6 +39,27 @@ export function claudeTransition(event: ClaudeHookEvent, payload: Record<string,
         case 'SubagentStop':
         case 'SessionEnd':
             return null;
+    }
+}
+
+export function codexTransition(event: CodexHookEvent, payload: Record<string, unknown>, current: PaneStatus): StatusChange | null {
+    switch (event) {
+        case 'SessionStart':
+            return current === 'starting' ? { status: 'idle', detail: null } : null;
+        case 'UserPromptSubmit':
+            return { status: 'working', detail: oneLine(payload.prompt, 160) };
+        case 'PreToolUse':
+        case 'PostToolUse':
+            return { status: 'working', detail: oneLine(payload.tool_name, 80) };
+        case 'PermissionRequest': {
+            const input = payload.tool_input && typeof payload.tool_input === 'object' ? payload.tool_input as Record<string, unknown> : {};
+            const tool = oneLine(payload.tool_name, 40) ?? 'a tool';
+            return { status: 'needs-input', detail: oneLine(input.description, 200) ?? `Allow ${tool}?` };
+        }
+        case 'Stop':
+            return { status: 'done', detail: oneLine(payload.last_assistant_message, 280) };
+        case 'Interrupt':
+            return { status: 'idle', detail: null };
     }
 }
 

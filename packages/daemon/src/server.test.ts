@@ -47,6 +47,25 @@ setTimeout(() => {}, 30000);
 ' -- "$@"
 `;
 
+// Runs the hook commands Voltran passed as -c overrides, the way Codex runs trusted hooks.
+const FAKE_CODEX = `#!/bin/sh
+echo "fake codex"
+exec node -e '
+const { execSync } = require("child_process");
+const hooks = {};
+for (const arg of process.argv) {
+    const match = /^hooks\\.(\\w+)=.*command=("(?:[^"\\\\]|\\\\.)*")/.exec(arg);
+    if (match) hooks[match[1]] = JSON.parse(match[2]);
+}
+const run = (event, payload) => execSync(hooks[event], { input: JSON.stringify(payload), shell: "/bin/sh" });
+run("SessionStart", { session_id: "s1", hook_event_name: "SessionStart", source: "startup" });
+run("UserPromptSubmit", { session_id: "s1", turn_id: "t1", prompt: "bump postgres" });
+run("PermissionRequest", { session_id: "s1", turn_id: "t1", tool_name: "shell", tool_input: { description: "Run terraform plan" } });
+setTimeout(() => run("Stop", { session_id: "s1", turn_id: "t1", last_assistant_message: "Plan is clean." }), 1500);
+setTimeout(() => {}, 30000);
+' -- "$@"
+`;
+
 let daemon: Daemon;
 let base: string;
 let home: string;
@@ -98,6 +117,8 @@ beforeAll(async () => {
     chmodSync(join(fakeBin, 'claude'), 0o755);
     writeFileSync(join(fakeBin, 'opencode'), FAKE_OPENCODE);
     chmodSync(join(fakeBin, 'opencode'), 0o755);
+    writeFileSync(join(fakeBin, 'codex'), FAKE_CODEX);
+    chmodSync(join(fakeBin, 'codex'), 0o755);
 
     port = await freePort();
     base = `http://127.0.0.1:${port}`;
@@ -497,6 +518,26 @@ describe('agent panes', () => {
         await until(() => output.replace(/\s+/g, ' ').includes(`Notes file: ${notesFile}`));
         expect(output).toContain('# Voltran pane notes');
 
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
+    });
+
+    it('track Codex status through the hooks Voltran passes it, once they report', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: state.projects[0].id, title: 'codex', panes: [{ adapter: 'codex' }] });
+        const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneId}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
+
+        const pane = async (): Promise<PaneView | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((entry) => entry.id === paneId);
+        await until(async () => (await pane())?.status === 'needs-input');
+        expect(await pane()).toMatchObject({ status: 'needs-input', detail: 'Run terraform plan' });
+        await until(async () => (await pane())?.status === 'done');
+        expect(await pane()).toMatchObject({ status: 'done', detail: 'Plan is clean.' });
+
+        const forged = await fetch(`${base}/api/hooks/${paneId}/Stop`, { method: 'POST', headers: { Authorization: `Bearer ${daemon.token}` }, body: '{}' });
+        expect(forged.status).toBe(403);
         socket.close();
         await api('DELETE', `/api/sessions/${session.id}`);
     });

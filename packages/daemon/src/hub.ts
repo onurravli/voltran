@@ -35,7 +35,7 @@ import {
     type ProjectGit,
     type WorktreeChoice,
 } from '@voltran/shared';
-import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
+import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
 import { PaneManager } from './panes.ts';
@@ -524,7 +524,7 @@ export class Hub {
     }
 
     hook(paneId: string, event: string, secret: string, payload: unknown): boolean {
-        if (!(isClaudeHookEvent(event) || isOpencodeEvent(event)) || !payload || typeof payload !== 'object') {
+        if (!(isClaudeHookEvent(event) || isOpencodeEvent(event) || isCodexHookEvent(event)) || !payload || typeof payload !== 'object') {
             return false;
         }
         const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
