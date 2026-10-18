@@ -133,8 +133,12 @@ removes only the clean ones. Branches are never deleted.
 and the sidebar width persisted in `localStorage` under `voltran.ui`, settings from the daemon),
 `events.ts` for the state socket, `terminals.ts` (one
 `TerminalSession` per pane, kept across unmounts), `shortcuts.ts` (⌃⌥ shortcuts and ⌘K) and
-`keymap.ts` (iTerm-style line editing bytes). Themes (`themes.ts`) derive the UI's CSS variables from
-each terminal palette; `index.html` applies a cached copy before first paint.
+`keymap.ts` (iTerm-style line editing bytes). Menus are Base UI (`@base-ui/react`, unstyled, in our
+`.menu` CSS): `menus.ts` builds each thing's items once and both the ⋯ buttons (`MoreMenu`) and
+right-click (`ContextMenuArea`, a `display: contents` trigger) render them through `Controls.tsx`.
+A portalled popup still bubbles React events through its owner, so popups swallow `contextmenu`.
+Themes (`themes.ts`) derive the UI's CSS variables from each terminal palette; `index.html` applies
+a cached copy before first paint.
 
 **Installed app.** Chrome can install Voltran as an app (`install.ts`, `public/manifest.webmanifest`).
 Every file stays behind the session cookie, so `index.html` fetches the manifest with
