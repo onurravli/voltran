@@ -1,4 +1,4 @@
-import type { DropEdge, Layout } from '@voltran/shared';
+import type { DropEdge, Layout, Workspace } from '@voltran/shared';
 import { MAX_WORKSPACE_PANES, removePane } from '@voltran/shared';
 import { api } from './api.ts';
 import { PANE_DRAG_TYPE, SESSION_DRAG_TYPE } from './drag.ts';
@@ -59,4 +59,45 @@ export function createWorkspace(): void {
     api.createWorkspace({ title: nextWorkspaceTitle(workspaces) })
         .then((workspace) => useUi.getState().selectWorkspace(workspace.id))
         .catch(reportError);
+}
+
+// Without a workspace id the panes go into a new workspace, which then opens; adding to an existing
+// one stays where you are.
+export function addToWorkspace(workspaceId: string | null, dragged: Dragged): void {
+    const { app } = useUi.getState();
+    if (!app) {
+        return;
+    }
+    const target = workspaceId === null
+        ? api.createWorkspace({ title: nextWorkspaceTitle(app.workspaces) })
+        : Promise.resolve(app.workspaces.find((entry) => entry.id === workspaceId));
+    target
+        .then(async (workspace) => {
+            if (!workspace) {
+                return;
+            }
+            const ui = useUi.getState();
+            const result = dropOnWorkspace(ui.app ?? app, workspace.layout, dragged, null, 'swap');
+            if (result.kind === 'full') {
+                ui.showToast(`A workspace shows at most ${MAX_WORKSPACE_PANES} panes`, 'error');
+            } else if (result.kind === 'changed') {
+                await api.updateWorkspace(workspace.id, { layout: result.layout });
+            }
+            if (workspaceId === null) {
+                useUi.getState().selectWorkspace(workspace.id);
+            } else if (result.kind === 'changed') {
+                useUi.getState().showToast(`Added to ${workspace.title}`);
+            }
+        })
+        .catch(reportError);
+}
+
+export function deleteWorkspace(workspace: Workspace): void {
+    useUi.getState().openDialog({
+        kind: 'confirm',
+        title: `Delete ${workspace.title}?`,
+        body: 'Only the workspace goes away. Its panes keep running in their sessions.',
+        action: 'Delete workspace',
+        onConfirm: () => api.deleteWorkspace(workspace.id),
+    });
 }

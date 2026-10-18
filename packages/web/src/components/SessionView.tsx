@@ -5,6 +5,7 @@ import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
 import { gitLabels, linkLabel, pullRequestLabel, shortPath } from '../labels.ts';
+import { sessionMenu } from '../menus.ts';
 import { notesFresh } from '../notes.ts';
 import { FIND_STEP_KEYS, closePane, keys } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
@@ -26,7 +27,7 @@ import {
     SplitRightIcon,
     StopIcon,
 } from './Icons.tsx';
-import { InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
+import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
@@ -445,7 +446,6 @@ function GitChips({ status }: { status: GitStatus }) {
 
 function SessionHeader({ session, project }: { session: Session; project: Project | undefined }) {
     const openPaneMenu = useUi((state) => state.openPaneMenu);
-    const openDialog = useUi((state) => state.openDialog);
     const sidebarHidden = useUi((state) => state.sidebarHidden);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
     const projectWorking = useUi((state) => {
@@ -473,45 +473,18 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
             .catch(reportError);
     };
 
-    const remove = (): void => {
-        const stops = 'Every process in this session stops and its scrollback is deleted. Agent conversations stay in their own history.';
-        const changes = git?.changed ?? 0;
-        const branch = git?.branch ? `the branch ${git.branch}` : 'its branch';
-        if (session.worktree && changes > 0) {
-            openDialog({
-                kind: 'confirm',
-                title: `Delete ${session.title}?`,
-                body: `${stops} Its worktree at ${shortPath(session.worktree)} has ${changes} uncommitted ${changes === 1 ? 'change' : 'changes'}. Keep the worktree to come back to it later, or delete it along with the changes. ${branch[0].toUpperCase()}${branch.slice(1)} stays either way.`,
-                action: 'Delete the changes too',
-                onConfirm: () => api.deleteSession(session.id, 'remove'),
-                alternative: { action: 'Keep the worktree', onConfirm: () => api.deleteSession(session.id, 'keep') },
-            });
-            return;
-        }
-        openDialog({
-            kind: 'confirm',
-            title: `Delete ${session.title}?`,
-            body: session.worktree ? `${stops} Its worktree at ${shortPath(session.worktree)} is removed; ${branch} stays.` : stops,
-            action: 'Delete session',
-            onConfirm: () => api.deleteSession(session.id),
-        });
+    const linkRequested = useUi((state) => state.linkEditSessionId === session.id);
+    const editLink = (): void => {
+        setLinkDraft(session.link ?? '');
+        setEditingLink(true);
     };
 
-    const menu: MenuItem[] = [
-        { label: 'Rename', onSelect: () => setRenaming(true) },
-        {
-            label: session.link ? 'Edit link' : 'Add link',
-            onSelect: () => {
-                setLinkDraft(session.link ?? '');
-                setEditingLink(true);
-            },
-        },
-        { label: 'Copy folder path', onSelect: copyPath },
-        session.archived
-            ? { label: 'Restore session', separated: true, onSelect: () => api.updateSession(session.id, { archived: false }).catch(reportError) }
-            : { label: 'Archive session', note: 'stops its processes', separated: true, onSelect: () => api.updateSession(session.id, { archived: true }).catch(reportError) },
-        { label: 'Delete session…', danger: true, onSelect: remove },
-    ];
+    useEffect(() => {
+        if (linkRequested) {
+            useUi.getState().editSessionLink(null);
+            editLink();
+        }
+    }, [linkRequested]);
 
     return (
         <header className={`session-header${projectWorking ? ' session-header--working' : ''}`} style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}>
@@ -575,7 +548,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                 >
                     <PlusIcon size={13} /> Add pane
                 </button>
-                <MoreMenu label="Session actions" items={menu} />
+                <MoreMenu label="Session actions" items={() => sessionMenu(session, { rename: () => setRenaming(true), editLink }, 'header')} />
             </div>
         </header>
     );

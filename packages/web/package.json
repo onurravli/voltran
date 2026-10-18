@@ -8,6 +8,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@voltran/shared": "0.1.0",
     "@xterm/addon-fit": "0.12.0-beta.311",
     "@xterm/addon-search": "0.17.0-beta.310",

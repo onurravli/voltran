@@ -85,7 +85,7 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
     );
 }
 
-function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: () => void }) {
+function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projectId?: string; worktree?: boolean; onClose: () => void }) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
     const adapters = (app?.adapters ?? []).filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent');
@@ -113,7 +113,7 @@ function SessionDialog({ projectId, onClose }: { projectId?: string; onClose: ()
             .then((info) => {
                 if (current) {
                     setGit(info);
-                    setWorktree(info.repository && useUi.getState().worktreeProjects[project] === true);
+                    setWorktree(info.repository && (wantsWorktree ?? useUi.getState().worktreeProjects[project] === true));
                     setBase(info.branch ?? info.branches[0] ?? '');
                 }
             })
@@ -318,7 +318,7 @@ export function Dialogs() {
         case 'project':
             return <ProjectDialog onClose={close} />;
         case 'session':
-            return <SessionDialog projectId={dialog.projectId} onClose={close} />;
+            return <SessionDialog projectId={dialog.projectId} worktree={dialog.worktree} onClose={close} />;
         case 'confirm':
             return <ConfirmDialog dialog={dialog} onClose={close} />;
         case 'shortcuts':

@@ -11,7 +11,7 @@ export type Connection = 'connecting' | 'online' | 'offline' | 'unauthenticated'
 
 export type Dialog =
     | { kind: 'project' }
-    | { kind: 'session'; projectId?: string }
+    | { kind: 'session'; projectId?: string; worktree?: boolean }
     | { kind: 'shortcuts' }
     | { kind: 'palette' }
     | {
@@ -69,6 +69,7 @@ export interface UiState {
     previewThemeId: string | null;
     dialog: Dialog | null;
     paneMenu: PaneMenuTarget | null;
+    linkEditSessionId: string | null;
     toast: Toast | null;
     installable: boolean;
     setApp: (app: AppState) => void;
@@ -100,6 +101,7 @@ export interface UiState {
     setPreviewTheme: (id: string | null) => void;
     openDialog: (dialog: Dialog | null) => void;
     openPaneMenu: (target: PaneMenuTarget | null) => void;
+    editSessionLink: (sessionId: string | null) => void;
     showToast: (message: string, tone?: Toast['tone']) => void;
     setInstallable: (installable: boolean) => void;
 }
@@ -208,6 +210,7 @@ export const useUi = create<UiState>((set, get) => ({
     zen: false,
     dialog: null,
     paneMenu: null,
+    linkEditSessionId: null,
     toast: null,
     installable: false,
 
@@ -307,6 +310,12 @@ export const useUi = create<UiState>((set, get) => ({
     setPreviewTheme: (previewThemeId) => set({ previewThemeId }),
     openDialog: (dialog) => set({ dialog, paneMenu: null }),
     openPaneMenu: (paneMenu) => set({ paneMenu }),
+    editSessionLink: (sessionId) => {
+        if (sessionId) {
+            get().selectSession(sessionId);
+        }
+        set({ linkEditSessionId: sessionId });
+    },
     showToast: (message, tone = 'info') => {
         toastId += 1;
         const id = toastId;

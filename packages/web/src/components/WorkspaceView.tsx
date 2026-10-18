@@ -2,33 +2,19 @@ import { useState } from 'react';
 import type { Workspace } from '@voltran/shared';
 import { paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
+import { workspaceMenu } from '../menus.ts';
 import { keys } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { draggedItem, dropIntoWorkspace, endDrag, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
-import { InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
+import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { SidebarIcon } from './Icons.tsx';
 import { LayoutNode, PaneBox, setSizesAt } from './SessionView.tsx';
-
-export function deleteWorkspace(workspace: Workspace): void {
-    useUi.getState().openDialog({
-        kind: 'confirm',
-        title: `Delete ${workspace.title}?`,
-        body: 'Only the workspace goes away. Its panes keep running in their sessions.',
-        action: 'Delete workspace',
-        onConfirm: () => api.deleteWorkspace(workspace.id),
-    });
-}
 
 function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
     const sidebarHidden = useUi((state) => state.sidebarHidden);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
     const [renaming, setRenaming] = useState(false);
     const count = paneIds(workspace.layout).length;
-
-    const menu: MenuItem[] = [
-        { label: 'Rename', onSelect: () => setRenaming(true) },
-        { label: 'Delete workspace…', danger: true, separated: true, onSelect: () => deleteWorkspace(workspace) },
-    ];
 
     return (
         <header className="session-header">
@@ -56,7 +42,7 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
             </div>
             <span className="workspace__count">{count === 1 ? '1 pane' : `${count} panes`}</span>
             <div className="session-header__actions">
-                <MoreMenu label="Workspace actions" items={menu} />
+                <MoreMenu label="Workspace actions" items={() => workspaceMenu(workspace, () => setRenaming(true), 'header')} />
             </div>
         </header>
     );

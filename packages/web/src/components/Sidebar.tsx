@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { PaneView, Project, Session, SubagentView, Workspace } from '@voltran/shared';
-import { PROJECT_COLORS, aggregateStatus, needsAttention, paneIds } from '@voltran/shared';
+import { aggregateStatus, needsAttention, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, SESSION_DRAG_TYPE } from '../drag.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH_STEP, draggedSidebarWidth } from '../sidebar.ts';
 import { gitLabels } from '../labels.ts';
+import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
 import { keys } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
-import { InlineEdit, MoreMenu } from './Controls.tsx';
+import { ContextMenuArea, InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
 import { BellIcon, BranchIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
@@ -55,16 +56,18 @@ function SubagentList({ session, agents }: { session: Session; agents: { agent: 
         <ul className="subagents" aria-label="Running subagents">
             {agents.map(({ agent, paneId }) => (
                 <li key={agent.id}>
-                    <button
-                        type="button"
-                        className="subagent-row"
-                        title={`${agent.description} · ${agent.type}${agent.background ? ' · in the background' : ''} · open in a pane`}
-                        onClick={() => open(agent, paneId)}
-                    >
-                        <StatusLamp status="working" size="sm" />
-                        <span className="subagent-row__label">{agent.description}</span>
-                        <span className="subagent-row__age">{relativeTime(agent.startedAt, now)}</span>
-                    </button>
+                    <ContextMenuArea label={agent.description} items={() => [{ label: 'Open in a pane', onSelect: () => open(agent, paneId) }]}>
+                        <button
+                            type="button"
+                            className="subagent-row"
+                            title={`${agent.description} · ${agent.type}${agent.background ? ' · in the background' : ''} · open in a pane`}
+                            onClick={() => open(agent, paneId)}
+                        >
+                            <StatusLamp status="working" size="sm" />
+                            <span className="subagent-row__label">{agent.description}</span>
+                            <span className="subagent-row__age">{relativeTime(agent.startedAt, now)}</span>
+                        </button>
+                    </ContextMenuArea>
                 </li>
             ))}
         </ul>
@@ -78,22 +81,24 @@ function PaneList({ session, panes }: { session: Session; panes: PaneView[] }) {
         <ul className="subagents" aria-label={`Panes of ${session.title}`}>
             {sorted.map((pane) => (
                 <li key={pane.id}>
-                    <button
-                        type="button"
-                        className="subagent-row pane-row"
-                        title="Drag onto a workspace to show it there"
-                        draggable
-                        onDragStart={(event) => {
-                            event.dataTransfer.setData(PANE_DRAG_TYPE, pane.id);
-                            event.dataTransfer.effectAllowed = 'copyMove';
-                            useUi.getState().setDraggingPane(pane.id);
-                        }}
-                        onDragEnd={endDrag}
-                        onClick={() => revealPane(session.id, pane.id)}
-                    >
-                        <StatusLamp status={pane.status} size="sm" />
-                        <span className="subagent-row__label">{pane.title}</span>
-                    </button>
+                    <ContextMenuArea label={pane.title} items={() => paneMenu(pane)}>
+                        <button
+                            type="button"
+                            className="subagent-row pane-row"
+                            title="Drag onto a workspace to show it there"
+                            draggable
+                            onDragStart={(event) => {
+                                event.dataTransfer.setData(PANE_DRAG_TYPE, pane.id);
+                                event.dataTransfer.effectAllowed = 'copyMove';
+                                useUi.getState().setDraggingPane(pane.id);
+                            }}
+                            onDragEnd={endDrag}
+                            onClick={() => revealPane(session.id, pane.id)}
+                        >
+                            <StatusLamp status={pane.status} size="sm" />
+                            <span className="subagent-row__label">{pane.title}</span>
+                        </button>
+                    </ContextMenuArea>
                 </li>
             ))}
         </ul>
@@ -139,55 +144,60 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
 
     return (
         <li className="session-item">
-            <button
-                type="button"
-                className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
-                onClick={() => selectSession(session.id)}
-                onDoubleClick={() => setRenaming(true)}
-                title="Double-click to rename, drag onto a workspace to show its panes there"
-                draggable={panes.length > 0}
-                onDragStart={(event) => {
-                    event.dataTransfer.setData(SESSION_DRAG_TYPE, session.id);
-                    event.dataTransfer.effectAllowed = 'copy';
-                    useUi.getState().setDraggingSession(session.id);
-                }}
-                onDragEnd={endDrag}
-                onDragOver={(event) => {
-                    if (accepts) {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'move';
-                        setOver(true);
-                    }
-                }}
-                onDragLeave={() => setOver(false)}
-                onDrop={(event) => {
-                    const moving = useUi.getState().draggingPaneId;
-                    setOver(false);
-                    if (!accepts || !moving) {
-                        return;
-                    }
-                    event.preventDefault();
-                    useUi.getState().setDraggingPane(null);
-                    api.movePane(moving, { sessionId: session.id })
-                        .then(() => useUi.getState().showToast(`Moved to ${session.title}`))
-                        .catch(reportError);
-                }}
-                aria-current={selected ? 'true' : undefined}
+            <ContextMenuArea
+                label={session.title}
+                items={() => sessionMenu(session, { rename: () => setRenaming(true), editLink: () => useUi.getState().editSessionLink(session.id) }, 'sidebar')}
             >
-                <StatusLamp status={status} failed={failed} />
-                <span className="session-row__text">
-                    <span className="session-row__title">{session.title}</span>
-                    {showDetail ? (
-                        <span className="session-row__detail">{lead.detail}</span>
-                    ) : worktreeBranch ? (
-                        <span className="session-row__detail session-row__branch" title={`Works in its own worktree: ${session.worktree}`}>
-                            <BranchIcon size={11} />
-                            <span className="session-row__branch-name">{worktreeBranch}</span>
-                        </span>
-                    ) : null}
-                </span>
-                {session.link ? <LinkIcon size={13} className="session-row__link" /> : null}
-            </button>
+                <button
+                    type="button"
+                    className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
+                    onClick={() => selectSession(session.id)}
+                    onDoubleClick={() => setRenaming(true)}
+                    title="Double-click to rename, drag onto a workspace to show its panes there"
+                    draggable={panes.length > 0}
+                    onDragStart={(event) => {
+                        event.dataTransfer.setData(SESSION_DRAG_TYPE, session.id);
+                        event.dataTransfer.effectAllowed = 'copy';
+                        useUi.getState().setDraggingSession(session.id);
+                    }}
+                    onDragEnd={endDrag}
+                    onDragOver={(event) => {
+                        if (accepts) {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
+                            setOver(true);
+                        }
+                    }}
+                    onDragLeave={() => setOver(false)}
+                    onDrop={(event) => {
+                        const moving = useUi.getState().draggingPaneId;
+                        setOver(false);
+                        if (!accepts || !moving) {
+                            return;
+                        }
+                        event.preventDefault();
+                        useUi.getState().setDraggingPane(null);
+                        api.movePane(moving, { sessionId: session.id })
+                            .then(() => useUi.getState().showToast(`Moved to ${session.title}`))
+                            .catch(reportError);
+                    }}
+                    aria-current={selected ? 'true' : undefined}
+                >
+                    <StatusLamp status={status} failed={failed} />
+                    <span className="session-row__text">
+                        <span className="session-row__title">{session.title}</span>
+                        {showDetail ? (
+                            <span className="session-row__detail">{lead.detail}</span>
+                        ) : worktreeBranch ? (
+                            <span className="session-row__detail session-row__branch" title={`Works in its own worktree: ${session.worktree}`}>
+                                <BranchIcon size={11} />
+                                <span className="session-row__branch-name">{worktreeBranch}</span>
+                            </span>
+                        ) : null}
+                    </span>
+                    {session.link ? <LinkIcon size={13} className="session-row__link" /> : null}
+                </button>
+            </ContextMenuArea>
             {panes.length > 0 ? (
                 <button
                     type="button"
@@ -236,37 +246,39 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
 
     return (
         <li>
-            <button
-                type="button"
-                className={`session-row${selected ? ' is-selected' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
-                onClick={() => selectWorkspace(workspace.id)}
-                onDoubleClick={() => setRenaming(true)}
-                title="Double-click to rename"
-                onDragOver={(event) => {
-                    if (accepts) {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'copy';
-                        setOver(true);
-                    }
-                }}
-                onDragLeave={() => setOver(false)}
-                onDrop={(event) => {
-                    setOver(false);
-                    const dragged = draggedItem(event.dataTransfer);
-                    endDrag();
-                    if (dragged) {
-                        event.preventDefault();
-                        dropIntoWorkspace(workspace.id, dragged, null, 'swap');
-                    }
-                }}
-                aria-current={selected ? 'true' : undefined}
-            >
-                <StatusLamp status={status} />
-                <span className="session-row__text">
-                    <span className="session-row__title">{workspace.title}</span>
-                    <span className="session-row__detail">{count === 0 ? 'Drag panes here' : count === 1 ? '1 pane' : `${count} panes`}</span>
-                </span>
-            </button>
+            <ContextMenuArea label={workspace.title} items={() => workspaceMenu(workspace, () => setRenaming(true), 'sidebar')}>
+                <button
+                    type="button"
+                    className={`session-row${selected ? ' is-selected' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
+                    onClick={() => selectWorkspace(workspace.id)}
+                    onDoubleClick={() => setRenaming(true)}
+                    title="Double-click to rename"
+                    onDragOver={(event) => {
+                        if (accepts) {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'copy';
+                            setOver(true);
+                        }
+                    }}
+                    onDragLeave={() => setOver(false)}
+                    onDrop={(event) => {
+                        setOver(false);
+                        const dragged = draggedItem(event.dataTransfer);
+                        endDrag();
+                        if (dragged) {
+                            event.preventDefault();
+                            dropIntoWorkspace(workspace.id, dragged, null, 'swap');
+                        }
+                    }}
+                    aria-current={selected ? 'true' : undefined}
+                >
+                    <StatusLamp status={status} />
+                    <span className="session-row__text">
+                        <span className="session-row__title">{workspace.title}</span>
+                        <span className="session-row__detail">{count === 0 ? 'Drag panes here' : count === 1 ? '1 pane' : `${count} panes`}</span>
+                    </span>
+                </button>
+            </ContextMenuArea>
         </li>
     );
 }
@@ -303,73 +315,52 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
     const [renaming, setRenaming] = useState(false);
     const waiting = sessions.filter((session) => panesOf(app, session.id).some((pane) => needsAttention(pane.status))).length;
 
-    const remove = (): void => {
-        openDialog({
-            kind: 'confirm',
-            title: `Remove ${project.name}?`,
-            body: `Its ${sessions.length === 1 ? 'session' : `${sessions.length} sessions`} and every process in them stop. Files in ${project.path} are not touched.${
-                sessions.some((session) => session.worktree) ? ' Session worktrees without uncommitted changes are removed; the others and every branch stay.' : ''
-            }`,
-            action: 'Remove project',
-            onConfirm: () => api.deleteProject(project.id),
-        });
-    };
+    const menu = (): MenuItem[] => projectMenu(project, () => setRenaming(true));
 
     return (
         <section className="project" style={{ '--project-color': project.color } as React.CSSProperties}>
-            <div className="project__header">
-                {renaming ? (
-                    <div className="project__toggle">
-                        <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
-                        <InlineEdit
-                            className="project__name"
-                            label="Project name"
-                            value={project.name}
-                            editing
-                            onEditingChange={setRenaming}
-                            onSave={(name) => api.updateProject(project.id, { name })}
-                        />
+            <ContextMenuArea label={project.name} items={menu}>
+                <div className="project__header">
+                    {renaming ? (
+                        <div className="project__toggle">
+                            <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
+                            <InlineEdit
+                                className="project__name"
+                                label="Project name"
+                                value={project.name}
+                                editing
+                                onEditingChange={setRenaming}
+                                onSave={(name) => api.updateProject(project.id, { name })}
+                            />
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            className="project__toggle"
+                            onClick={() => toggleProject(project.id)}
+                            onDoubleClick={() => setRenaming(true)}
+                            aria-expanded={!collapsed}
+                            title={`${project.path}\nDouble-click to rename`}
+                        >
+                            <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
+                            <span className="project__name">{project.name}</span>
+                            {collapsed && waiting > 0 ? <span className="project__waiting">{waiting}</span> : null}
+                            {gitLabel ? (
+                                <span className="project__git" title={gitLabel.detail}>
+                                    <span className="project__git-branch">{gitLabel.branch}</span>
+                                    {gitLabel.changes ? <span className={`git-count${git?.conflicted ? ' git-count--conflict' : ''}`}>{gitLabel.changes}</span> : null}
+                                </span>
+                            ) : null}
+                        </button>
+                    )}
+                    <div className="project__actions">
+                        <button type="button" className="icon-button" title={`New session in ${project.name}`} onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
+                            <PlusIcon size={14} />
+                        </button>
+                        <MoreMenu small label={`${project.name} actions`} items={menu} />
                     </div>
-                ) : (
-                    <button
-                        type="button"
-                        className="project__toggle"
-                        onClick={() => toggleProject(project.id)}
-                        onDoubleClick={() => setRenaming(true)}
-                        aria-expanded={!collapsed}
-                        title={`${project.path}\nDouble-click to rename`}
-                    >
-                        <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
-                        <span className="project__name">{project.name}</span>
-                        {collapsed && waiting > 0 ? <span className="project__waiting">{waiting}</span> : null}
-                        {gitLabel ? (
-                            <span className="project__git" title={gitLabel.detail}>
-                                <span className="project__git-branch">{gitLabel.branch}</span>
-                                {gitLabel.changes ? <span className={`git-count${git?.conflicted ? ' git-count--conflict' : ''}`}>{gitLabel.changes}</span> : null}
-                            </span>
-                        ) : null}
-                    </button>
-                )}
-                <div className="project__actions">
-                    <button type="button" className="icon-button" title={`New session in ${project.name}`} onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
-                        <PlusIcon size={14} />
-                    </button>
-                    <MoreMenu
-                        small
-                        label={`${project.name} actions`}
-                        items={[
-                            { label: 'Rename', onSelect: () => setRenaming(true) },
-                            {
-                                label: 'Colour',
-                                swatches: PROJECT_COLORS,
-                                selected: project.color,
-                                onPick: (color) => api.updateProject(project.id, { color }).catch(reportError),
-                            },
-                            { label: 'Remove project…', danger: true, separated: true, onSelect: remove },
-                        ]}
-                    />
                 </div>
-            </div>
+            </ContextMenuArea>
             {collapsed ? null : sessions.length === 0 ? (
                 <button type="button" className="project__empty" onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
                     Start a session here
@@ -401,19 +392,21 @@ function Inbox() {
             <ul className="inbox__list">
                 {queue.map((pane) => (
                     <li key={pane.id}>
-                        <button type="button" className={`inbox__item inbox__item--${pane.status}`} onClick={() => revealPane(pane.sessionId, pane.id)}>
-                            <StatusLamp status={pane.status} size="sm" />
-                            <span className="inbox__text">
-                                <span className="inbox__title">
-                                    {sessions.get(pane.sessionId)?.title ?? 'Session'}
-                                    <time className="inbox__time">{relativeTime(pane.statusAt, now)}</time>
+                        <ContextMenuArea label={pane.title} items={() => paneMenu(pane)}>
+                            <button type="button" className={`inbox__item inbox__item--${pane.status}`} onClick={() => revealPane(pane.sessionId, pane.id)}>
+                                <StatusLamp status={pane.status} size="sm" />
+                                <span className="inbox__text">
+                                    <span className="inbox__title">
+                                        {sessions.get(pane.sessionId)?.title ?? 'Session'}
+                                        <time className="inbox__time">{relativeTime(pane.statusAt, now)}</time>
+                                    </span>
+                                    <span className="inbox__detail">
+                                        {pane.status === 'needs-input' ? '' : 'Finished · '}
+                                        {pane.detail ?? pane.title}
+                                    </span>
                                 </span>
-                                <span className="inbox__detail">
-                                    {pane.status === 'needs-input' ? '' : 'Finished · '}
-                                    {pane.detail ?? pane.title}
-                                </span>
-                            </span>
-                        </button>
+                            </button>
+                        </ContextMenuArea>
                     </li>
                 ))}
             </ul>
@@ -545,7 +538,7 @@ export function Sidebar() {
                 </button>
             </header>
 
-            <nav className="sidebar__projects" aria-label="Projects and sessions">
+            <ContextMenuArea label="Sidebar" items={sidebarMenu} render={<nav className="sidebar__projects" aria-label="Projects and sessions" />}>
                 <Workspaces />
                 {projects.map((project) => (
                     <ProjectGroup
@@ -557,7 +550,7 @@ export function Sidebar() {
                 <button type="button" className="add-project" onClick={() => openDialog({ kind: 'project' })}>
                     <FolderIcon size={14} /> Add project
                 </button>
-            </nav>
+            </ContextMenuArea>
 
             <Inbox />
             <Footer />

@@ -1,6 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { ContextMenu } from '@base-ui/react/context-menu';
+import { Menu } from '@base-ui/react/menu';
+import type { MenuItem } from '../menus.ts';
 import { reportError } from '../store.ts';
-import { MoreIcon } from './Icons.tsx';
+import { ChevronIcon, MoreIcon } from './Icons.tsx';
+
+export type { MenuItem } from '../menus.ts';
 
 export function InlineEdit({ value, onSave, className, label, editing: requested, onEditingChange }: {
     value: string;
@@ -57,145 +62,132 @@ export function InlineEdit({ value, onSave, className, label, editing: requested
     );
 }
 
-interface MenuAction {
-    label: string;
-    note?: string;
-    danger?: boolean;
-    separated?: boolean;
-    onSelect: () => void;
-}
-
-interface MenuSwatches {
-    label: string;
-    swatches: readonly { name: string; value: string }[];
-    selected: string;
-    separated?: boolean;
-    onPick: (value: string) => void;
-}
-
-export type MenuItem = MenuAction | MenuSwatches;
-
 const MENU_GAP = 6;
 const VIEWPORT_MARGIN = 8;
 
-export function MoreMenu({ label, items, small = false }: { label: string; items: MenuItem[]; small?: boolean }) {
-    const [open, setOpen] = useState(false);
-    const [place, setPlace] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-    const root = useRef<HTMLDivElement>(null);
-    const trigger = useRef<HTMLButtonElement>(null);
-    const menu = useRef<HTMLDivElement>(null);
+type MenuItems = MenuItem[] | (() => MenuItem[]);
 
-    useLayoutEffect(() => {
-        if (!open || !trigger.current || !menu.current) {
-            return;
+const resolve = (items: MenuItems): MenuItem[] => (typeof items === 'function' ? items() : items);
+
+// A popup is portalled out of the DOM, but React still bubbles its events through the component that
+// rendered it, so a right-click inside a menu would otherwise open the menu of the row around it.
+const keepContextMenu = (event: ReactMouseEvent): void => {
+    event.preventDefault();
+    event.stopPropagation();
+};
+
+function MenuEntries({ items }: { items: MenuItem[] }) {
+    return items.map((item) => {
+        const separated = item.separated ? ' menu__item--separated' : '';
+        if ('swatches' in item) {
+            const selected = item.swatches.find((swatch) => swatch.value.toLowerCase() === item.selected.toLowerCase())?.value ?? null;
+            return (
+                <Menu.RadioGroup
+                    key={item.label}
+                    className={`menu__swatches${separated}`}
+                    aria-label={item.label}
+                    value={selected}
+                    onValueChange={(value: string) => item.onPick(value)}
+                >
+                    {item.swatches.map((swatch) => (
+                        <Menu.RadioItem
+                            key={swatch.value}
+                            value={swatch.value}
+                            label={swatch.name}
+                            aria-label={swatch.name}
+                            title={swatch.name}
+                            className="menu__swatch"
+                            style={{ '--swatch': swatch.value } as React.CSSProperties}
+                        />
+                    ))}
+                </Menu.RadioGroup>
+            );
         }
-        const anchor = trigger.current.getBoundingClientRect();
-        const { offsetWidth: width, offsetHeight: height } = menu.current;
-        const below = anchor.bottom + MENU_GAP + height <= window.innerHeight - VIEWPORT_MARGIN;
-        setPlace({
-            top: below ? anchor.bottom + MENU_GAP : Math.max(VIEWPORT_MARGIN, anchor.top - MENU_GAP - height),
-            left: Math.min(Math.max(VIEWPORT_MARGIN, anchor.right - width), window.innerWidth - width - VIEWPORT_MARGIN),
-        });
-    }, [open]);
-
-    useEffect(() => {
-        if (!open) {
-            return;
+        if ('items' in item) {
+            return (
+                <Menu.SubmenuRoot key={item.label} disabled={item.disabled}>
+                    <Menu.SubmenuTrigger className={`menu__item${separated}`} disabled={item.disabled}>
+                        <span>{item.label}</span>
+                        <ChevronIcon size={12} className="menu__chevron" />
+                    </Menu.SubmenuTrigger>
+                    <Menu.Portal>
+                        <Menu.Positioner className="menu-layer" side="inline-end" align="start" sideOffset={4} alignOffset={-5} collisionPadding={VIEWPORT_MARGIN}>
+                            <Menu.Popup className="menu menu--floating" aria-label={item.label} onContextMenu={keepContextMenu}>
+                                <MenuEntries items={item.items} />
+                            </Menu.Popup>
+                        </Menu.Positioner>
+                    </Menu.Portal>
+                </Menu.SubmenuRoot>
+            );
         }
-        const entries = (): HTMLButtonElement[] => [...(root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"], [role="menuitemradio"]') ?? [])];
-        const dismiss = (): void => setOpen(false);
-        const onPointer = (event: MouseEvent): void => {
-            if (!root.current?.contains(event.target as Node)) {
-                dismiss();
-            }
-        };
-        const onKey = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                event.stopPropagation();
-                dismiss();
-                trigger.current?.focus();
-            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                event.preventDefault();
-                const list = entries();
-                const index = list.indexOf(document.activeElement as HTMLButtonElement);
-                const step = event.key === 'ArrowDown' ? 1 : -1;
-                list[index < 0 ? 0 : (index + step + list.length) % list.length]?.focus();
-            }
-        };
-        const onScroll = (event: Event): void => {
-            if (!menu.current?.contains(event.target as Node)) {
-                dismiss();
-            }
-        };
-        window.addEventListener('mousedown', onPointer);
-        window.addEventListener('keydown', onKey, true);
-        window.addEventListener('scroll', onScroll, true);
-        window.addEventListener('resize', dismiss);
-        window.addEventListener('blur', dismiss);
-        entries()[0]?.focus();
-        return () => {
-            window.removeEventListener('mousedown', onPointer);
-            window.removeEventListener('keydown', onKey, true);
-            window.removeEventListener('scroll', onScroll, true);
-            window.removeEventListener('resize', dismiss);
-            window.removeEventListener('blur', dismiss);
-        };
-    }, [open]);
-
-    return (
-        <div className="more" ref={root}>
-            <button
-                ref={trigger}
-                type="button"
-                className={`icon-button${small ? '' : ' icon-button--bar'}`}
-                aria-label={label}
-                title={label}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                onClick={() => setOpen(!open)}
+        return (
+            <Menu.Item
+                key={item.label}
+                className={`menu__item${item.danger ? ' menu__item--danger' : ''}${separated}`}
+                disabled={item.disabled}
+                onClick={item.onSelect}
             >
+                <span>{item.label}</span>
+                {item.note ? <span className="menu__note">{item.note}</span> : null}
+            </Menu.Item>
+        );
+    });
+}
+
+function LazyEntries({ items }: { items: MenuItems }) {
+    return <MenuEntries items={resolve(items)} />;
+}
+
+export function MoreMenu({ label, items, small = false }: { label: string; items: MenuItems; small?: boolean }) {
+    return (
+        <Menu.Root>
+            <Menu.Trigger className={`icon-button${small ? '' : ' icon-button--bar'}`} aria-label={label} title={label}>
                 <MoreIcon size={small ? 14 : 16} />
-            </button>
-            {open ? (
-                <div className="menu menu--anchored" role="menu" aria-label={label} ref={menu} style={place}>
-                    {items.map((item) => ('swatches' in item ? (
-                        <div
-                            key={item.label}
-                            className={`menu__swatches${item.separated ? ' menu__item--separated' : ''}`}
-                            role="group"
-                            aria-label={item.label}
-                        >
-                            {item.swatches.map((swatch) => (
-                                <button
-                                    key={swatch.value}
-                                    type="button"
-                                    role="menuitemradio"
-                                    aria-checked={swatch.value.toLowerCase() === item.selected.toLowerCase()}
-                                    aria-label={swatch.name}
-                                    title={swatch.name}
-                                    className="menu__swatch"
-                                    style={{ '--swatch': swatch.value } as React.CSSProperties}
-                                    onClick={() => item.onPick(swatch.value)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <button
-                            key={item.label}
-                            type="button"
-                            role="menuitem"
-                            className={`menu__item${item.danger ? ' menu__item--danger' : ''}${item.separated ? ' menu__item--separated' : ''}`}
-                            onClick={() => {
-                                setOpen(false);
-                                item.onSelect();
-                            }}
-                        >
-                            <span>{item.label}</span>
-                            {item.note ? <span className="menu__note">{item.note}</span> : null}
-                        </button>
-                    )))}
-                </div>
-            ) : null}
-        </div>
+            </Menu.Trigger>
+            <Menu.Portal>
+                <Menu.Positioner className="menu-layer" side="bottom" align="end" sideOffset={MENU_GAP} collisionPadding={VIEWPORT_MARGIN}>
+                    <Menu.Popup className="menu menu--floating" aria-label={label} onContextMenu={keepContextMenu}>
+                        <LazyEntries items={items} />
+                    </Menu.Popup>
+                </Menu.Positioner>
+            </Menu.Portal>
+        </Menu.Root>
+    );
+}
+
+// macOS has no key that opens a context menu, and a browser opens one from the keyboard only on some
+// systems, so the ContextMenu key and Shift+F10 open it below the focused row everywhere.
+function openFromKeyboard(event: ReactKeyboardEvent<HTMLElement>): void {
+    if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const row = event.target as HTMLElement;
+    const rect = row.getBoundingClientRect();
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 12, clientY: rect.bottom }));
+}
+
+// The trigger is display: contents, so wrapping a row changes nothing about its layout. Items are
+// built when the menu opens, from the state at that moment.
+export function ContextMenuArea({ label, items, render, children }: {
+    label: string;
+    items: () => MenuItem[];
+    render?: ContextMenu.Trigger.Props['render'];
+    children: ReactNode;
+}) {
+    return (
+        <ContextMenu.Root>
+            <ContextMenu.Trigger className={render ? undefined : 'context-area'} render={render} onKeyDown={openFromKeyboard}>
+                {children}
+            </ContextMenu.Trigger>
+            <ContextMenu.Portal>
+                <ContextMenu.Positioner className="menu-layer" collisionPadding={VIEWPORT_MARGIN}>
+                    <ContextMenu.Popup className="menu menu--floating" aria-label={label} onContextMenu={keepContextMenu}>
+                        <LazyEntries items={items} />
+                    </ContextMenu.Popup>
+                </ContextMenu.Positioner>
+            </ContextMenu.Portal>
+        </ContextMenu.Root>
     );
 }
