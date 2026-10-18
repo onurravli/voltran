@@ -257,7 +257,7 @@ export function voltranSessionId(adapter: AdapterId): string | null {
     return null;
 }
 
-function findOnPath(binary: string, path: string): string | null {
+export function findOnPath(binary: string, path: string): string | null {
     for (const dir of path.split(delimiter)) {
         if (!dir) {
             continue;
