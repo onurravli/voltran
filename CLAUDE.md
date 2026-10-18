@@ -143,6 +143,14 @@ Every file stays behind the session cookie, so `index.html` fetches the manifest
 `~/Applications/Chrome Apps.localized` (its Info.plist names the app id, URL and profile), and the CLI
 opens it with `--app-id` plus `--app-launch-url-for-shortcuts-menu-item=<login URL>`, which signs it in.
 
+**Platforms.** macOS and Linux; Windows only through WSL2 (hooks are POSIX shell, viewers need
+`SIGUSR2`, the notes lock needs real file modes). `daemon/src/linux.ts` holds the Linux side of the CLI:
+finding Chrome for `--app=` and the systemd user unit for `autostart`, a oneshot with
+`KillMode=process` because `up` exits once the daemon it started is listening. In the web app, keyboard
+labels are written with Mac glyphs and go through `keys()` (`keyLabel` in `keymap.ts`); off a Mac, ⌘
+shortcuts are Ctrl+Shift (`isPrimaryChord`) and find steps with F3. CI runs typecheck and tests on
+Ubuntu (`.github/workflows/test.yml`).
+
 ## Testing
 
 - Vitest runs `packages/*/src/**/*.test.ts` in a Node environment, so web logic that needs tests lives

@@ -18,7 +18,8 @@ you trust once; other agents (Antigravity, anything else) get status from termin
 
 ## Requirements
 
-- macOS (Linux should work; untested)
+- macOS or Linux (see [On Linux](#on-linux)). Windows is not supported; run Voltran inside WSL2,
+  which is Linux
 - Node.js 22.18 or newer (Voltran runs its TypeScript directly, with no build step for the daemon)
 - Google Chrome is optional: when installed, `voltran up` opens Voltran in its own app window
 
@@ -41,7 +42,7 @@ is already open, `voltran up` does not open another one.
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
-| `voltran autostart [on\|off]` | Start the daemon when you log in to macOS (a LaunchAgent); with no argument, say whether it does |
+| `voltran autostart [on\|off]` | Start the daemon when you log in (a LaunchAgent on macOS, a systemd user service on Linux); with no argument, say whether it does |
 
 ### In the Dock
 
@@ -50,6 +51,26 @@ window, Dock icon and ⌘Tab entry, and `voltran up` opens it from then on. Righ
 Options → Keep in Dock to pin it. The app cannot start the daemon, so run `voltran autostart on` once
 to have it running whenever you are logged in. The agent runs the Node that ran that command; run it
 again after switching Node versions.
+
+### On Linux
+
+Voltran runs the same way on Linux, with these differences:
+
+- `npm install` compiles node-pty, which has no prebuilt binary for Linux, so it needs Python 3, make
+  and a C++ compiler (`build-essential` and `python3` on Debian and Ubuntu).
+- `voltran up` opens an app window with the first of `google-chrome`, `google-chrome-stable`,
+  `chromium` or `chromium-browser` on your `PATH`, or the default browser through `xdg-open`. It does
+  not find an installed Chrome app, so it opens a window of its own even after you install one.
+- `voltran autostart on` writes `~/.config/systemd/user/voltran.service` and enables it, so it needs a
+  systemd user session. To keep Voltran running while you are logged out, run
+  `loginctl enable-linger`.
+- The shortcuts that use ⌘ on a Mac use Ctrl+Shift: Ctrl+Shift+K opens the command palette and
+  Ctrl+Shift+F finds in the terminal, with F3 / Shift+F3 for the next and previous match. The ⌃⌥
+  shortcuts are Ctrl+Alt. GNOME keeps Ctrl+Alt+arrows for switching workspaces, so those four may
+  not reach Voltran; their actions are in the command palette too. The ⌘ line-editing keys below are
+  macOS only.
+- The notes lock relies on file permissions, which do not stop root, so run Voltran as your own
+  user.
 
 ## How it is organized
 
@@ -166,7 +187,8 @@ and you choose between keeping it and loading the other version.
 ### Shortcuts
 
 Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The exceptions are ⌘K
-(⌃⌥K works too) and ⌘F, which mean nothing to a terminal.
+(⌃⌥K works too) and ⌘F, which mean nothing to a terminal. On Linux they use other keys; see
+[On Linux](#on-linux).
 
 | Keys | Action |
 |---|---|
