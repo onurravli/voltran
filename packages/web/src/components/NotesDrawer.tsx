@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { PaneView } from '@voltran/shared';
 import { blockedBy, markNotesSeen, notesFor } from '../notes.ts';
 import { useUi } from '../store.ts';
+import { keys } from '../shortcuts.ts';
 import { peekTerminal } from '../terminals.ts';
 import { CloseIcon } from './Icons.tsx';
 
@@ -57,7 +58,7 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
             <div className="notes__header">
                 <span className="notes__title">Notes</span>
                 <span className="notes__status" aria-live="polite">{status}</span>
-                <button type="button" className="icon-button" title="Hide notes (⌃⌥E)" onClick={() => useUi.getState().toggleNotes(pane.id)}>
+                <button type="button" className="icon-button" title={`Hide notes (${keys('⌃⌥E')})`} onClick={() => useUi.getState().toggleNotes(pane.id)}>
                     <CloseIcon size={14} />
                 </button>
             </div>

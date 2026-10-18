@@ -1,8 +1,13 @@
 import type { AppState, PaneView, Session } from '@voltran/shared';
 import { api } from './api.ts';
+import { isPrimaryChord, keyLabel } from './keymap.ts';
 import { revealPane } from './notify.ts';
 import { attentionPanes, reportError, selectedWorkspace, shownPaneIds, useUi } from './store.ts';
 import { removeFromWorkspace } from './workspace-actions.ts';
+
+export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+export const keys = (mac: string): string => keyLabel(mac, IS_MAC);
 
 interface Shortcut {
     code: string;
@@ -150,7 +155,7 @@ export function toggleZen(): void {
     document.documentElement.requestFullscreen()
         .then(() => keyboardLock()?.lock(['Escape']))
         .catch(() => undefined);
-    showToast('Zen mode. ⇧Esc or ⌃⌥Z to leave');
+    showToast(`Zen mode. ${keys('⇧Esc')} or ${keys('⌃⌥Z')} to leave`);
 }
 
 // An exited pane has no process left to stop, so closing it does not ask first.
@@ -191,20 +196,20 @@ function toggleFocusedNotes(): void {
 }
 
 export const SHORTCUTS: Shortcut[] = [
-    { code: 'KeyK', keys: '⌘K', label: 'Open the command palette', run: togglePalette },
-    { code: 'KeyJ', keys: '⌃⌥J', label: 'Jump to the next pane that needs you', run: jumpToAttention },
-    { code: 'KeyB', keys: '⌃⌥B', label: 'Show or hide the sidebar', run: () => useUi.getState().toggleSidebar() },
-    { code: 'KeyZ', keys: '⌃⌥Z', label: 'Zen mode: the focused pane, full screen, nothing else (⇧Esc leaves)', run: toggleZen },
-    { code: 'KeyN', keys: '⌃⌥N', label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
-    { code: 'ArrowUp', keys: '⌃⌥↑', label: 'Previous workspace or session', run: () => stepSession(-1) },
-    { code: 'ArrowDown', keys: '⌃⌥↓', label: 'Next workspace or session', run: () => stepSession(1) },
-    { code: 'ArrowLeft', keys: '⌃⌥←', label: 'Previous pane on screen', run: () => stepPane(-1) },
-    { code: 'ArrowRight', keys: '⌃⌥→', label: 'Next pane on screen', run: () => stepPane(1) },
-    { code: 'Backslash', keys: '⌃⌥\\', label: 'Split the focused pane to the right with a shell', run: () => splitFocused('horizontal') },
-    { code: 'Minus', keys: '⌃⌥-', label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
+    { code: 'KeyK', keys: keys('⌘K'), label: 'Open the command palette', run: togglePalette },
+    { code: 'KeyJ', keys: keys('⌃⌥J'), label: 'Jump to the next pane that needs you', run: jumpToAttention },
+    { code: 'KeyB', keys: keys('⌃⌥B'), label: 'Show or hide the sidebar', run: () => useUi.getState().toggleSidebar() },
+    { code: 'KeyZ', keys: keys('⌃⌥Z'), label: `Zen mode: the focused pane, full screen, nothing else (${keys('⇧Esc')} leaves)`, run: toggleZen },
+    { code: 'KeyN', keys: keys('⌃⌥N'), label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
+    { code: 'ArrowUp', keys: keys('⌃⌥↑'), label: 'Previous workspace or session', run: () => stepSession(-1) },
+    { code: 'ArrowDown', keys: keys('⌃⌥↓'), label: 'Next workspace or session', run: () => stepSession(1) },
+    { code: 'ArrowLeft', keys: keys('⌃⌥←'), label: 'Previous pane on screen', run: () => stepPane(-1) },
+    { code: 'ArrowRight', keys: keys('⌃⌥→'), label: 'Next pane on screen', run: () => stepPane(1) },
+    { code: 'Backslash', keys: keys('⌃⌥\\'), label: 'Split the focused pane to the right with a shell', run: () => splitFocused('horizontal') },
+    { code: 'Minus', keys: keys('⌃⌥-'), label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
     {
         code: 'Enter',
-        keys: '⌃⌥↩',
+        keys: keys('⌃⌥↩'),
         label: 'Maximize or restore the focused pane',
         run: () => {
             const { focusedPaneId, toggleMaximize } = useUi.getState();
@@ -213,15 +218,15 @@ export const SHORTCUTS: Shortcut[] = [
             }
         },
     },
-    { code: 'KeyW', keys: '⌃⌥W', label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
-    { code: 'KeyE', keys: '⌃⌥E', label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
-    { code: 'Slash', keys: '⌃⌥/', label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
+    { code: 'KeyW', keys: keys('⌃⌥W'), label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
+    { code: 'KeyE', keys: keys('⌃⌥E'), label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
+    { code: 'Slash', keys: keys('⌃⌥/'), label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
 ];
 
 const BY_CODE = new Map(SHORTCUTS.map((shortcut) => [shortcut.code, shortcut]));
 
 function isPaletteKey(event: KeyboardEvent): boolean {
-    return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyK';
+    return isPrimaryChord(event, IS_MAC) && event.code === 'KeyK';
 }
 
 export function visibleFocusedPane(): string | null {
@@ -234,16 +239,21 @@ function findablePane(): string | null {
 }
 
 function isFindKey(event: KeyboardEvent): boolean {
-    return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyF' && findablePane() !== null;
+    return isPrimaryChord(event, IS_MAC) && event.code === 'KeyF' && findablePane() !== null;
 }
 
 function isFindStepKey(event: KeyboardEvent): boolean {
-    return event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'KeyG' && useUi.getState().findPaneId !== null;
+    const step = IS_MAC
+        ? event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'KeyG'
+        : !event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'F3';
+    return step && useUi.getState().findPaneId !== null;
 }
 
-export const FIND_SHORTCUT = { keys: '⌘F', label: 'Find in the focused terminal' };
+export const FIND_SHORTCUT = { keys: keys('⌘F'), label: 'Find in the focused terminal' };
 
-export const FIND_KEYS = [FIND_SHORTCUT, { keys: '⌘G / ⇧⌘G', label: 'Next / previous match' }];
+export const FIND_STEP_KEYS = IS_MAC ? { next: '⌘G', previous: '⇧⌘G' } : { next: 'F3', previous: 'Shift+F3' };
+
+export const FIND_KEYS = [FIND_SHORTCUT, { keys: `${FIND_STEP_KEYS.next} / ${FIND_STEP_KEYS.previous}`, label: 'Next / previous match' }];
 
 function isZenExitKey(event: KeyboardEvent): boolean {
     return event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && useUi.getState().zen;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Workspace } from '@voltran/shared';
 import { paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
+import { keys } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { draggedItem, dropIntoWorkspace, endDrag, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
 import { InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
@@ -34,7 +35,7 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
             <button
                 type="button"
                 className="icon-button icon-button--bar"
-                title={sidebarHidden ? 'Show the sidebar (⌃⌥B)' : 'Hide the sidebar (⌃⌥B)'}
+                title={sidebarHidden ? `Show the sidebar (${keys('⌃⌥B')})` : `Hide the sidebar (${keys('⌃⌥B')})`}
                 aria-label={sidebarHidden ? 'Show the sidebar' : 'Hide the sidebar'}
                 aria-pressed={!sidebarHidden}
                 onClick={toggleSidebar}

@@ -37,3 +37,17 @@ function chord(event: KeyInput): string {
 export function translateKey(event: KeyInput): string | null {
     return SEQUENCES.get(chord(event)) ?? null;
 }
+
+// Elsewhere ⌘ is the Super key, which the desktop keeps for itself, so the shortcuts that use ⌘ on a
+// Mac use Ctrl+Shift there, as Linux terminals do: plain Ctrl+K and Ctrl+F belong to the terminal.
+export function isPrimaryChord(event: KeyInput, mac: boolean): boolean {
+    return mac
+        ? event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+        : event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey;
+}
+
+const KEY_NAMES: [string, string][] = [['⌃', 'Ctrl+'], ['⌥', 'Alt+'], ['⇧', 'Shift+'], ['⌘', 'Ctrl+Shift+'], ['↩', 'Enter'], ['⌫', 'Backspace']];
+
+export function keyLabel(keys: string, mac: boolean): string {
+    return mac ? keys : KEY_NAMES.reduce((label, [glyph, name]) => label.replaceAll(glyph, name), keys);
+}

@@ -6,6 +6,7 @@ import { PANE_DRAG_TYPE, SESSION_DRAG_TYPE } from '../drag.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH_STEP, draggedSidebarWidth } from '../sidebar.ts';
 import { gitLabels } from '../labels.ts';
+import { keys } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
@@ -446,7 +447,7 @@ function Footer() {
                         {showArchived ? 'Hide archived' : `Archived (${archivedCount})`}
                     </button>
                 ) : null}
-                <button type="button" className="icon-button sidebar__keys" title="Keyboard shortcuts (⌃⌥/)" onClick={() => openDialog({ kind: 'shortcuts' })}>
+                <button type="button" className="icon-button sidebar__keys" title={`Keyboard shortcuts (${keys('⌃⌥/')})`} onClick={() => openDialog({ kind: 'shortcuts' })}>
                     <KeyboardIcon size={15} />
                 </button>
             </div>
@@ -538,7 +539,7 @@ export function Sidebar() {
                     type="button"
                     className="button button--bar"
                     onClick={() => openDialog({ kind: projects.length === 0 ? 'project' : 'session' })}
-                    title="Start a new session (⌃⌥N)"
+                    title={`Start a new session (${keys('⌃⌥N')})`}
                 >
                     <PlusIcon size={13} /> Session
                 </button>

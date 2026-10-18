@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { translateKey, type KeyInput } from './keymap.ts';
+import { isPrimaryChord, keyLabel, translateKey, type KeyInput } from './keymap.ts';
 
 type Modifiers = Partial<Omit<KeyInput, 'key'>>;
 
@@ -55,5 +55,31 @@ describe('translateKey', () => {
         ['a', 'a', {}],
     ] as const)('leaves %s to xterm and the browser', (_label, key, modifiers) => {
         expect(press(key, modifiers)).toBeNull();
+    });
+});
+
+describe('isPrimaryChord', () => {
+    const chord = (modifiers: Modifiers): KeyInput => ({ key: 'k', metaKey: false, altKey: false, ctrlKey: false, shiftKey: false, ...modifiers });
+
+    it('is ⌘ alone on a Mac and Ctrl+Shift elsewhere', () => {
+        expect(isPrimaryChord(chord({ metaKey: true }), true)).toBe(true);
+        expect(isPrimaryChord(chord({ ctrlKey: true, shiftKey: true }), true)).toBe(false);
+        expect(isPrimaryChord(chord({ ctrlKey: true, shiftKey: true }), false)).toBe(true);
+        expect(isPrimaryChord(chord({ metaKey: true }), false)).toBe(false);
+        expect(isPrimaryChord(chord({ ctrlKey: true }), false)).toBe(false);
+        expect(isPrimaryChord(chord({ ctrlKey: true, shiftKey: true, altKey: true }), false)).toBe(false);
+    });
+});
+
+describe('keyLabel', () => {
+    it.each([
+        ['⌃⌥J', 'Ctrl+Alt+J'],
+        ['⌃⌥↑', 'Ctrl+Alt+↑'],
+        ['⌃⌥↩', 'Ctrl+Alt+Enter'],
+        ['⌘K', 'Ctrl+Shift+K'],
+        ['⇧Esc', 'Shift+Esc'],
+    ])('names %s as %s off a Mac', (keys, expected) => {
+        expect(keyLabel(keys, false)).toBe(expected);
+        expect(keyLabel(keys, true)).toBe(keys);
     });
 });

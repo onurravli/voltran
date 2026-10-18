@@ -6,7 +6,7 @@ import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
 import { gitLabels, linkLabel, pullRequestLabel, shortPath } from '../labels.ts';
 import { notesFresh } from '../notes.ts';
-import { closePane } from '../shortcuts.ts';
+import { FIND_STEP_KEYS, closePane, keys } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
 import { draggedItem, dropIntoWorkspace, endDrag, removeFromWorkspace, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
@@ -116,10 +116,10 @@ function FindBar({ paneId }: { paneId: string }) {
                 }}
             />
             <span className="find__count" aria-live="polite">{status}</span>
-            <button type="button" className="icon-button" aria-label="Previous match (⇧⌘G)" title="Previous match (⇧⌘G)" disabled={count === 0} onClick={() => move('previous')}>
+            <button type="button" className="icon-button" aria-label={`Previous match (${FIND_STEP_KEYS.previous})`} title={`Previous match (${FIND_STEP_KEYS.previous})`} disabled={count === 0} onClick={() => move('previous')}>
                 <ChevronUpIcon size={14} />
             </button>
-            <button type="button" className="icon-button" aria-label="Next match (⌘G)" title="Next match (⌘G)" disabled={count === 0} onClick={() => move('next')}>
+            <button type="button" className="icon-button" aria-label={`Next match (${FIND_STEP_KEYS.next})`} title={`Next match (${FIND_STEP_KEYS.next})`} disabled={count === 0} onClick={() => move('next')}>
                 <ChevronDownIcon size={14} />
             </button>
             <button type="button" className="icon-button" aria-label="Close (Esc)" title="Close (Esc)" onClick={close}>
@@ -291,7 +291,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                         type="button"
                         className={`icon-button pane__notes-toggle${pane.notes.size > 0 ? ' has-notes' : ''}${!notesOpen && notesFresh(pane.id, pane.notes) ? ' is-fresh' : ''}`}
                         aria-expanded={notesOpen}
-                        title={notesOpen ? 'Hide notes (⌃⌥E)' : 'Show notes (⌃⌥E)'}
+                        title={notesOpen ? `Hide notes (${keys('⌃⌥E')})` : `Show notes (${keys('⌃⌥E')})`}
                         onClick={() => useUi.getState().toggleNotes(pane.id)}
                     >
                         <NotesIcon size={14} />
@@ -304,7 +304,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <button type="button" className="icon-button" title="Split down" onClick={(event) => split(event, 'vertical')}>
                         <SplitDownIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title={maximized ? 'Restore (⌃⌥↩)' : 'Maximize (⌃⌥↩)'} onClick={() => toggleMaximize(pane.id)}>
+                    <button type="button" className="icon-button" title={maximized ? `Restore (${keys('⌃⌥↩')})` : `Maximize (${keys('⌃⌥↩')})`} onClick={() => toggleMaximize(pane.id)}>
                         {maximized ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
                     </button>
                     {running ? (
@@ -320,7 +320,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     >
                         <RestartIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title={inWorkspace ? 'Remove from this workspace (⌃⌥W)' : 'Close pane (⌃⌥W)'} onClick={close}>
+                    <button type="button" className="icon-button" title={inWorkspace ? `Remove from this workspace (${keys('⌃⌥W')})` : `Close pane (${keys('⌃⌥W')})`} onClick={close}>
                         <CloseIcon size={14} />
                     </button>
                 </div>
@@ -518,7 +518,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
             <button
                 type="button"
                 className="icon-button icon-button--bar"
-                title={sidebarHidden ? 'Show the sidebar (⌃⌥B)' : 'Hide the sidebar (⌃⌥B)'}
+                title={sidebarHidden ? `Show the sidebar (${keys('⌃⌥B')})` : `Hide the sidebar (${keys('⌃⌥B')})`}
                 aria-label={sidebarHidden ? 'Show the sidebar' : 'Hide the sidebar'}
                 aria-pressed={!sidebarHidden}
                 onClick={toggleSidebar}
