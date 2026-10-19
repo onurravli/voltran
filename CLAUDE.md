@@ -78,6 +78,12 @@ same for every pane. A Codex pane uses `ActivityTracker` until its first hook ar
 heuristics). Adapters (`claude`, `opencode`, `codex`, `antigravity`, `shell`, `command`, `subagent`)
 are defined in `adapters.ts`.
 
+**Session titles.** A session created without a title is `titleSource: 'pending'` and needs a pane
+whose adapter reports hooks. `naming.ts` (`SessionNamer`) takes the first prompt any agent reports
+(`'prompt'`), then for Claude reads the `ai-title` entry Claude Code writes near the top of its
+transcript during the first turn (`readAiTitle`, `'agent'`): at most every 2 s and 30 times per
+session, plus once more 4 s after a `Stop`. A title the user sets is `'user'` and is never replaced.
+
 **Subagents.** `subagents.ts` tracks each Claude pane's running subagents from hooks: `SubagentStart`
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
 `PostToolUse`, and background agents are reconciled against the `background_tasks` list on `Stop`.

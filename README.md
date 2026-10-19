@@ -77,6 +77,9 @@ Voltran runs the same way on Linux, with these differences:
 - **Project**: a folder or repository you work in.
 - **Session**: one piece of work inside a project, such as a ticket, a branch or an investigation.
   It can carry a link to its ticket or pull request, and it can work in a git worktree of its own.
+  A session that starts with Claude Code, Codex or OpenCode needs no title: it is called "New
+  session" until your first prompt, which names it, and a Claude Code session then takes the title
+  Claude gives the conversation. Renaming it yourself keeps your title.
 - **Pane**: a terminal inside a session, which runs an agent (Claude Code, OpenCode, Codex,
   Antigravity), a shell, or a command such as `npm run dev`. Panes split right or down and resize freely. A
   command that starts with `claude`, such as `claude --plugin-dir ./my-plugin`, opens a Claude Code
