@@ -502,7 +502,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                 <span className="session-header__project" title={project?.path}>{project?.name}</span>
                 <span className="session-header__slash" aria-hidden="true">/</span>
                 <InlineEdit
-                    className="session-header__title"
+                    className={`session-header__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}
                     label="Session name"
                     value={session.title}
                     editing={renaming}

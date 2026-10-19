@@ -40,10 +40,15 @@ export interface Project {
     createdAt: number;
 }
 
+// Where a session's title came from. Voltran names a 'pending' session from its first prompt and
+// then from Claude Code's own title for the conversation; a title the user gives is never replaced.
+export type TitleSource = 'user' | 'pending' | 'prompt' | 'agent';
+
 export interface Session {
     id: string;
     projectId: string;
     title: string;
+    titleSource: TitleSource;
     link: string | null;
     cwd: string;
     worktree: string | null;
@@ -148,6 +153,7 @@ export interface AdapterInfo {
     kind: PaneKind;
     statusSource: StatusSource;
     resumable: boolean;
+    reportsHooks: boolean;
     available: boolean;
 }
 
@@ -179,7 +185,7 @@ export interface UpdateProjectBody {
 
 export interface CreateSessionBody {
     projectId: string;
-    title: string;
+    title?: string;
     link?: string | null;
     panes?: PaneSpec[];
     worktree?: { branch: string; base?: string };

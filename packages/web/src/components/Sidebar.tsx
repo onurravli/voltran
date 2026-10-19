@@ -185,7 +185,7 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 >
                     <StatusLamp status={status} failed={failed} />
                     <span className="session-row__text">
-                        <span className="session-row__title">{session.title}</span>
+                        <span className={`session-row__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}>{session.title}</span>
                         {showDetail ? (
                             <span className="session-row__detail">{lead.detail}</span>
                         ) : worktreeBranch ? (

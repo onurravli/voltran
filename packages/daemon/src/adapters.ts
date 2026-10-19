@@ -279,6 +279,7 @@ export function describeAdapters(path: string): AdapterInfo[] {
         label: definition.label,
         kind: definition.kind,
         statusSource: definition.statusSource,
+        reportsHooks: definition.reportsHooks,
         resumable: definition.resumable,
         available: definition.binary === null || findOnPath(definition.binary, path) !== null,
     }));

@@ -127,6 +127,9 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
         setPicks((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
     };
 
+    const commandAdapter = command.trim() ? commandPane(command).adapter : null;
+    const namesItself = adapters.some((adapter) => adapter.reportsHooks && (picks.includes(adapter.id) || adapter.id === commandAdapter));
+
     const submit = async (event: FormEvent): Promise<void> => {
         event.preventDefault();
         const panes: PaneSpec[] = picks.map((adapter) => ({ adapter }));
@@ -139,7 +142,7 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
             const own = git?.repository === true && worktree;
             const session = await api.createSession({
                 projectId: project,
-                title: title.trim(),
+                title: title.trim() || undefined,
                 link: link.trim() || null,
                 panes,
                 ...(own ? { worktree: { branch: branchName.trim(), ...(base ? { base } : {}) } } : {}),
@@ -164,13 +167,15 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
         <Modal title="Start a session" onClose={onClose}>
             <form className="form" onSubmit={submit}>
                 <label className="field">
-                    <span className="field__label">What are you working on?</span>
+                    <span className="field__label">
+                        What are you working on?{namesItself ? <> <span className="field__optional">optional</span></> : null}
+                    </span>
                     <input
                         className="field__input"
                         value={title}
                         onChange={(event) => setTitle(event.target.value)}
-                        placeholder="Fix login redirect, PROJ-123, flaky test hunt…"
-                        required
+                        placeholder={namesItself ? 'Leave it empty and the agent names it from your first prompt' : 'Fix login redirect, PROJ-123, flaky test hunt…'}
+                        required={!namesItself}
                     />
                 </label>
                 <div className="field-row">
@@ -239,7 +244,7 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                 {error ? <p className="form__error" role="alert">{error}</p> : null}
                 <div className="form__actions">
                     <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
-                    <button type="submit" className="button button--primary" disabled={busy || !title.trim() || !project || (picks.length === 0 && !command.trim()) || (git?.repository === true && worktree && !branchName.trim())}>
+                    <button type="submit" className="button button--primary" disabled={busy || (!title.trim() && !namesItself) || !project || (picks.length === 0 && !command.trim()) || (git?.repository === true && worktree && !branchName.trim())}>
                         {busy && git?.repository && worktree ? 'Creating the worktree…' : 'Start session'}
                     </button>
                 </div>

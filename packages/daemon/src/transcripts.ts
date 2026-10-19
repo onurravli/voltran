@@ -9,6 +9,7 @@ const MAX_CHUNK_BYTES = 1024 * 1024;
 const MAX_TEXT = 20_000;
 const MAX_RESULT = 2_000;
 const MAX_SUMMARY = 140;
+const MAX_TITLE_SCAN_BYTES = 512 * 1024;
 
 export interface SubagentMeta {
     description: string | null;
@@ -25,6 +26,49 @@ export function subagentTranscriptPath(parentTranscript: unknown, sessionId: unk
         return null;
     }
     return join(dirname(parentTranscript), sessionId, 'subagents', `agent-${agentId}.jsonl`);
+}
+
+// Claude Code names a conversation during its first turn with an internal `ai-title` entry near the
+// top of the transcript, so only the start of the file is read. The path must name the conversation
+// the hook reported and be a regular file.
+export function readAiTitle(transcript: unknown, sessionId: unknown): string | null {
+    if (typeof transcript !== 'string' || typeof sessionId !== 'string' || !isAbsolute(transcript)) {
+        return null;
+    }
+    if (!SESSION_ID.test(sessionId) || basename(transcript) !== `${sessionId}.jsonl`) {
+        return null;
+    }
+    let text: string;
+    let fd: number | null = null;
+    try {
+        if (!lstatSync(transcript).isFile()) {
+            return null;
+        }
+        fd = openSync(transcript, 'r');
+        const buffer = Buffer.alloc(Math.min(fstatSync(fd).size, MAX_TITLE_SCAN_BYTES));
+        text = buffer.toString('utf8', 0, readSync(fd, buffer, 0, buffer.length, 0));
+    } catch {
+        return null;
+    } finally {
+        if (fd !== null) {
+            closeSync(fd);
+        }
+    }
+    let title: string | null = null;
+    for (const line of text.split('\n')) {
+        if (!line.includes('"ai-title"')) {
+            continue;
+        }
+        try {
+            const entry = JSON.parse(line) as { type?: unknown; aiTitle?: unknown };
+            if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string' && entry.aiTitle.trim()) {
+                title = entry.aiTitle.trim().replace(/\s+/g, ' ');
+            }
+        } catch {
+            continue;
+        }
+    }
+    return title;
 }
 
 function insideSubagents(path: string): boolean {

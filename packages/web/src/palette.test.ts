@@ -36,6 +36,7 @@ const session = (id: string, title: string, archived = false): Session => ({
     id,
     projectId: 'project',
     title,
+    titleSource: 'user',
     link: null,
     cwd: '/tmp',
     worktree: null,

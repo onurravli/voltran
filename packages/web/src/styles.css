@@ -555,6 +555,11 @@ kbd {
     margin-top: calc(4px + (1.4em - 18.2px) / 2);
 }
 
+.session-row__title.title--pending,
+.session-header__title.title--pending {
+    color: var(--text-faint);
+}
+
 .session-row:hover {
     background: var(--rivet-soft);
 }

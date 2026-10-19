@@ -6,7 +6,7 @@ const leaf = (paneId: string): Layout => ({ type: 'pane', paneId });
 const row = (...ids: string[]): Layout => ({ type: 'split', direction: 'horizontal', children: ids.map(leaf), sizes: ids.map(() => 100 / ids.length) });
 const column = (...ids: string[]): Layout => ({ type: 'split', direction: 'vertical', children: ids.map(leaf), sizes: ids.map(() => 100 / ids.length) });
 
-const session = (id: string, layout: Layout | null): Session => ({ id, projectId: 'p', title: id, link: null, cwd: '/tmp', worktree: null, layout, archived: false, createdAt: 0, updatedAt: 0 });
+const session = (id: string, layout: Layout | null): Session => ({ id, projectId: 'p', title: id, titleSource: 'user', link: null, cwd: '/tmp', worktree: null, layout, archived: false, createdAt: 0, updatedAt: 0 });
 const pane = (id: string, sessionId: string, status: PaneView['status'] = 'idle'): PaneView => ({ id, sessionId, status } as PaneView);
 const workspace = (layout: Layout | null, title = 'w'): Workspace => ({ id: 'w', title, layout, createdAt: 0, updatedAt: 0 });
 

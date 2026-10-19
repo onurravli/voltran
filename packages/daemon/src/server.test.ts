@@ -13,7 +13,8 @@ import { buildDaemon, type Daemon } from './main.ts';
 
 // Stands in for the real CLI: runs the exact hook commands Voltran handed it through --settings,
 // so the env plumbing and the per-pane secret are exercised end to end. With --notes-test it also
-// starts a session and writes the pane's notes the way Claude's Write tool would.
+// starts a session and writes the pane's notes the way Claude's Write tool would; with --title-test it
+// writes a transcript in which Claude has named the conversation and stops.
 const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
 settings=$2
@@ -26,6 +27,11 @@ case "$*" in *--notes-test*)
     sleep 1
     printf 'agent progress\\n' > "$VOLTRAN_NOTES"
     printf '%s' "$call" | sh -c "$(hook PostToolUse 0)"
+;; esac
+case "$*" in *--title-test*)
+    sid=11111111-2222-3333-4444-555555555555
+    printf '{"type":"ai-title","aiTitle":"Fake conversation title","sessionId":"%s"}\\n' "$sid" > "$PWD/$sid.jsonl"
+    printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$PWD/$sid.jsonl" | sh -c "$(hook Stop 0)"
 ;; esac
 sleep 30
 `;
@@ -482,6 +488,40 @@ describe('agent panes', () => {
         await api('DELETE', `/api/sessions/${session.id}`);
         const scrollback = join(home, 'data', 'scrollback');
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
+    });
+
+    it('names a session started without a title from its agents, until the user renames it', async () => {
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'naming-')) });
+        const refused = await api<{ error: string }>('POST', '/api/sessions', { projectId: project.id, panes: [{ adapter: 'shell' }] });
+        expect(refused.status).toBe(400);
+
+        const start = async (adapter: 'claude' | 'codex', command?: string): Promise<{ session: Session; socket: WebSocket }> => {
+            const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: '  ', panes: [{ adapter, command }] });
+            const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneIds(session.layout)[0]}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+            await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+            socket.send(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
+            return { session, socket };
+        };
+        const titleOf = async (id: string): Promise<Pick<Session, 'title' | 'titleSource'> | undefined> => {
+            const session = (await api<AppState>('GET', '/api/state')).body.sessions.find((entry) => entry.id === id);
+            return session && { title: session.title, titleSource: session.titleSource };
+        };
+
+        const claude = await start('claude', '--title-test');
+        expect(claude.session).toMatchObject({ title: 'New session', titleSource: 'pending' });
+        await until(async () => (await titleOf(claude.session.id))?.titleSource === 'agent');
+        expect(await titleOf(claude.session.id)).toEqual({ title: 'Fake conversation title', titleSource: 'agent' });
+
+        const codex = await start('codex');
+        await until(async () => (await titleOf(codex.session.id))?.titleSource === 'prompt');
+        expect(await titleOf(codex.session.id)).toEqual({ title: 'bump postgres', titleSource: 'prompt' });
+        await api('PATCH', `/api/sessions/${codex.session.id}`, { title: 'Postgres upgrade' });
+        expect(await titleOf(codex.session.id)).toEqual({ title: 'Postgres upgrade', titleSource: 'user' });
+
+        for (const { session, socket } of [claude, codex]) {
+            socket.close();
+            await api('DELETE', `/api/sessions/${session.id}`);
+        }
     });
 
     it('give Claude the pane notes and hold them while Claude edits them', async () => {

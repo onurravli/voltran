@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { AdapterId, Layout, Pane, Project, Session, Workspace } from '@voltran/shared';
+import type { AdapterId, Layout, Pane, Project, Session, TitleSource, Workspace } from '@voltran/shared';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const SCHEMA = `
 create table if not exists projects (
@@ -16,6 +16,7 @@ create table if not exists sessions (
     id text primary key,
     project_id text not null references projects(id) on delete cascade,
     title text not null,
+    title_source text not null default 'user',
     link text,
     cwd text not null,
     worktree text,
@@ -59,6 +60,7 @@ const toSession = (row: Row): Session => ({
     id: String(row.id),
     projectId: String(row.project_id),
     title: String(row.title),
+    titleSource: (row.title_source ?? 'user') as TitleSource,
     link: row.link === null ? null : String(row.link),
     cwd: String(row.cwd),
     worktree: row.worktree === null || row.worktree === undefined ? null : String(row.worktree),
@@ -99,6 +101,9 @@ export class Store {
         const sessionColumns = this.db.prepare('pragma table_info(sessions)').all() as Row[];
         if (!sessionColumns.some((column) => column.name === 'worktree')) {
             this.db.exec('alter table sessions add column worktree text');
+        }
+        if (!sessionColumns.some((column) => column.name === 'title_source')) {
+            this.db.exec(`alter table sessions add column title_source text not null default 'user'`);
         }
         // Gemini CLI panes from before Antigravity replaced it would name an adapter that no longer exists.
         this.db.exec(`update panes set adapter = 'antigravity' where adapter = 'gemini'`);
@@ -173,12 +178,13 @@ export class Store {
     }
 
     insertSession(session: Session): void {
-        this.db.prepare(`insert into sessions (id, project_id, title, link, cwd, worktree, layout, archived, created_at, updated_at)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        this.db.prepare(`insert into sessions (id, project_id, title, title_source, link, cwd, worktree, layout, archived, created_at, updated_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
             .run(
                 session.id,
                 session.projectId,
                 session.title,
+                session.titleSource,
                 session.link,
                 session.cwd,
                 session.worktree,
@@ -189,14 +195,14 @@ export class Store {
             );
     }
 
-    updateSession(id: string, patch: Partial<Pick<Session, 'title' | 'link' | 'archived' | 'layout'>>): void {
+    updateSession(id: string, patch: Partial<Pick<Session, 'title' | 'titleSource' | 'link' | 'archived' | 'layout'>>): void {
         const current = this.getSession(id);
         if (!current) {
             return;
         }
         const next = { ...current, ...patch, updatedAt: Date.now() };
-        this.db.prepare('update sessions set title = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?')
-            .run(next.title, next.link, next.archived ? 1 : 0, next.layout ? JSON.stringify(next.layout) : null, next.updatedAt, id);
+        this.db.prepare('update sessions set title = ?, title_source = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?')
+            .run(next.title, next.titleSource, next.link, next.archived ? 1 : 0, next.layout ? JSON.stringify(next.layout) : null, next.updatedAt, id);
     }
 
     deleteSession(id: string): void {

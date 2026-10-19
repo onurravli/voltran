@@ -37,6 +37,7 @@ import {
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
+import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
 import { PaneManager } from './panes.ts';
 import type { Store } from './store.ts';
@@ -70,6 +71,7 @@ export interface HubOptions {
 type Listener = (event: ServerEvent) => void;
 
 const BROADCAST_DELAY_MS = 30;
+const TITLE_RETRY_MS = 4000;
 const MAX_TITLE = 200;
 const MAX_COMMAND = 4000;
 const NOTES_HOLDER = /^[A-Za-z0-9-]{8,64}$/;
@@ -132,6 +134,8 @@ export class Hub {
     private listeners = new Set<Listener>();
     private broadcastTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly closeOnCleanExit = new Set<string>();
+    private readonly namer = new SessionNamer();
+    private readonly namingTimers = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(options: HubOptions) {
         this.store = options.store;
@@ -201,6 +205,8 @@ export class Hub {
 
     shutdown(): Promise<void> {
         this.notes.close();
+        this.namingTimers.forEach(clearTimeout);
+        this.namingTimers.clear();
         if (this.broadcastTimer) {
             clearTimeout(this.broadcastTimer);
             this.broadcastTimer = null;
@@ -288,7 +294,10 @@ export class Hub {
             throw new HttpError(400, 'a session starts with at most 8 panes');
         }
         specs.forEach((spec) => this.validatePaneSpec(spec));
-        const title = requireString(body.title, 'title', MAX_TITLE);
+        const title = typeof body.title === 'string' && body.title.trim() ? requireString(body.title, 'title', MAX_TITLE) : null;
+        if (title === null && !specs.some((spec) => adapterFor(spec.adapter).reportsHooks)) {
+            throw new HttpError(400, 'a session needs a title unless it starts with Claude Code, Codex or OpenCode, which name it');
+        }
         const link = optionalLink(body.link);
         const worktree = body.worktree === undefined ? null : await this.createWorktree(project, body.worktree);
         if (!this.store.getProject(project.id)) {
@@ -302,7 +311,8 @@ export class Hub {
         const session: Session = {
             id: randomUUID(),
             projectId: project.id,
-            title,
+            title: title ?? PENDING_TITLE,
+            titleSource: title === null ? 'pending' : 'user',
             link,
             cwd: worktree?.cwd ?? project.path,
             worktree: worktree?.root ?? null,
@@ -328,9 +338,11 @@ export class Hub {
 
     updateSession(id: string, body: UpdateSessionBody): Session {
         const session = this.mustGetSession(id);
-        const patch: Partial<Pick<Session, 'title' | 'link' | 'archived' | 'layout'>> = {};
+        const patch: Partial<Pick<Session, 'title' | 'titleSource' | 'link' | 'archived' | 'layout'>> = {};
         if (body.title !== undefined) {
             patch.title = requireString(body.title, 'title', MAX_TITLE);
+            patch.titleSource = 'user';
+            this.namer.forget(id);
         }
         if (body.link !== undefined) {
             patch.link = optionalLink(body.link);
@@ -377,6 +389,7 @@ export class Hub {
         }
         this.removeSessionPanes(id);
         this.store.deleteSession(id);
+        this.namer.forget(id);
         this.pruneWorkspaces();
         this.scheduleBroadcast();
         if (removeWorktree && session.worktree) {
@@ -530,6 +543,7 @@ export class Hub {
         const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
         if (handled) {
             this.trackNotesEdit(paneId, event, payload as Record<string, unknown>);
+            this.nameSession(paneId, event, payload as Record<string, unknown>, true);
         }
         if (handled && (event === 'PostToolUse' || event === 'Stop' || event === 'ToolEnd' || event === 'TurnEnd')) {
             const session = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '');
@@ -538,6 +552,28 @@ export class Hub {
             }
         }
         return handled;
+    }
+
+    // Claude can finish naming the conversation after a short first turn has already stopped, so a
+    // Stop looks once more a little later.
+    private nameSession(paneId: string, event: string, payload: Record<string, unknown>, retry: boolean): void {
+        const pane = this.store.getPane(paneId);
+        const session = pane ? this.store.getSession(pane.sessionId) : undefined;
+        if (!pane || !session) {
+            return;
+        }
+        const named = this.namer.name(session, pane, event, payload);
+        if (named) {
+            this.store.updateSession(session.id, named);
+            this.scheduleBroadcast();
+        }
+        if (retry && event === 'Stop' && pane.adapter === 'claude' && (named?.titleSource ?? session.titleSource) === 'prompt') {
+            const timer = setTimeout(() => {
+                this.namingTimers.delete(timer);
+                this.nameSession(paneId, event, payload, false);
+            }, TITLE_RETRY_MS);
+            this.namingTimers.add(timer);
+        }
     }
 
     paneNotes(id: string): PaneNotes {
