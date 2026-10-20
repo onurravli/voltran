@@ -4,7 +4,7 @@
   "private": true,
   "description": "Local multi-agent session and terminal orchestrator",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.18"
   },

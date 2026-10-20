@@ -384,3 +384,9 @@ experiments away from your real sessions.
 - An agent-to-agent message bus exposed as an MCP server
 - A native window (Tauri) with a dock badge and global shortcuts
 - Project providers that discover work automatically, for example task folders in a repository
+
+## License
+
+Voltran is licensed under the [Apache License 2.0](LICENSE.md). Forks and redistributions must keep the
+[NOTICE](NOTICE) file, which credits Voltran and its author; the license does not grant use of the
+Voltran name.
