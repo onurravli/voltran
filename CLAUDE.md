@@ -84,6 +84,15 @@ whose adapter reports hooks. `naming.ts` (`SessionNamer`) takes the first prompt
 transcript during the first turn (`readAiTitle`, `'agent'`): at most every 2 s and 30 times per
 session, plus once more 4 s after a `Stop`. A title the user sets is `'user'` and is never replaced.
 
+**Usage limits.** Claude Code passes the account's `rate_limits` (five-hour and seven-day windows,
+`resets_at` in epoch seconds) only to its status line, so `claudeHookSettings` sets `statusLine` to
+`statusline.sh`. A status line in `--settings` replaces the user's and the project's, so the script
+posts input that carries `rate_limits` to `/api/hooks/:pane/StatusLine` and then runs
+`$VOLTRAN_STATUSLINE`, the user's own command, which the Claude adapter looks up at spawn in Claude's
+order (`userStatusLine` in `statusline.ts`). An idle pane reports the limits from its last response, so
+`mergeUsage` keeps the newest view of each window. `AppState.usage` lives in memory only; the sidebar
+footer draws it (`web/src/usage.ts`).
+
 **Subagents.** `subagents.ts` tracks each Claude pane's running subagents from hooks: `SubagentStart`
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
 `PostToolUse`, and background agents are reconciled against the `background_tasks` list on `Stop`.

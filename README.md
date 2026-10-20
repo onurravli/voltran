@@ -172,6 +172,13 @@ Panes that need you collect in the **Needs you** tray at the bottom of the sideb
 and as desktop notifications once you turn alerts on. While any agent in a project is working, a
 light sweeps along the line in the project's colour under the session's title bar.
 
+### Usage limits
+
+With a Claude Pro or Max login, the bottom of the sidebar shows how much of your five-hour and weekly
+limits is used and how long until each resets. A bar turns amber past half and red past four fifths.
+The bars appear once a Claude Code pane has had a reply and update whenever a Claude pane redraws its
+status line; after a restart they stay hidden until then.
+
 ### Subagents
 
 The subagents a Claude Code pane is running, background ones included, are listed under its session
@@ -300,6 +307,13 @@ packages/
   `SubagentStop` and `SessionEnd`. The hooks `curl` the daemon with a secret that is unique to that
   pane's process. Your own and your repositories' Claude settings stay untouched, because settings
   passed this way add to them rather than replacing them.
+- **Usage limits.** Claude Code hands the account's usage limits only to its status line, so the
+  settings Voltran passes also set one: a script that sends the limits to the daemon with the pane's
+  secret, then runs your own status line command with the same input, taken from the project's
+  settings or yours the way Claude would. Only the command carries over: your `refreshInterval` and
+  `padding` do not apply inside Voltran. A quiet pane reports the limits from its last reply, so the
+  daemon keeps the newest view of each window: the one that resets later, or the higher usage within
+  the same window.
 - **Subagents.** The hooks give each subagent's id, and Claude writes its transcript next to the
   parent session's (`<session>/subagents/agent-<id>.jsonl`). A subagent pane runs a small viewer
   that follows that file; the daemon tells it when the subagent stops.
