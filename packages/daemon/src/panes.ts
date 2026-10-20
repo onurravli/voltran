@@ -243,9 +243,18 @@ export class PaneManager {
         }
     }
 
-    hook(id: string, secret: string, event: string, payload: Record<string, unknown>): boolean {
+    private hookedRuntime(id: string, secret: string): Runtime | null {
         const runtime = this.runtimes.get(id);
-        if (!runtime?.hookSecret || !safeEqual(secret, runtime.hookSecret)) {
+        return runtime?.hookSecret && safeEqual(secret, runtime.hookSecret) ? runtime : null;
+    }
+
+    isClaudeReport(id: string, secret: string): boolean {
+        return this.hookedRuntime(id, secret)?.pane.adapter === 'claude';
+    }
+
+    hook(id: string, secret: string, event: string, payload: Record<string, unknown>): boolean {
+        const runtime = this.hookedRuntime(id, secret);
+        if (!runtime) {
             return false;
         }
         if (runtime.pane.adapter === 'claude' && isClaudeHookEvent(event)) {

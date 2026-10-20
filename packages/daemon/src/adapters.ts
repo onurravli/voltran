@@ -5,6 +5,7 @@ import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
 import { notesGuidePath } from './notes.ts';
+import { userStatusLine } from './statusline.ts';
 
 export interface LaunchSpec {
     file: string;
@@ -25,6 +26,8 @@ export interface LaunchContext {
 const SUBAGENT_VIEWER = fileURLToPath(new URL('./subagent-view.ts', import.meta.url));
 export const OPENCODE_PLUGIN = fileURLToPath(new URL('./opencode-plugin', import.meta.url));
 export const NOTES_HOOK = fileURLToPath(new URL('./notes-hook.sh', import.meta.url));
+export const STATUS_LINE = fileURLToPath(new URL('./statusline.sh', import.meta.url));
+export const STATUS_LINE_EVENT = 'StatusLine';
 
 interface AdapterDefinition {
     id: AdapterId;
@@ -46,7 +49,7 @@ const DEFINITIONS: AdapterDefinition[] = [
         resumable: true,
         reportsHooks: true,
         binary: 'claude',
-        launch: ({ pane, claudeSettingsFile }) => {
+        launch: ({ pane, claudeSettingsFile, baseEnv }) => {
             const args = ['--settings', claudeSettingsFile];
             if (pane.agentSessionId && pane.agentResumable) {
                 args.push('--resume', pane.agentSessionId);
@@ -54,7 +57,9 @@ const DEFINITIONS: AdapterDefinition[] = [
                 args.push('--session-id', pane.agentSessionId);
             }
             args.push(...(splitArgs(pane.command ?? '') ?? []));
-            return { file: 'claude', args };
+            const configDir = baseEnv.CLAUDE_CONFIG_DIR || (baseEnv.HOME ? join(baseEnv.HOME, '.claude') : null);
+            const statusLine = userStatusLine(pane.cwd, configDir);
+            return { file: 'claude', args, ...(statusLine ? { env: { VOLTRAN_STATUSLINE: statusLine } } : {}) };
         },
     },
     {
@@ -340,6 +345,7 @@ const SESSION_SCOPED_ENV = [
     'VOLTRAN_HOOK_SECRET',
     'VOLTRAN_URL',
     'VOLTRAN_NOTES',
+    'VOLTRAN_STATUSLINE',
 ];
 
 export function childEnv(base: NodeJS.ProcessEnv, path: string, extra: Record<string, string> = {}): Record<string, string> {
@@ -447,7 +453,11 @@ export function claudeHookSettings(notesDir: string): object {
     hooks.SessionStart.push({ hooks: [notes('session-start')] });
     hooks.UserPromptSubmit.push({ hooks: [notes('prompt')] });
     hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: [notes('pre-tool-use')] });
-    return { hooks, permissions: { allow: [`Read(/${notesDir}/**)`, `Edit(/${notesDir}/**)`] } };
+    return {
+        hooks,
+        statusLine: { type: 'command', command: `sh ${shellQuote(STATUS_LINE)}` },
+        permissions: { allow: [`Read(/${notesDir}/**)`, `Edit(/${notesDir}/**)`] },
+    };
 }
 
 export function writeClaudeSettings(file: string, notesDir: string): void {

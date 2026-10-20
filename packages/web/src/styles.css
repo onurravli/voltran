@@ -842,6 +842,64 @@ kbd {
     margin-left: auto;
 }
 
+.usage {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 2px 2px 6px;
+    color: var(--text-muted);
+    font-size: calc(11px * var(--ui-scale));
+    font-variant-numeric: tabular-nums;
+}
+
+.usage__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.usage__label {
+    flex: none;
+    width: 2ch;
+    color: var(--text-faint);
+}
+
+.usage__bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--rivet);
+    overflow: hidden;
+}
+
+.usage__fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--live);
+}
+
+.usage__bar--warn .usage__fill {
+    background: var(--signal);
+}
+
+.usage__bar--high .usage__fill {
+    background: var(--fault);
+}
+
+.usage__percent {
+    flex: none;
+    width: 4ch;
+    text-align: right;
+}
+
+.usage__reset {
+    flex: none;
+    width: 6ch;
+    color: var(--text-faint);
+    text-align: right;
+}
+
 .connection {
     display: block;
     margin-bottom: 4px;

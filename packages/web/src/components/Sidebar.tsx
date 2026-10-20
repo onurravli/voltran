@@ -9,6 +9,7 @@ import { gitLabels } from '../labels.ts';
 import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
 import { keys } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
+import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
 import { ContextMenuArea, InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
@@ -414,6 +415,44 @@ function Inbox() {
     );
 }
 
+function UsageMeters() {
+    const usage = useUi((state) => state.app?.usage ?? null);
+    const now = useNow(30_000);
+    const rows = usageRows(usage);
+
+    if (rows.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="usage" aria-label="Claude usage limits">
+            {rows.map(({ label, name, window }) => {
+                const reset = isReset(window, now);
+                const percent = Math.round(window.usedPercent);
+                const resetsAt = window.resetsAt === null ? '' : `, resets ${new Date(window.resetsAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`;
+                return (
+                    <div key={label} className="usage__row" title={reset ? `${name} has reset` : `${name}: ${percent}% used${resetsAt}`}>
+                        <span className="usage__label">{label}</span>
+                        <span
+                            className={`usage__bar usage__bar--${usageLevel(percent)}`}
+                            role="meter"
+                            aria-label={name}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={reset ? 0 : percent}
+                            aria-valuetext={reset ? 'reset' : `${percent}% used`}
+                        >
+                            <span className="usage__fill" style={{ width: `${reset ? 0 : window.usedPercent}%` }} />
+                        </span>
+                        <span className="usage__percent">{reset ? '' : `${percent}%`}</span>
+                        <span className="usage__reset">{reset ? 'reset' : window.resetsAt === null ? '' : resetCountdown(window.resetsAt, now)}</span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 function Footer() {
     const connection = useUi((state) => state.connection);
     const showArchived = useUi((state) => state.showArchived);
@@ -424,6 +463,7 @@ function Footer() {
 
     return (
         <footer className="sidebar__footer">
+            <UsageMeters />
             {connection === 'offline' ? <span className="connection connection--offline">Reconnecting to the daemon…</span> : null}
             <div className="sidebar__footer-row">
                 {permission === 'default' ? (

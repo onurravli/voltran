@@ -157,6 +157,16 @@ export interface AdapterInfo {
     available: boolean;
 }
 
+export interface UsageWindow {
+    usedPercent: number;
+    resetsAt: number | null;
+}
+
+export interface Usage {
+    fiveHour: UsageWindow | null;
+    sevenDay: UsageWindow | null;
+}
+
 export interface AppState {
     projects: Project[];
     sessions: Session[];
@@ -164,6 +174,7 @@ export interface AppState {
     workspaces: Workspace[];
     git: Record<string, GitStatus>;
     adapters: AdapterInfo[];
+    usage: Usage | null;
 }
 
 export interface PaneSpec {

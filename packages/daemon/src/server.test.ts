@@ -14,7 +14,8 @@ import { buildDaemon, type Daemon } from './main.ts';
 // Stands in for the real CLI: runs the exact hook commands Voltran handed it through --settings,
 // so the env plumbing and the per-pane secret are exercised end to end. With --notes-test it also
 // starts a session and writes the pane's notes the way Claude's Write tool would; with --title-test it
-// writes a transcript in which Claude has named the conversation and stops.
+// writes a transcript in which Claude has named the conversation and stops; with --usage-test it renders
+// its status line with the account's usage limits.
 const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
 settings=$2
@@ -32,6 +33,10 @@ case "$*" in *--title-test*)
     sid=11111111-2222-3333-4444-555555555555
     printf '{"type":"ai-title","aiTitle":"Fake conversation title","sessionId":"%s"}\\n' "$sid" > "$PWD/$sid.jsonl"
     printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$PWD/$sid.jsonl" | sh -c "$(hook Stop 0)"
+;; esac
+case "$*" in *--usage-test*)
+    line=$(node -e 'process.stdout.write(require(process.argv[1]).statusLine.command)' "$settings")
+    printf '{"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":4000000000}}}' | sh -c "$line"
 ;; esac
 sleep 30
 `;
@@ -488,6 +493,40 @@ describe('agent panes', () => {
         await api('DELETE', `/api/sessions/${session.id}`);
         const scrollback = join(home, 'data', 'scrollback');
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
+    });
+
+    it('report the account\'s usage limits from Claude\'s status line and still show the user\'s own', async () => {
+        const dir = mkdtempSync(join(home, 'usage-'));
+        mkdirSync(join(dir, '.claude'));
+        writeFileSync(join(dir, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'printf "own status line"' } }));
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: dir });
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'usage', panes: [{ adapter: 'claude', command: '--usage-test' }] });
+        const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+
+        let output = '';
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneId}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        socket.on('message', (data, isBinary) => {
+            if (isBinary) {
+                output += data.toString();
+            }
+        });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
+
+        await until(async () => (await api<AppState>('GET', '/api/state')).body.usage !== null);
+        expect((await api<AppState>('GET', '/api/state')).body.usage).toEqual({ fiveHour: { usedPercent: 42, resetsAt: 4_000_000_000_000 }, sevenDay: null });
+        await until(async () => output.includes('own status line'));
+
+        const forged = await fetch(`${base}/api/hooks/${paneId}/StatusLine`, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer not-the-secret' },
+            body: '{"rate_limits":{"five_hour":{"used_percentage":99,"resets_at":4000000000}}}',
+        });
+        expect(forged.status).toBe(403);
+        expect((await api<AppState>('GET', '/api/state')).body.usage?.fiveHour?.usedPercent).toBe(42);
+
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
     });
 
     it('names a session started without a title from its agents, until the user renames it', async () => {

@@ -31,15 +31,17 @@ import {
     type UpdateProjectBody,
     type UpdateSessionBody,
     type UpdateWorkspaceBody,
+    type Usage,
     type Workspace,
     type ProjectGit,
     type WorktreeChoice,
 } from '@voltran/shared';
-import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, voltranSessionId } from './adapters.ts';
+import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
 import { PaneManager } from './panes.ts';
+import { mergeUsage } from './statusline.ts';
 import type { Store } from './store.ts';
 import { WorktreeError, Worktrees, worktreeRunner, type WorktreeRunner } from './worktrees.ts';
 
@@ -136,6 +138,7 @@ export class Hub {
     private readonly closeOnCleanExit = new Set<string>();
     private readonly namer = new SessionNamer();
     private readonly namingTimers = new Set<ReturnType<typeof setTimeout>>();
+    private usage: Usage | null = null;
 
     constructor(options: HubOptions) {
         this.store = options.store;
@@ -181,6 +184,7 @@ export class Hub {
             workspaces: this.store.listWorkspaces(),
             git: this.git.snapshot(),
             adapters: this.adapters,
+            usage: this.usage,
         };
     }
 
@@ -537,6 +541,9 @@ export class Hub {
     }
 
     hook(paneId: string, event: string, secret: string, payload: unknown): boolean {
+        if (event === STATUS_LINE_EVENT && payload && typeof payload === 'object') {
+            return this.statusLine(paneId, secret, payload as Record<string, unknown>);
+        }
         if (!(isClaudeHookEvent(event) || isOpencodeEvent(event) || isCodexHookEvent(event)) || !payload || typeof payload !== 'object') {
             return false;
         }
@@ -552,6 +559,18 @@ export class Hub {
             }
         }
         return handled;
+    }
+
+    private statusLine(paneId: string, secret: string, payload: Record<string, unknown>): boolean {
+        if (!this.panes.isClaudeReport(paneId, secret)) {
+            return false;
+        }
+        const usage = mergeUsage(this.usage, payload);
+        if (usage !== this.usage) {
+            this.usage = usage;
+            this.scheduleBroadcast();
+        }
+        return true;
     }
 
     // Claude can finish naming the conversation after a short first turn has already stopped, so a

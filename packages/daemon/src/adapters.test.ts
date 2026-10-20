@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Pane } from '@voltran/shared';
-import { adapterFor, childEnv, claudeArgsProblem, claudeHookSettings, CODEX_HOOK_EVENTS, codexHookArgs, NOTES_HOOK, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, voltranSessionId } from './adapters.ts';
+import { adapterFor, childEnv, claudeArgsProblem, claudeHookSettings, CODEX_HOOK_EVENTS, codexHookArgs, NOTES_HOOK, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, STATUS_LINE, voltranSessionId } from './adapters.ts';
 
 describe('splitArgs', () => {
     it('splits on whitespace and honours quotes and backslashes without expanding anything', () => {
@@ -44,11 +47,27 @@ describe('claude adapter', () => {
         createdAt: 0,
         ...overrides,
     });
-    const launch = (overrides: Partial<Pane>) => adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv: {}, notesFile: null, notesGuide: null });
+    const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}) =>
+        adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv, notesFile: null, notesGuide: null });
 
     it('passes its arguments after the ones Voltran sets, on resume too', () => {
         expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', '/s.json', '--resume', 'abc', '--plugin-dir', './a b']);
         expect(launch({}).args).toEqual(['--settings', '/s.json', '--resume', 'abc']);
+    });
+
+    it('hands the status line the user\'s own command, from their Claude folder', () => {
+        const home = mkdtempSync(join(tmpdir(), 'voltran-claude-home-'));
+        try {
+            const cwd = join(home, 'project');
+            mkdirSync(cwd);
+            expect(launch({ cwd }, { HOME: home }).env).toBeUndefined();
+            mkdirSync(join(home, '.claude'));
+            writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'bash ~/.claude/line.sh' } }));
+            expect(launch({ cwd }, { HOME: home }).env).toEqual({ VOLTRAN_STATUSLINE: 'bash ~/.claude/line.sh' });
+            expect(launch({ cwd }, { HOME: home, CLAUDE_CONFIG_DIR: join(home, 'elsewhere') }).env).toBeUndefined();
+        } finally {
+            rmSync(home, { recursive: true, force: true });
+        }
     });
 });
 
@@ -135,6 +154,10 @@ describe('claudeHookSettings', () => {
         expect(settings.hooks.Stop).toHaveLength(1);
     });
 
+    it('runs Voltran\'s status line script, quoting its path', () => {
+        expect((settings as unknown as { statusLine: object }).statusLine).toEqual({ type: 'command', command: `sh '${STATUS_LINE.replace(/'/g, `'\\''`)}'` });
+    });
+
     it('lets Claude read and edit the notes without asking', () => {
         expect(settings.permissions.allow).toEqual(["Read(//home/o'b/.voltran/notes/**)", "Edit(//home/o'b/.voltran/notes/**)"]);
     });
@@ -142,8 +165,9 @@ describe('claudeHookSettings', () => {
 
 describe('childEnv', () => {
     it('does not pass on the notes of the pane that started the daemon', () => {
-        const env = childEnv({ VOLTRAN_NOTES: '/elsewhere/notes.md', HOME: '/h' }, '/bin');
+        const env = childEnv({ VOLTRAN_NOTES: '/elsewhere/notes.md', VOLTRAN_STATUSLINE: 'x', HOME: '/h' }, '/bin');
         expect(env.VOLTRAN_NOTES).toBeUndefined();
+        expect(env.VOLTRAN_STATUSLINE).toBeUndefined();
         expect(env.HOME).toBe('/h');
     });
 });

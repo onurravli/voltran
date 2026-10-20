@@ -55,6 +55,7 @@ const app = {
     workspaces: [],
     git: {},
     adapters: [],
+    usage: null,
 } as AppState;
 
 describe('destinations', () => {
