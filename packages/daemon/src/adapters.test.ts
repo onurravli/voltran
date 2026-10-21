@@ -41,7 +41,7 @@ describe('claude adapter', () => {
         title: 'Claude Code',
         command: null,
         cwd: '/tmp',
-        agentSessionId: 'abc',
+        agentSessionId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
         agentResumable: true,
         ended: false,
         createdAt: 0,
@@ -51,8 +51,14 @@ describe('claude adapter', () => {
         adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv, notesFile: null, notesGuide: null });
 
     it('passes its arguments after the ones Voltran sets, on resume too', () => {
-        expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', '/s.json', '--resume', 'abc', '--plugin-dir', './a b']);
-        expect(launch({}).args).toEqual(['--settings', '/s.json', '--resume', 'abc']);
+        expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', '/s.json', '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', '--plugin-dir', './a b']);
+        expect(launch({}).args).toEqual(['--settings', '/s.json', '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
+        expect(launch({ agentResumable: false }).args).toEqual(['--settings', '/s.json', '--session-id', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
+    });
+
+    it('never passes a stored session id that is not a Claude session id, so it cannot become a flag', () => {
+        expect(launch({ agentSessionId: '--dangerously-skip-permissions' }).args).toEqual(['--settings', '/s.json']);
+        expect(launch({ agentSessionId: 'abc', agentResumable: false }).args).toEqual(['--settings', '/s.json']);
     });
 
     it('hands the status line the user\'s own command, from their Claude folder', () => {

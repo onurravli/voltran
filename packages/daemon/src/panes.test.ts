@@ -184,15 +184,17 @@ describe('PaneManager', () => {
 
     it('accepts hook reports only with the secret of the current process', () => {
         const { manager, recorded } = setup();
-        const pane = makePane({ adapter: 'claude', command: null, agentSessionId: 'original' });
+        const pane = makePane({ adapter: 'claude', command: null, agentSessionId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b' });
         manager.add(pane);
         const internals = manager as unknown as Internals;
         internals.runtimes.get(pane.id)!.hookSecret = 'per-spawn-secret';
 
         expect(manager.hook(pane.id, 'wrong-secret!!!!', 'Stop', {})).toBe(false);
 
-        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: 'after-clear' })).toBe(true);
-        expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: 'after-clear', agentResumable: false });
+        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' })).toBe(true);
+        expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', agentResumable: false });
+        manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '--dangerously-skip-permissions' });
+        expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' });
 
         manager.hook(pane.id, 'per-spawn-secret', 'UserPromptSubmit', { prompt: 'fix it' });
         expect(view(manager, pane.id)).toMatchObject({ status: 'working', detail: 'fix it', agentResumable: true });

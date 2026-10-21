@@ -20,10 +20,10 @@ const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
 settings=$2
 hook() { node -e 'const s=require(process.argv[1]); process.stdout.write(s.hooks[process.argv[2]][Number(process.argv[3])].hooks[0].command)' "$settings" "$1" "$2"; }
-printf '{"session_id":"fake-session-1","prompt":"hi from fake claude"}' | sh -c "$(hook UserPromptSubmit 0)"
+printf '{"session_id":"7e57c1a0-0000-4000-8000-000000000001","prompt":"hi from fake claude"}' | sh -c "$(hook UserPromptSubmit 0)"
 case "$*" in *--notes-test*)
     sh -c "$(hook SessionStart 1)" < /dev/null
-    call='{"session_id":"fake-session-1","tool_name":"Write","tool_input":{"file_path":"'"$VOLTRAN_NOTES"'"}}'
+    call='{"session_id":"7e57c1a0-0000-4000-8000-000000000001","tool_name":"Write","tool_input":{"file_path":"'"$VOLTRAN_NOTES"'"}}'
     printf '%s' "$call" | sh -c "$(hook PreToolUse 0)"
     sleep 1
     printf 'agent progress\\n' > "$VOLTRAN_NOTES"
@@ -507,7 +507,7 @@ describe('agent panes', () => {
         const pane = async (): Promise<PaneView | undefined> => (await api<AppState>('GET', '/api/state')).body.panes.find((entry) => entry.id === paneId);
         await until(async () => (await pane())?.status === 'working');
 
-        expect(await pane()).toMatchObject({ title: 'Claude Code', detail: 'hi from fake claude', agentSessionId: 'fake-session-1', agentResumable: true });
+        expect(await pane()).toMatchObject({ title: 'Claude Code', detail: 'hi from fake claude', agentSessionId: '7e57c1a0-0000-4000-8000-000000000001', agentResumable: true });
         expect(output).toMatch(/fake claude --settings \S+claude-settings\.json --session-id [0-9a-f-]{36} --plugin-dir \.\/a b/);
 
         const forged = await fetch(`${base}/api/hooks/${paneId}/Stop`, { method: 'POST', headers: { Authorization: `Bearer ${daemon.token}` }, body: '{}' });

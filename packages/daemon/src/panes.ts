@@ -9,7 +9,7 @@ import { adapterFor, childEnv, isClaudeHookEvent, isCodexHookEvent, isOpencodeEv
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, codexTransition, OpencodeStatus, type StatusChange } from './status.ts';
 import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
-import { readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
+import { isClaudeSessionId, readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
 
 export interface PaneClient {
     sendText(text: string): void;
@@ -287,7 +287,7 @@ export class PaneManager {
     }
 
     private claudeHook(runtime: Runtime, event: ClaudeHookEvent, payload: Record<string, unknown>): void {
-        const sessionId = typeof payload.session_id === 'string' ? payload.session_id : null;
+        const sessionId = isClaudeSessionId(payload.session_id) ? payload.session_id : null;
         if (sessionId && sessionId !== runtime.pane.agentSessionId) {
             this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: false });
         }

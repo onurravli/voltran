@@ -11,6 +11,8 @@ const MAX_RESULT = 2_000;
 const MAX_SUMMARY = 140;
 const MAX_TITLE_SCAN_BYTES = 512 * 1024;
 
+export const isClaudeSessionId = (value: unknown): value is string => typeof value === 'string' && SESSION_ID.test(value);
+
 export interface SubagentMeta {
     description: string | null;
     type: string | null;

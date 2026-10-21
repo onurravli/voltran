@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
 import { notesGuidePath } from './notes.ts';
 import { userStatusLine } from './statusline.ts';
+import { isClaudeSessionId } from './transcripts.ts';
 
 export interface LaunchSpec {
     file: string;
@@ -51,10 +52,8 @@ const DEFINITIONS: AdapterDefinition[] = [
         binary: 'claude',
         launch: ({ pane, claudeSettingsFile, baseEnv }) => {
             const args = ['--settings', claudeSettingsFile];
-            if (pane.agentSessionId && pane.agentResumable) {
-                args.push('--resume', pane.agentSessionId);
-            } else if (pane.agentSessionId) {
-                args.push('--session-id', pane.agentSessionId);
+            if (isClaudeSessionId(pane.agentSessionId)) {
+                args.push(pane.agentResumable ? '--resume' : '--session-id', pane.agentSessionId);
             }
             args.push(...(splitArgs(pane.command ?? '') ?? []));
             const configDir = baseEnv.CLAUDE_CONFIG_DIR || (baseEnv.HOME ? join(baseEnv.HOME, '.claude') : null);
