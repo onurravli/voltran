@@ -174,7 +174,7 @@ finding Chrome for `--app=` and the systemd user unit for `autostart`, a oneshot
 `KillMode=process` because `up` exits once the daemon it started is listening. In the web app, keyboard
 labels are written with Mac glyphs and go through `keys()` (`keyLabel` in `keymap.ts`); off a Mac, ⌘
 shortcuts are Ctrl+Shift (`isPrimaryChord`) and find steps with F3. CI runs typecheck and tests on
-Ubuntu (`.github/workflows/test.yml`).
+Ubuntu and macOS (`.github/workflows/test.yml`).
 
 ## Testing
 
