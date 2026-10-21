@@ -101,12 +101,17 @@ on. ⌃⌥↩ maximizes a pane, ⌃⌥B hides the sidebar, and zen mode (⌃⌥Z
 full screen. Drag the sidebar's right edge to make it between 200 and 480 pixels wide, or all the way
 to the left to close it; double-click the edge to go back to the default width.
 
+Drag a project by its name, or a session, to put it somewhere else in the sidebar: a line shows where
+it lands. A session stays in its own project, and a new one starts at the bottom. Every window shows
+the same order.
+
 ### Sidebar menus
 
 Right-click anything in the sidebar for what you can do with it, or focus it and press Shift+F10
 (or the menu key). A project offers a new session (in a worktree, for a repository), its colour,
-and copying its path. A session offers a new pane, its link, copying its path or worktree branch,
-adding its panes to a workspace, marking finished panes as seen, and archiving. A pane, in a
+copying its path, and moving it up or down. A session offers a new pane, its link, copying its path
+or worktree branch, adding its panes to a workspace, marking finished panes as seen, moving it up or
+down within its project, and archiving. A pane, in a
 session's pane list or under **Needs you**, offers showing, maximizing, its notes, restarting or
 stopping it, moving it to another session of its project, adding it to a workspace, and closing
 it. Right-click empty space for a new session, project or workspace. The ⋯ menus in the sidebar and

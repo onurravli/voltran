@@ -122,6 +122,12 @@ edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hu
 whose set of panes differs from the session's. Moving a pane to another session is a separate
 endpoint (`POST /api/panes/:id/move`).
 
+**Sidebar order.** Projects and sessions have a `position` in `store.ts`; `PATCH` with `moveBefore`
+(a sibling's id, or `null` for the end) renumbers the siblings, and `listSessions` returns sessions
+grouped by project in that order, so `AppState` arrives in sidebar order. The web store tracks a
+sidebar drag as `reordering`, apart from `draggingSessionId`, which means "can drop on a workspace"
+and is set only for a session with panes.
+
 **Workspaces** are named layouts that point at panes of any session or project without owning them
 (`PATCH /api/workspaces/:id`); the hub only checks that every pane exists, appears once and that
 there are at most `MAX_WORKSPACE_PANES`. Every path that deletes panes (a pane, a session, a project)
