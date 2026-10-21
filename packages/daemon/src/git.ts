@@ -20,6 +20,33 @@ const MAX_OUTPUT = 16 * 1024 * 1024;
 // command; the optional locks are off so polling never holds index.lock while an agent commits.
 export const STATUS_ARGS = ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z'];
 export const PULL_REQUEST_ARGS = ['pr', 'view', '--json', 'number,url,state,isDraft,statusCheckRollup'];
+export const FILTER_CONFIG_ARGS = ['config', '--show-scope', '-z', '--get-regexp', '^filter\\.'];
+const FILTER_NAME = /^[A-Za-z0-9._-]+$/;
+
+// git status runs a file's clean filter when the file's timestamp changed, and a repository's own
+// config (or a file it includes) can name any command as one. The filters a repository defines for
+// itself are switched off for the poll; the user's global ones, such as Git LFS, are kept. A name
+// that cannot be passed through -c intact means no poll at all.
+export function repositoryFilterOverrides(output: string): string[] | null {
+    const parts = output.split('\0');
+    const names = new Set<string>();
+    for (let index = 0; index + 1 < parts.length; index += 2) {
+        const scope = parts[index];
+        const key = parts[index + 1].split('\n')[0];
+        if (scope !== 'local' && scope !== 'worktree') {
+            continue;
+        }
+        const name = key.slice('filter.'.length, key.lastIndexOf('.'));
+        if (!name) {
+            continue;
+        }
+        if (!FILTER_NAME.test(name)) {
+            return null;
+        }
+        names.add(name);
+    }
+    return [...names].flatMap((name) => ['-c', `filter.${name}.clean=`, '-c', `filter.${name}.smudge=`, '-c', `filter.${name}.process=`, '-c', `filter.${name}.required=false`]);
+}
 
 export function commandRunner(env: NodeJS.ProcessEnv): GitRunner {
     const commandEnv = { ...env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' };
@@ -200,7 +227,8 @@ export class GitWatcher {
     }
 
     async refresh(folder: string): Promise<void> {
-        const result = await this.options.run('git', STATUS_ARGS, folder);
+        const filters = repositoryFilterOverrides((await this.options.run('git', FILTER_CONFIG_ARGS, folder)).stdout);
+        const result = filters ? await this.options.run('git', [...filters, ...STATUS_ARGS], folder) : { ok: false, stdout: '' };
         if (this.stopped) {
             return;
         }

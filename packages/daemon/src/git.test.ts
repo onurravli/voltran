@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { GitWatcher, PULL_REQUEST_ARGS, STATUS_ARGS, commandRunner, parsePullRequest, parseStatus, type GitRunner } from './git.ts';
+import { FILTER_CONFIG_ARGS, GitWatcher, PULL_REQUEST_ARGS, STATUS_ARGS, commandRunner, parsePullRequest, parseStatus, repositoryFilterOverrides, type GitRunner } from './git.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -72,16 +72,32 @@ describe('parsePullRequest', () => {
     });
 });
 
+const gitIn = (dir: string, ...args: string[]): void => {
+    execFileSync('git', args, { cwd: dir, stdio: 'ignore', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
+};
+
 function repository(): string {
     const dir = mkdtempSync(join(tmpdir(), 'voltran-git-'));
     cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-    const git = (...args: string[]): void => {
-        execFileSync('git', args, { cwd: dir, stdio: 'ignore', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
-    };
-    git('init', '-b', 'main');
-    git('-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'start');
+    gitIn(dir, 'init', '-b', 'main');
+    gitIn(dir, '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'start');
     return dir;
 }
+
+describe('repositoryFilterOverrides', () => {
+    const entry = (scope: string, key: string, value: string): string => `${scope}\0${key}\n${value}\0`;
+
+    it('switches off the filters a repository defines and keeps the user\'s own', () => {
+        const output = entry('global', 'filter.lfs.clean', 'git-lfs clean -- %f') + entry('local', 'filter.x.clean', 'touch owned') + entry('local', 'filter.x.process', 'y');
+        expect(repositoryFilterOverrides(output)).toEqual(['-c', 'filter.x.clean=', '-c', 'filter.x.smudge=', '-c', 'filter.x.process=', '-c', 'filter.x.required=false']);
+        expect(repositoryFilterOverrides('')).toEqual([]);
+    });
+
+    it('gives up on a filter name that -c could not carry intact', () => {
+        expect(repositoryFilterOverrides(entry('local', 'filter.a=b.clean', 'evil'))).toBeNull();
+        expect(repositoryFilterOverrides(entry('worktree', 'filter.a b.clean', 'evil'))).toBeNull();
+    });
+});
 
 function watcher(folders: string[], run: GitRunner, pullRequests = true): { watcher: GitWatcher; changes: () => number } {
     let count = 0;
@@ -127,7 +143,7 @@ describe('GitWatcher', () => {
         head = 'feat/other';
         await git.refresh('/repo');
         expect(calls.filter((call) => call.startsWith('gh'))).toHaveLength(2);
-        expect(calls[0]).toBe(`git ${STATUS_ARGS.join(' ')}`);
+        expect(calls.slice(0, 2)).toEqual([`git ${FILTER_CONFIG_ARGS.join(' ')}`, `git ${STATUS_ARGS.join(' ')}`]);
 
         const off: string[] = [];
         const { watcher: quiet } = watcher(['/repo'], async (command, args) => {
@@ -135,8 +151,28 @@ describe('GitWatcher', () => {
             return run(command, args, '/repo');
         }, false);
         await quiet.refresh('/repo');
-        expect(off).toEqual(['git']);
+        expect(off).toEqual(['git', 'git']);
         expect(quiet.snapshot()['/repo'].pullRequest).toBeNull();
+    });
+
+    it('never runs a filter command the repository configured for itself', async () => {
+        const dir = repository();
+        const marker = join(dir, '..', `${dir.split('/').at(-1)}-filter-ran`);
+        cleanups.push(() => rmSync(marker, { force: true }));
+        writeFileSync(join(dir, '.gitattributes'), '*.txt filter=x\n');
+        writeFileSync(join(dir, 'a.txt'), 'hello\n');
+        gitIn(dir, 'add', '-A');
+        gitIn(dir, '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-m', 'files');
+        gitIn(dir, 'config', 'filter.x.clean', `touch '${marker}'; cat`);
+        utimesSync(join(dir, 'a.txt'), new Date(), new Date(Date.now() + 60_000));
+
+        const { watcher: git } = watcher([dir], commandRunner(process.env), false);
+        await git.refresh(dir);
+        expect(git.snapshot()[dir]).toMatchObject({ branch: 'main', changed: 0 });
+        expect(existsSync(marker)).toBe(false);
+
+        execFileSync('git', ['status', '--porcelain'], { cwd: dir, stdio: 'ignore' });
+        expect(existsSync(marker)).toBe(true);
     });
 
     it('stops asking gh once it turns out not to be installed', async () => {

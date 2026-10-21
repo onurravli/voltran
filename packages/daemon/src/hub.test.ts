@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -142,6 +142,21 @@ describe('Hub', () => {
             writeFileSync(join(removed.cwd, 'packages', 'web', 'index.ts'), 'changed\n');
             await hub.deleteSession(removed.id, 'remove');
             expect(existsSync(removed.worktree!)).toBe(false);
+        });
+
+        it('counts a worktree\'s changes without running a filter the repository configured', async () => {
+            const { dir, repo, hub } = repository();
+            const marker = join(dir, 'filter-ran');
+            writeFileSync(join(repo, '.gitattributes'), '*.ts filter=x\n');
+            git(repo, 'add', '-A');
+            git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'attributes');
+            git(repo, 'config', 'filter.x.clean', `touch '${marker}'; cat`);
+            const project = hub.createProject({ path: repo });
+            const session = await hub.createSession({ projectId: project.id, title: 'Filtered', worktree: { branch: 'filtered' } });
+            utimesSync(join(session.cwd, 'packages', 'web', 'index.ts'), new Date(), new Date(Date.now() + 60_000));
+            await hub.deleteSession(session.id);
+            expect(existsSync(session.worktree!)).toBe(false);
+            expect(existsSync(marker)).toBe(false);
         });
 
         it('keeps the worktrees with changes when the project is deleted', async () => {

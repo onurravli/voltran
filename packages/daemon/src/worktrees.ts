@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { branchFromTitle, type ProjectGit } from '@voltran/shared';
+import { FILTER_CONFIG_ARGS, repositoryFilterOverrides } from './git.ts';
 
 export type WorktreeRunner = (args: string[], cwd: string) => Promise<{ ok: boolean; stdout: string; stderr: string }>;
 
@@ -84,7 +85,11 @@ export class Worktrees {
         if (!existsSync(root)) {
             return 0;
         }
-        const status = await this.run(['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '-z'], root);
+        const filters = repositoryFilterOverrides((await this.run(FILTER_CONFIG_ARGS, root)).stdout);
+        if (!filters) {
+            throw new WorktreeError(`the repository of ${root} names a filter Voltran cannot switch off, so it did not read the status`);
+        }
+        const status = await this.run([...filters, '--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '-z'], root);
         if (!status.ok) {
             throw new WorktreeError(gitMessage(status.stderr, `git could not read the status of ${root}`));
         }
