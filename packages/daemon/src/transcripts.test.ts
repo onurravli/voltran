@@ -170,6 +170,25 @@ describe('readSubagentMeta', () => {
 });
 
 describe('parseTranscriptLine', () => {
+    it('drops control characters from everything a transcript line carries, keeping line breaks and tabs', () => {
+        const esc = '\u001b[2A\u001b[2K\u001b]8;;https://evil.example\u0007\u009b31m';
+        const entries = [
+            ...parseTranscriptLine({ type: 'user', message: { content: `go${esc}\nnow` } })!,
+            ...parseTranscriptLine({ type: 'assistant', message: { content: [
+                { type: 'text', text: `done${esc}` },
+                { type: 'tool_use', id: 't', name: `Bash${esc}`, input: { command: `ls${esc}` } },
+            ] } })!,
+            ...parseTranscriptLine({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't', content: `a\tb${esc}\r\nc` }] } })!,
+        ];
+        expect(JSON.stringify(entries)).not.toMatch(/\\u00(1b|07|9b)|\\r/);
+        expect(entries.map((entry) => ('text' in entry ? entry.text : `${entry.name} ${entry.summary}`))).toEqual([
+            'go[2A[2K]8;;https://evil.example31m\nnow',
+            'done[2A[2K]8;;https://evil.example31m',
+            'Bash[2A[2K]8;;https://evil.example31m ls[2A[2K]8;;https://evil.example31m',
+            'a\tb[2A[2K]8;;https://evil.example31m\nc',
+        ]);
+    });
+
     it('summarizes tool calls by their most telling input', () => {
         const tool = (name: string, input: Record<string, unknown>) =>
             parseTranscriptLine({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'x', name, input }] } })![0];

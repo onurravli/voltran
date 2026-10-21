@@ -126,7 +126,15 @@ export function readSubagentMeta(transcriptPath: string): SubagentMeta | null {
     }
 }
 
-const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+// Every string an entry carries goes through here. The subagent viewer writes entries to a terminal,
+// and a transcript holds whatever its tools read or fetched, so control characters are dropped:
+// escape sequences in a tool result could otherwise move the cursor and hide or forge earlier lines.
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
+
+const clip = (text: string, max: number): string => {
+    const clean = text.replace(CONTROL, '');
+    return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+};
 
 const oneLine = (value: unknown): string => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
 
@@ -208,7 +216,7 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
                 entries.push({ kind: 'text', text: clip(input.message, MAX_TEXT), at });
                 continue;
             }
-            entries.push({ kind: 'tool', id: typeof block.id === 'string' ? block.id : '', name: block.name, summary: toolSummary(block.name, input), at });
+            entries.push({ kind: 'tool', id: typeof block.id === 'string' ? block.id : '', name: clip(block.name, MAX_SUMMARY), summary: toolSummary(block.name, input), at });
         } else if (block.type === 'tool_result') {
             entries.push({
                 kind: 'result',
