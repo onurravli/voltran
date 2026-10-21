@@ -30,7 +30,7 @@ export interface SettingsState {
 
 export const APPEARANCES: readonly Appearance[] = ['system', 'dark', 'light'];
 export const SIDEBAR_POSITIONS: readonly SidebarPosition[] = ['left', 'right'];
-export const DARK_THEME_IDS: readonly string[] = ['voltran', 'tokyo-night', 'catppuccin-mocha', 'dracula', 'nord', 'gruvbox-dark', 'one-dark', 'rose-pine'];
+export const DARK_THEME_IDS: readonly string[] = ['voltran', 'tokyo-night', 'catppuccin-mocha', 'dracula', 'nord', 'gruvbox-dark', 'one-dark', 'rose-pine', 'solarized-dark'];
 export const LIGHT_THEME_IDS: readonly string[] = ['catppuccin-latte', 'solarized-light', 'github-light'];
 export const MIN_FONT_SIZE = 9;
 export const MAX_FONT_SIZE = 28;

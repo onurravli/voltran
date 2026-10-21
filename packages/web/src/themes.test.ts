@@ -128,7 +128,7 @@ describe('parseThemeId', () => {
     });
 
     it('falls back to the scheme default for unknown or malformed values', () => {
-        for (const value of [undefined, null, '', 'Nord', ' nord', 'solarized-dark', 42, {}, ['nord']]) {
+        for (const value of [undefined, null, '', 'Nord', ' nord', 'monokai', 42, {}, ['nord']]) {
             expect(parseThemeId(value, 'dark')).toBe(DEFAULT_THEME_IDS.dark);
             expect(parseThemeId(value, 'light')).toBe(DEFAULT_THEME_IDS.light);
         }
