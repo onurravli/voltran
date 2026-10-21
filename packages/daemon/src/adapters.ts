@@ -1,10 +1,9 @@
 import { execFile } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { accessSync, constants, writeFileSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { accessSync, constants } from 'node:fs';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
-import { notesGuidePath } from './notes.ts';
 import { userStatusLine } from './statusline.ts';
 import { isClaudeSessionId } from './transcripts.ts';
 
@@ -17,7 +16,6 @@ export interface LaunchSpec {
 export interface LaunchContext {
     pane: Pane;
     shell: string;
-    claudeSettingsFile: string;
     subagentRunning: boolean;
     baseEnv: NodeJS.ProcessEnv;
     notesFile: string | null;
@@ -50,8 +48,9 @@ const DEFINITIONS: AdapterDefinition[] = [
         resumable: true,
         reportsHooks: true,
         binary: 'claude',
-        launch: ({ pane, claudeSettingsFile, baseEnv }) => {
-            const args = ['--settings', claudeSettingsFile];
+        launch: ({ pane, baseEnv, notesFile, notesGuide }) => {
+            const notes = notesFile && notesGuide ? { file: notesFile, guide: notesGuide } : null;
+            const args = ['--settings', JSON.stringify(claudeHookSettings(notes))];
             if (isClaudeSessionId(pane.agentSessionId)) {
                 args.push(pane.agentResumable ? '--resume' : '--session-id', pane.agentSessionId);
             }
@@ -438,27 +437,30 @@ export function codexHookArgs(): string[] {
 
 // Hooks must never slow down or block the agent: short curl timeout, no output, always exit 0.
 // The per-pane secret only authorizes status reports for that one pane. The notes hooks print the
-// pane's notes into Claude's context and refuse its edits while the user is typing in them.
-export function claudeHookSettings(notesDir: string): object {
+// pane's notes into Claude's context and refuse its edits while the user is typing in them. The
+// settings are built for each pane, because the rule that lets Claude edit its notes without asking
+// also opens that folder to its sandbox, and no pane may write another pane's notes.
+export function claudeHookSettings(notes: { file: string; guide: string } | null): object {
     const hooks: Record<string, unknown[]> = {};
     for (const event of CLAUDE_HOOK_EVENTS) {
         hooks[event] = [{ hooks: [{ type: 'command', command: hookCommand(event), timeout: 5 }] }];
     }
-    const notes = (mode: string): object => ({
+    const statusLine = { type: 'command', command: `sh ${shellQuote(STATUS_LINE)}` };
+    if (!notes) {
+        return { hooks, statusLine };
+    }
+    const notesHook = (mode: string): object => ({
         type: 'command',
-        command: `sh ${shellQuote(NOTES_HOOK)} ${mode} ${shellQuote(notesGuidePath(notesDir))}; exit 0`,
+        command: `sh ${shellQuote(NOTES_HOOK)} ${mode} ${shellQuote(notes.guide)}; exit 0`,
         timeout: 5,
     });
-    hooks.SessionStart.push({ hooks: [notes('session-start')] });
-    hooks.UserPromptSubmit.push({ hooks: [notes('prompt')] });
-    hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: [notes('pre-tool-use')] });
+    hooks.SessionStart.push({ hooks: [notesHook('session-start')] });
+    hooks.UserPromptSubmit.push({ hooks: [notesHook('prompt')] });
+    hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: [notesHook('pre-tool-use')] });
+    const folder = dirname(notes.file);
     return {
         hooks,
-        statusLine: { type: 'command', command: `sh ${shellQuote(STATUS_LINE)}` },
-        permissions: { allow: [`Read(/${notesDir}/**)`, `Edit(/${notesDir}/**)`] },
+        statusLine,
+        permissions: { allow: [`Read(/${folder}/**)`, `Edit(/${folder}/**)`] },
     };
-}
-
-export function writeClaudeSettings(file: string, notesDir: string): void {
-    writeFileSync(file, `${JSON.stringify(claudeHookSettings(notesDir), null, 2)}\n`, { mode: 0o600 });
 }

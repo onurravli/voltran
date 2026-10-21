@@ -48,17 +48,18 @@ describe('claude adapter', () => {
         ...overrides,
     });
     const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}) =>
-        adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv, notesFile: null, notesGuide: null });
+        adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', subagentRunning: false, baseEnv, notesFile: null, notesGuide: null });
+    const settings = expect.stringMatching(/^\{"hooks":/);
 
     it('passes its arguments after the ones Voltran sets, on resume too', () => {
-        expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', '/s.json', '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', '--plugin-dir', './a b']);
-        expect(launch({}).args).toEqual(['--settings', '/s.json', '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
-        expect(launch({ agentResumable: false }).args).toEqual(['--settings', '/s.json', '--session-id', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
+        expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', settings, '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', '--plugin-dir', './a b']);
+        expect(launch({}).args).toEqual(['--settings', settings, '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
+        expect(launch({ agentResumable: false }).args).toEqual(['--settings', settings, '--session-id', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
     });
 
     it('never passes a stored session id that is not a Claude session id, so it cannot become a flag', () => {
-        expect(launch({ agentSessionId: '--dangerously-skip-permissions' }).args).toEqual(['--settings', '/s.json']);
-        expect(launch({ agentSessionId: 'abc', agentResumable: false }).args).toEqual(['--settings', '/s.json']);
+        expect(launch({ agentSessionId: '--dangerously-skip-permissions' }).args).toEqual(['--settings', settings]);
+        expect(launch({ agentSessionId: 'abc', agentResumable: false }).args).toEqual(['--settings', settings]);
     });
 
     it('hands the status line the user\'s own command, from their Claude folder', () => {
@@ -127,7 +128,7 @@ describe('opencode adapter', () => {
         ...overrides,
     });
     const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}, notesFile: string | null = null) =>
-        adapterFor('opencode').launch({ pane: pane(overrides), shell: '/bin/zsh', claudeSettingsFile: '/s.json', subagentRunning: false, baseEnv, notesFile, notesGuide: '/n/GUIDE.md' });
+        adapterFor('opencode').launch({ pane: pane(overrides), shell: '/bin/zsh', subagentRunning: false, baseEnv, notesFile, notesGuide: '/n/GUIDE.md' });
 
     it('runs its own server on the pane session, with the arguments after the ones Voltran sets', () => {
         expect(launch({}).args).toEqual(['--standalone', '--session', 'ses_abc']);
@@ -146,7 +147,9 @@ describe('opencode adapter', () => {
 });
 
 describe('claudeHookSettings', () => {
-    const settings = claudeHookSettings("/home/o'b/.voltran/notes") as { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>; permissions: { allow: string[] } };
+    type Settings = { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>; permissions?: { allow: string[] } };
+    const notesOf = (pane: string) => ({ file: `/home/o'b/.voltran/notes/${pane}/notes.md`, guide: "/home/o'b/.voltran/notes/GUIDE.md" });
+    const settings = claudeHookSettings(notesOf('pane-1')) as Settings;
 
     it('adds the notes hooks after the status reports, quoting their paths', () => {
         const hook = `'${NOTES_HOOK.replace(/'/g, `'\\''`)}'`;
@@ -164,8 +167,18 @@ describe('claudeHookSettings', () => {
         expect((settings as unknown as { statusLine: object }).statusLine).toEqual({ type: 'command', command: `sh '${STATUS_LINE.replace(/'/g, `'\\''`)}'` });
     });
 
-    it('lets Claude read and edit the notes without asking', () => {
-        expect(settings.permissions.allow).toEqual(["Read(//home/o'b/.voltran/notes/**)", "Edit(//home/o'b/.voltran/notes/**)"]);
+    it('lets Claude read and edit its own pane\'s notes without asking, and no other pane\'s', () => {
+        expect(settings.permissions?.allow).toEqual(["Read(//home/o'b/.voltran/notes/pane-1/**)", "Edit(//home/o'b/.voltran/notes/pane-1/**)"]);
+        expect((claudeHookSettings(notesOf('pane-2')) as Settings).permissions?.allow).toEqual([
+            "Read(//home/o'b/.voltran/notes/pane-2/**)",
+            "Edit(//home/o'b/.voltran/notes/pane-2/**)",
+        ]);
+    });
+
+    it('leaves out the notes hooks and permissions when the pane has no notes', () => {
+        const bare = claudeHookSettings(null) as Settings;
+        expect(bare.permissions).toBeUndefined();
+        expect(bare.hooks.SessionStart).toHaveLength(1);
     });
 });
 

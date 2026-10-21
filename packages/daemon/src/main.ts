@@ -1,7 +1,8 @@
 import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describeAdapters, resolveShellPath, writeClaudeSettings } from './adapters.ts';
+import { describeAdapters, resolveShellPath } from './adapters.ts';
 import { startDaemonProcess } from './cli.ts';
 import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
 import { Hub } from './hub.ts';
@@ -42,7 +43,8 @@ function readPreviousWindows(file: string): number {
 export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     ensureHome(config);
     const token = readOrCreateToken(config);
-    writeClaudeSettings(config.claudeSettingsFile, config.notesDir);
+    // The settings every Claude pane shared before each pane got its own.
+    rmSync(join(config.home, 'claude-settings.json'), { force: true });
 
     const store = new Store(config.dbFile);
     const hub = new Hub({
@@ -51,7 +53,6 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         scrollbackDir: config.scrollbackDir,
         notesDir: config.notesDir,
         worktreesDir: config.worktreesDir,
-        claudeSettingsFile: config.claudeSettingsFile,
         url: config.url,
         shell: options.shell,
         path: options.path,

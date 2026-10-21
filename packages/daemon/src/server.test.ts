@@ -19,7 +19,7 @@ import { buildDaemon, type Daemon } from './main.ts';
 const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
 settings=$2
-hook() { node -e 'const s=require(process.argv[1]); process.stdout.write(s.hooks[process.argv[2]][Number(process.argv[3])].hooks[0].command)' "$settings" "$1" "$2"; }
+hook() { node -e 'const s=JSON.parse(process.argv[1]); process.stdout.write(s.hooks[process.argv[2]][Number(process.argv[3])].hooks[0].command)' "$settings" "$1" "$2"; }
 printf '{"session_id":"7e57c1a0-0000-4000-8000-000000000001","prompt":"hi from fake claude"}' | sh -c "$(hook UserPromptSubmit 0)"
 case "$*" in *--notes-test*)
     sh -c "$(hook SessionStart 1)" < /dev/null
@@ -35,7 +35,7 @@ case "$*" in *--title-test*)
     printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$PWD/$sid.jsonl" | sh -c "$(hook Stop 0)"
 ;; esac
 case "$*" in *--usage-test*)
-    line=$(node -e 'process.stdout.write(require(process.argv[1]).statusLine.command)' "$settings")
+    line=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).statusLine.command)' "$settings")
     printf '{"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":4000000000}}}' | sh -c "$line"
 ;; esac
 sleep 30
@@ -508,7 +508,7 @@ describe('agent panes', () => {
         await until(async () => (await pane())?.status === 'working');
 
         expect(await pane()).toMatchObject({ title: 'Claude Code', detail: 'hi from fake claude', agentSessionId: '7e57c1a0-0000-4000-8000-000000000001', agentResumable: true });
-        expect(output).toMatch(/fake claude --settings \S+claude-settings\.json --session-id [0-9a-f-]{36} --plugin-dir \.\/a b/);
+        expect(output).toMatch(/fake claude --settings \{"hooks":.*\} --session-id [0-9a-f-]{36} --plugin-dir \.\/a b/);
 
         const forged = await fetch(`${base}/api/hooks/${paneId}/Stop`, { method: 'POST', headers: { Authorization: `Bearer ${daemon.token}` }, body: '{}' });
         expect(forged.status).toBe(403);

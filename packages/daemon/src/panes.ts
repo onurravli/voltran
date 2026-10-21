@@ -47,7 +47,6 @@ interface Runtime {
 
 export interface PaneManagerOptions {
     scrollbackDir: string;
-    claudeSettingsFile: string;
     url: string;
     shell: string;
     path: string;
@@ -445,7 +444,6 @@ export class PaneManager {
         const spec = adapter.launch({
             pane,
             shell: this.options.shell,
-            claudeSettingsFile: this.options.claudeSettingsFile,
             subagentRunning,
             baseEnv: this.options.baseEnv,
             notesFile,

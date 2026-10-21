@@ -59,7 +59,6 @@ export interface HubOptions {
     adapters: AdapterInfo[];
     scrollbackDir: string;
     notesDir: string;
-    claudeSettingsFile: string;
     url: string;
     shell: string;
     path: string;
@@ -161,7 +160,6 @@ export class Hub {
         });
         this.panes = new PaneManager({
             scrollbackDir: options.scrollbackDir,
-            claudeSettingsFile: options.claudeSettingsFile,
             url: options.url,
             shell: options.shell,
             path: options.path,

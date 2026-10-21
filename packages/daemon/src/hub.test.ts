@@ -23,7 +23,6 @@ function open(dir: string): { store: Store; hub: Hub } {
         scrollbackDir: dir,
         notesDir: join(dir, 'notes'),
         worktreesDir: join(dir, 'worktrees'),
-        claudeSettingsFile: join(dir, 'claude-settings.json'),
         url: 'http://127.0.0.1:1',
         shell: '/bin/sh',
         path: '/usr/bin:/bin',
