@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -48,6 +48,16 @@ describe('notes hook', () => {
         writeFileSync(changed, '');
         expect(run('session-start')).toBe(`${NOTES_GUIDE}\nNotes file: ${notes}\n\n- ship the drawer\n`);
         expect(existsSync(changed)).toBe(false);
+    });
+
+    it('does not print what a notes file planted as a link points at', () => {
+        const { notes, run } = setup();
+        const secret = `${notes}.secret`;
+        writeFileSync(secret, 'outside the sandbox\n');
+        symlinkSync(secret, notes);
+        const output = run('session-start');
+        expect(output).toContain('(not shown: the notes file or its folder is a link');
+        expect(output).not.toContain('outside the sandbox');
     });
 
     it('stays under Claude\'s limit for hook output by cutting long notes', () => {

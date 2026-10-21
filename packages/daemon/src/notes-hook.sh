@@ -9,9 +9,11 @@ changed="$folder.changed"
 limit=8000
 
 show() {
-    [ -r "$guide" ] && cat "$guide"
+    [ -r "$guide" ] && [ ! -L "$guide" ] && cat "$guide"
     printf '\nNotes file: %s\n\n' "$notes"
-    if [ -s "$notes" ]; then
+    if [ -L "$notes" ] || [ -L "$folder" ]; then
+        printf '(not shown: the notes file or its folder is a link, which Voltran never makes)\n'
+    elif [ -f "$notes" ] && [ -s "$notes" ]; then
         head -c "$limit" "$notes"
         size=$(wc -c < "$notes" | tr -d ' ')
         if [ "$size" -gt "$limit" ]; then

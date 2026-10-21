@@ -1,5 +1,20 @@
-import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import {
+    chmodSync,
+    closeSync,
+    constants,
+    fstatSync,
+    lstatSync,
+    mkdirSync,
+    openSync,
+    readdirSync,
+    readFileSync,
+    renameSync,
+    rmSync,
+    watch,
+    writeFileSync,
+    type FSWatcher,
+} from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { MAX_NOTES_BYTES, type NotesAuthor, type NotesMeta, type PaneNotes } from '@voltran/shared';
 
@@ -65,15 +80,36 @@ export const notesGuidePath = (dir: string): string => join(dir, GUIDE);
 
 const versionOf = (content: string): string => createHash('sha256').update(content).digest('hex').slice(0, 16);
 
-const ignoreMissing = (action: () => void): void => {
+const kindOf = (path: string): 'file' | 'directory' | 'other' | null => {
     try {
-        action();
+        const stat = lstatSync(path);
+        return stat.isFile() ? 'file' : stat.isDirectory() ? 'directory' : 'other';
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw error;
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            return null;
         }
+        throw error;
     }
 };
+
+// Agents can write in the notes folders, so anything there may be a link they planted. Files are
+// replaced through a fresh temporary name that open refuses to follow, and only real files and
+// folders get their modes changed.
+function replaceFile(dir: string, name: string, content: string, mode: number): void {
+    const temporary = join(dir, `.${name}.${randomBytes(8).toString('hex')}.tmp`);
+    try {
+        writeFileSync(temporary, content, { mode, flag: 'wx' });
+        renameSync(temporary, join(dir, name));
+    } finally {
+        rmSync(temporary, { force: true });
+    }
+}
+
+function chmodIf(path: string, kind: 'file' | 'directory', mode: number): void {
+    if (kindOf(path) === kind) {
+        chmodSync(path, mode);
+    }
+}
 
 // Each pane's note lives in a folder of its own, so a lock can make the folder read-only too: a
 // read-only file alone does not stop a write that replaces it through a rename.
@@ -95,7 +131,7 @@ export class NotesStore {
     // A lock does not outlive the daemon that took it, and a deleted pane leaves no note behind.
     load(paneIds: Iterable<string>): void {
         mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-        writeFileSync(this.guide, NOTES_GUIDE, { mode: 0o600 });
+        replaceFile(this.dir, GUIDE, NOTES_GUIDE, 0o600);
         const known = new Set(paneIds);
         for (const name of readdirSync(this.dir)) {
             const paneId = name.endsWith(CHANGED) ? name.slice(0, -CHANGED.length) : name;
@@ -141,9 +177,7 @@ export class NotesStore {
     }
 
     file(paneId: string): string {
-        const dir = this.dirOf(paneId);
-        mkdirSync(dir, { recursive: true, mode: 0o700 });
-        return join(dir, FILE);
+        return join(this.folder(paneId), FILE);
     }
 
     isFile(paneId: string, path: unknown): boolean {
@@ -208,7 +242,7 @@ export class NotesStore {
         note.version = versionOf(content);
         note.updatedAt = Date.now();
         note.updatedBy = 'user';
-        writeFileSync(join(this.dir, `${paneId}${CHANGED}`), '', { mode: 0o600 });
+        replaceFile(this.dir, `${paneId}${CHANGED}`, '', 0o600);
         this.setLock(paneId, note, 'user', holder);
         this.options.onChange({ paneId, content, version: note.version, by: 'user', holder });
         this.options.onMeta();
@@ -299,50 +333,71 @@ export class NotesStore {
         }
     }
 
+    // A link, a pipe or anything else that is not a plain file reads as empty notes.
     private readFile(paneId: string): { content: string; updatedAt: number | null } {
-        const file = join(this.dirOf(paneId), FILE);
+        const empty = { content: '', updatedAt: null };
+        const dir = this.dirOf(paneId);
+        if (kindOf(dir) !== 'directory') {
+            return empty;
+        }
+        let fd: number;
         try {
-            return { content: readFileSync(file, 'utf8'), updatedAt: statSync(file).mtimeMs };
+            fd = openSync(join(dir, FILE), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-                return { content: '', updatedAt: null };
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code === 'ENOENT' || code === 'ELOOP') {
+                return empty;
             }
             throw error;
+        }
+        try {
+            const stat = fstatSync(fd);
+            return stat.isFile() ? { content: readFileSync(fd, 'utf8'), updatedAt: stat.mtimeMs } : empty;
+        } finally {
+            closeSync(fd);
         }
     }
 
     private writeFile(paneId: string, content: string): void {
-        const dir = this.dirOf(paneId);
-        const temporary = join(dir, `.${FILE}.${process.pid}.tmp`);
-        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        const dir = this.folder(paneId);
         chmodSync(dir, 0o700);
         try {
-            writeFileSync(temporary, content, { mode: 0o400 });
-            renameSync(temporary, join(dir, FILE));
+            replaceFile(dir, FILE, content, 0o400);
         } finally {
-            rmSync(temporary, { force: true });
             chmodSync(dir, 0o500);
         }
     }
 
     private setWritable(paneId: string, writable: boolean): void {
-        const dir = this.dirOf(paneId);
+        const dir = writable ? this.dirOf(paneId) : this.folder(paneId);
         const file = join(dir, FILE);
         if (writable) {
-            ignoreMissing(() => chmodSync(dir, 0o700));
-            ignoreMissing(() => chmodSync(file, 0o600));
+            chmodIf(dir, 'directory', 0o700);
+            chmodIf(file, 'file', 0o600);
         } else {
-            mkdirSync(dir, { recursive: true, mode: 0o700 });
-            ignoreMissing(() => chmodSync(file, 0o400));
+            chmodIf(file, 'file', 0o400);
             chmodSync(dir, 0o500);
         }
     }
 
     private removeFiles(paneId: string): void {
         const dir = this.dirOf(paneId);
-        ignoreMissing(() => chmodSync(dir, 0o700));
+        chmodIf(dir, 'directory', 0o700);
         rmSync(dir, { recursive: true, force: true });
         rmSync(join(this.dir, `${paneId}${CHANGED}`), { force: true });
+    }
+
+    // The pane's folder, as a real folder: whatever else stands at its path is removed first.
+    private folder(paneId: string): string {
+        const dir = this.dirOf(paneId);
+        const kind = kindOf(dir);
+        if (kind !== 'directory') {
+            if (kind !== null) {
+                rmSync(dir, { force: true });
+            }
+            mkdirSync(dir, { recursive: true, mode: 0o700 });
+        }
+        return dir;
     }
 
     private dirOf(paneId: string): string {

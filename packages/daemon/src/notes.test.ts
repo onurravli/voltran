@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -130,6 +130,47 @@ describe('NotesStore', () => {
         writeFileSync(temporary, 'replaced\n');
         renameSync(temporary, file);
         expect(readFileSync(file, 'utf8')).toBe('replaced\n');
+    });
+
+    it('never follows a link planted where it writes or reads, and never changes the mode of what a link points at', () => {
+        const { dir, store } = setup();
+        const outside = mkdtempSync(join(tmpdir(), 'voltran-outside-'));
+        cleanups.push(() => rmSync(outside, { recursive: true, force: true }));
+        const precious = (name: string): string => {
+            const path = join(outside, name);
+            writeFileSync(path, 'precious\n', { mode: 0o644 });
+            return path;
+        };
+        const paneId = randomUUID();
+        const notes = precious('notes');
+        const changed = precious('changed');
+        const guide = precious('guide');
+        symlinkSync(notes, store.file(paneId));
+        symlinkSync(changed, join(dir, `${paneId}.changed`));
+        symlinkSync(guide, join(dir, 'GUIDE.md'));
+
+        store.load([paneId]);
+        expect(store.read(paneId).content).toBe('');
+        store.lock(paneId, HOLDER, store.read(paneId).version);
+        store.save(paneId, HOLDER, store.read(paneId).version, 'mine\n');
+        store.unlock(paneId, HOLDER);
+
+        for (const path of [notes, changed, guide]) {
+            expect(readFileSync(path, 'utf8')).toBe('precious\n');
+            expect(statSync(path).mode & 0o777).toBe(0o644);
+        }
+        expect(lstatSync(store.file(paneId)).isFile()).toBe(true);
+        expect(readFileSync(store.file(paneId), 'utf8')).toBe('mine\n');
+        expect(lstatSync(join(dir, `${paneId}.changed`)).isFile()).toBe(true);
+
+        const linked = randomUUID();
+        symlinkSync(outside, join(dir, linked));
+        store.lock(linked, HOLDER, store.read(linked).version);
+        store.save(linked, HOLDER, store.read(linked).version, 'elsewhere?\n');
+        store.unlock(linked, HOLDER);
+        expect(lstatSync(join(dir, linked)).isDirectory()).toBe(true);
+        expect(existsSync(join(outside, 'notes.md'))).toBe(false);
+        expect(statSync(outside).mode & 0o777).toBe(0o700);
     });
 
     it('refuses the lock to a stale window, another window and a running agent edit', () => {
