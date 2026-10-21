@@ -26,6 +26,8 @@ you trust once; other agents (Antigravity, anything else) get status from termin
 ## Getting started
 
 ```bash
+git clone https://github.com/onurravli/voltran.git
+cd voltran
 npm install
 npm link            # optional: puts `voltran` on your PATH
 voltran up          # or: npm run up
