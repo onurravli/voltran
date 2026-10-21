@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
 export const CHROME_APPS_DIR = join(homedir(), 'Applications', 'Chrome Apps.localized');
 export const CHROME_USER_DATA_DIR = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
 export const LAUNCH_AGENT_LABEL = 'dev.voltran.daemon';
+const SHARED_SHIM_PROFILE = '-';
 export const LAUNCH_AGENT_FILE = join(homedir(), 'Library', 'LaunchAgents', `${LAUNCH_AGENT_LABEL}.plist`);
 
 export interface ChromeApp {
@@ -23,6 +24,8 @@ function readPlist(file: string): Record<string, unknown> | null {
 
 // Chrome writes every installed web app as a small app bundle whose Info.plist names the app id, the
 // URL it opens and the profile folder that owns it (`<user data dir>/<profile>/Web Applications/…`).
+// A bundle that several profiles share names the folder `-`, and Chrome's Local State lists the
+// profiles that have the app, most recently used first.
 export function installedChromeApp(url: string, appsDir = CHROME_APPS_DIR, userDataDir = CHROME_USER_DATA_DIR): ChromeApp | null {
     if (!existsSync(appsDir)) {
         return null;
@@ -38,11 +41,33 @@ export function installedChromeApp(url: string, appsDir = CHROME_APPS_DIR, userD
             continue;
         }
         const profile = dirname(dirname(appDataDir));
-        if (dirname(profile) === userDataDir) {
-            return { id, profileDirectory: basename(profile) };
+        if (dirname(profile) !== userDataDir) {
+            continue;
+        }
+        const profileDirectory = basename(profile) === SHARED_SHIM_PROFILE ? appShimProfile(userDataDir, id) : basename(profile);
+        if (profileDirectory) {
+            return { id, profileDirectory };
         }
     }
     return null;
+}
+
+function appShimProfile(userDataDir: string, id: string): string | null {
+    let shim: unknown;
+    try {
+        shim = JSON.parse(readFileSync(join(userDataDir, 'Local State'), 'utf8'))?.app_shims?.[id];
+    } catch {
+        return null;
+    }
+    const installed = profileList(shim, 'installed_profiles');
+    return profileList(shim, 'last_active_profiles').find((name) => installed.includes(name)) ?? installed[0] ?? null;
+}
+
+function profileList(shim: unknown, key: string): string[] {
+    const list = typeof shim === 'object' && shim !== null ? (shim as Record<string, unknown>)[key] : undefined;
+    return Array.isArray(list)
+        ? list.filter((name): name is string => typeof name === 'string' && name !== SHARED_SHIM_PROFILE && name !== '' && basename(name) === name)
+        : [];
 }
 
 const xml = (text: string): string => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');

@@ -49,6 +49,28 @@ describe.skipIf(process.platform !== 'darwin')('macOS integration', () => {
         expect(installedChromeApp('http://127.0.0.1:4747', join(appsDir, 'missing'), userDataDir)).toBeNull();
     });
 
+    it('takes the profile from Chrome\'s Local State when several profiles share the app bundle', () => {
+        const appsDir = tempDir();
+        const userDataDir = tempDir();
+        const localState = (appShims: unknown): void => writeFileSync(join(userDataDir, 'Local State'), JSON.stringify({ app_shims: appShims }));
+        shim(appsDir, 'Voltran.app', { CrAppModeShortcutID: 'abc', CrAppModeShortcutURL: 'http://127.0.0.1:4747/', CrAppModeUserDataDir: `${userDataDir}/-/Web Applications/_crx_abc` });
+        const find = (): unknown => installedChromeApp('http://127.0.0.1:4747', appsDir, userDataDir);
+
+        expect(find()).toBeNull();
+
+        localState({ abc: { installed_profiles: ['Default', 'Profile 1'], last_active_profiles: ['Profile 3', 'Profile 1'] } });
+        expect(find()).toEqual({ id: 'abc', profileDirectory: 'Profile 1' });
+
+        localState({ abc: { installed_profiles: ['Default'], last_active_profiles: [] } });
+        expect(find()).toEqual({ id: 'abc', profileDirectory: 'Default' });
+
+        localState({ abc: { installed_profiles: [7, '-', '', '../Default'] }, other: { installed_profiles: ['Default'] } });
+        expect(find()).toBeNull();
+
+        writeFileSync(join(userDataDir, 'Local State'), '{');
+        expect(find()).toBeNull();
+    });
+
     it('writes a launch agent that runs the given program with its environment', () => {
         const text = launchAgentPlist({
             program: ['/Users/me/.nvm/node', '/Users/me/R&D <voltran>/bin/voltran.mjs', 'up', '--no-open'],
