@@ -87,6 +87,14 @@ function readBody(req: IncomingMessage, limit: number): Promise<string> {
     });
 }
 
+function requestUrl(req: IncomingMessage): URL {
+    try {
+        return new URL(req.url ?? '/', 'http://localhost');
+    } catch {
+        throw new HttpError(400, 'malformed request URL');
+    }
+}
+
 async function readJson<T>(req: IncomingMessage, limit = JSON_LIMIT): Promise<T> {
     const raw = await readBody(req, limit);
     if (!raw) {
@@ -173,7 +181,7 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('POST', '/api/sessions', async (req, res) => sendJson(res, 201, await hub.createSession(await readJson(req))));
     route('PATCH', '/api/sessions/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateSession(id, await readJson(req))));
     route('DELETE', '/api/sessions/:id', async (req, res, [id]) => {
-        const worktree = new URL(req.url ?? '/', 'http://voltran').searchParams.get('worktree');
+        const worktree = requestUrl(req).searchParams.get('worktree');
         if (worktree !== null && worktree !== 'keep' && worktree !== 'remove') {
             throw new HttpError(400, 'worktree must be "keep" or "remove"');
         }
@@ -249,10 +257,9 @@ export function createVoltranServer(options: ServerOptions): Server {
     };
 
     const server = createServer(async (req, res) => {
-        const url = new URL(req.url ?? '/', 'http://localhost');
-        const pathname = url.pathname;
-
         try {
+            const url = requestUrl(req);
+            const pathname = url.pathname;
             const hookMatch = req.method === 'POST' ? pathname.match(hookPattern) : null;
             if (hookMatch) {
                 const verdict = guard.checkRequest(req, { allowAnonymous: true });
@@ -319,6 +326,10 @@ export function createVoltranServer(options: ServerOptions): Server {
                 sendJson(res, error.status, { error: error.message });
                 return;
             }
+            if (error instanceof URIError) {
+                sendJson(res, 400, { error: 'malformed request URL' });
+                return;
+            }
             console.error('[voltran] request failed:', error);
             sendJson(res, 500, { error: 'internal error' });
         }
@@ -359,20 +370,21 @@ function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: Sett
     }, HEARTBEAT_MS);
     server.on('close', () => clearInterval(heartbeat));
 
-    server.on('upgrade', (req, socket, head) => {
+    const upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
         const verdict = guard.checkRequest(req);
         if (!verdict.ok) {
             refuseUpgrade(socket, verdict.status, verdict.reason);
             return;
         }
-        const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+        const pathname = requestUrl(req).pathname;
         const paneMatch = pathname.match(/^\/ws\/panes\/([^/]+)$/);
+        const paneId = paneMatch ? decodeURIComponent(paneMatch[1]) : null;
 
-        if (pathname !== '/ws/events' && !paneMatch) {
+        if (pathname !== '/ws/events' && paneId === null) {
             refuseUpgrade(socket, 404, 'Not Found');
             return;
         }
-        if (paneMatch && !hub.panes.has(decodeURIComponent(paneMatch[1]))) {
+        if (paneId !== null && !hub.panes.has(paneId)) {
             refuseUpgrade(socket, 404, 'Not Found');
             return;
         }
@@ -380,12 +392,23 @@ function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: Sett
         wss.handleUpgrade(req, socket, head, (ws) => {
             alive.set(ws, true);
             ws.on('pong', () => alive.set(ws, true));
-            if (paneMatch) {
-                servePane(ws, hub, decodeURIComponent(paneMatch[1]));
+            if (paneId !== null) {
+                servePane(ws, hub, paneId);
             } else {
                 serveEvents(ws, hub, settings, version);
             }
         });
+    };
+
+    // Nothing that arrives with an upgrade request may throw out of this listener: the daemon would
+    // exit and take every pane with it.
+    server.on('upgrade', (req, socket, head) => {
+        socket.on('error', () => socket.destroy());
+        try {
+            upgrade(req, socket, head);
+        } catch {
+            refuseUpgrade(socket, 400, 'Bad Request');
+        }
     });
 }
 

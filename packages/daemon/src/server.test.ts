@@ -179,6 +179,30 @@ describe('access control', () => {
         expect(outcome).toContain('403');
     });
 
+    it('answers malformed URLs, escapes and cookies without going down', async () => {
+        const raw = (method: string, path: string, headers: Record<string, string> = {}): Promise<number> => new Promise((resolveStatus) => {
+            httpRequest({ host: '127.0.0.1', port, method, path, headers }, (response) => {
+                response.resume();
+                resolveStatus(response.statusCode ?? 0);
+            }).end();
+        });
+        const upgrade = (path: string, headers: Record<string, string>): Promise<string> => new Promise((resolveOutcome) => {
+            const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers });
+            socket.on('open', () => {
+                socket.close();
+                resolveOutcome('opened');
+            });
+            socket.on('error', (error) => resolveOutcome(error.message));
+        });
+
+        expect(await raw('GET', '//')).toBe(400);
+        expect(await raw('GET', '/api/panes/%/notes', { Authorization: `Bearer ${daemon.token}` })).toBe(400);
+        expect(await raw('POST', '/api/hooks/%/Stop', { Authorization: 'Bearer nope' })).toBe(400);
+        expect(await upgrade('/ws/events', { Cookie: 'voltran_session=%' })).toContain('401');
+        expect(await upgrade('/ws/panes/%', { Authorization: `Bearer ${daemon.token}` })).toContain('400');
+        expect((await api('GET', '/api/health')).status).toBe(200);
+    });
+
     it('counts the open windows for the CLI, for signed-in callers only', async () => {
         expect((await fetch(`${base}/api/windows`)).status).toBe(401);
         const before = (await api<{ open: number; previous: number }>('GET', '/api/windows')).body;
