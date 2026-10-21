@@ -341,6 +341,7 @@ const SESSION_SCOPED_ENV = [
     'INIT_CWD',
     'VOLTRAN_PANE_ID',
     'VOLTRAN_HOOK_SECRET',
+    'VOLTRAN_HOOK_HEADER',
     'VOLTRAN_URL',
     'VOLTRAN_NOTES',
     'VOLTRAN_STATUSLINE',
@@ -424,7 +425,7 @@ const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'
 
 function hookCommand(event: string): string {
     return `[ -n "$VOLTRAN_PANE_ID" ] && curl -s -m 2 -o /dev/null -X POST `
-        + `-H "Authorization: Bearer $VOLTRAN_HOOK_SECRET" -H 'Content-Type: application/json' `
+        + `-H @"$VOLTRAN_HOOK_HEADER" -H 'Content-Type: application/json' `
         + `--data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"; exit 0`;
 }
 

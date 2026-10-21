@@ -61,6 +61,7 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'voltran-panes-')), overrides: P
     const recorded: Recorded = { records: [], attention: [] };
     const manager = new PaneManager({
         scrollbackDir: dir,
+        hooksDir: join(dir, 'hooks'),
         url: 'http://127.0.0.1:1',
         shell: '/bin/sh',
         path: process.env.PATH ?? '/usr/bin:/bin',

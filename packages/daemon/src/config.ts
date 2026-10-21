@@ -15,6 +15,7 @@ export interface Config {
     scrollbackDir: string;
     notesDir: string;
     worktreesDir: string;
+    hooksDir: string;
     settingsFile: string;
     windowsFile: string;
     webDist: string;
@@ -51,6 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         scrollbackDir: join(home, 'scrollback'),
         notesDir: join(home, 'notes'),
         worktreesDir: join(home, 'worktrees'),
+        hooksDir: join(home, 'hooks'),
         settingsFile: join(home, 'settings.json'),
         windowsFile: join(home, 'windows'),
         webDist: resolve(here, '../../web/dist'),

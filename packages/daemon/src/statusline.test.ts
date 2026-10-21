@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Usage } from '@voltran/shared';
 import { STATUS_LINE } from './adapters.ts';
@@ -139,7 +139,10 @@ describe('status line script', () => {
 
     it('reports input that carries the usage limits to the pane\'s hook route', async () => {
         const { url, requests } = await daemon();
-        const env = { VOLTRAN_PANE_ID: 'pane-1', VOLTRAN_HOOK_SECRET: 's3cret', VOLTRAN_URL: url };
+        const header = join(mkdtempSync(join(tmpdir(), 'voltran-header-')), 'pane-1');
+        cleanups.push(() => rmSync(dirname(header), { recursive: true, force: true }));
+        writeFileSync(header, 'Authorization: Bearer s3cret\n', { mode: 0o600 });
+        const env = { VOLTRAN_PANE_ID: 'pane-1', VOLTRAN_HOOK_HEADER: header, VOLTRAN_URL: url };
         const input = JSON.stringify(limits({ used_percentage: 10, resets_at: 2_000_000_000 }));
         expect(run('{"model":{}}', env).status).toBe(0);
         expect(run(input, env).status).toBe(0);

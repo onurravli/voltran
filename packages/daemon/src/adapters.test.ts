@@ -88,7 +88,8 @@ describe('codex adapter', () => {
             expect(match?.[1]).toBe(event);
             const command = JSON.parse(match?.[2] ?? '""') as string;
             expect(command).toContain(`"$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"`);
-            expect(command).toContain('Bearer $VOLTRAN_HOOK_SECRET');
+            expect(command).toContain('-H @"$VOLTRAN_HOOK_HEADER"');
+            expect(command).not.toContain('VOLTRAN_HOOK_SECRET');
             expect(command).not.toMatch(/[\r\n]/);
         });
         expect(codexHookArgs()).toEqual(args);

@@ -5,7 +5,7 @@ input=$(cat)
 case "$input" in
     *'"rate_limits"'*)
         [ -n "$VOLTRAN_PANE_ID" ] && printf '%s' "$input" | curl -s -m 2 -o /dev/null -X POST \
-            -H "Authorization: Bearer $VOLTRAN_HOOK_SECRET" -H 'Content-Type: application/json' \
+            -H @"$VOLTRAN_HOOK_HEADER" -H 'Content-Type: application/json' \
             --data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/StatusLine" > /dev/null 2>&1 &
         ;;
 esac

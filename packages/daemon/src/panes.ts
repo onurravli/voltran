@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import * as nodePty from 'node-pty';
 import headless from '@xterm/headless';
@@ -47,6 +47,7 @@ interface Runtime {
 
 export interface PaneManagerOptions {
     scrollbackDir: string;
+    hooksDir: string;
     url: string;
     shell: string;
     path: string;
@@ -86,6 +87,7 @@ export class PaneManager {
 
     constructor(options: PaneManagerOptions) {
         this.options = options;
+        rmSync(options.hooksDir, { recursive: true, force: true });
         this.persistTimer = setInterval(() => this.persistDirty(), PERSIST_INTERVAL_MS);
         this.maintenanceTimer = setInterval(() => this.maintain(), MAINTENANCE_INTERVAL_MS);
     }
@@ -452,7 +454,7 @@ export class PaneManager {
         const extraEnv: Record<string, string> = {
             ...spec.env,
             ...(notesFile ? { VOLTRAN_NOTES: notesFile } : {}),
-            ...(secret ? { VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_URL: this.options.url } : {}),
+            ...(secret ? { VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_HOOK_HEADER: this.hookHeader(pane.id, secret)!, VOLTRAN_URL: this.options.url } : {}),
         };
         runtime.opencode?.reset();
 
@@ -470,6 +472,7 @@ export class PaneManager {
             });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            this.hookHeader(pane.id, null);
             this.write(runtime, notice(`could not start ${adapter.label}: ${message}`, 'error'));
             this.updateRecord(runtime, { ended: true });
             runtime.state.exitCode = null;
@@ -506,6 +509,7 @@ export class PaneManager {
             this.clearKillTimer(runtime);
             runtime.pty = null;
             runtime.hookSecret = null;
+            this.hookHeader(runtime.pane.id, null);
             this.updateRecord(runtime, { ended: true });
             runtime.tracker?.reset('exited');
             runtime.opencode?.reset();
@@ -525,9 +529,23 @@ export class PaneManager {
         });
     }
 
+    // Hooks are shell commands, and a secret written into one would sit in curl's arguments, which other
+    // users of the machine can read with ps. curl reads the header from this file instead.
+    private hookHeader(paneId: string, secret: string | null): string | null {
+        const file = join(this.options.hooksDir, paneId);
+        rmSync(file, { force: true });
+        if (!secret) {
+            return null;
+        }
+        mkdirSync(this.options.hooksDir, { recursive: true, mode: 0o700 });
+        writeFileSync(file, `Authorization: Bearer ${secret}\n`, { mode: 0o600, flag: 'wx' });
+        return file;
+    }
+
     private stopProcess(runtime: Runtime): void {
         runtime.generation += 1;
         runtime.hookSecret = null;
+        this.hookHeader(runtime.pane.id, null);
         this.clearKillTimer(runtime);
         if (runtime.pty) {
             try {

@@ -59,6 +59,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         scrollbackDir: config.scrollbackDir,
         notesDir: config.notesDir,
         worktreesDir: config.worktreesDir,
+        hooksDir: config.hooksDir,
         url: config.url,
         shell: options.shell,
         path: options.path,

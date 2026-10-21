@@ -536,9 +536,13 @@ describe('agent panes', () => {
 
         const forged = await fetch(`${base}/api/hooks/${paneId}/Stop`, { method: 'POST', headers: { Authorization: `Bearer ${daemon.token}` }, body: '{}' });
         expect(forged.status).toBe(403);
+        const header = join(home, 'data', 'hooks', paneId);
+        expect(statSync(header).mode & 0o777).toBe(0o600);
+        expect(output).not.toMatch(/[0-9a-f]{48}/);
 
         socket.close();
         await api('DELETE', `/api/sessions/${session.id}`);
+        expect(existsSync(header)).toBe(false);
         const scrollback = join(home, 'data', 'scrollback');
         expect(existsSync(scrollback) ? readdirSync(scrollback).filter((file) => file.startsWith(paneId)) : []).toEqual([]);
     });
