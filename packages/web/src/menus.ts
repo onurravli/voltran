@@ -2,7 +2,8 @@ import { PROJECT_COLORS, type PaneView, type Project, type Session, type Workspa
 import { api } from './api.ts';
 import { shortPath } from './labels.ts';
 import { revealPane } from './notify.ts';
-import { closePane } from './shortcuts.ts';
+import { closePane, orderedSessions } from './shortcuts.ts';
+import { stepBefore } from './sidebar.ts';
 import { panesOf, reportError, useUi } from './store.ts';
 import { addToWorkspace, createWorkspace, deleteWorkspace } from './workspace-actions.ts';
 import { dropOnWorkspace, type Dragged } from './workspaces.ts';
@@ -70,6 +71,32 @@ function workspaceItems(dragged: Dragged): MenuItem[] {
     ];
 }
 
+function moveItems(ids: string[], id: string, move: (before: string | null) => Promise<unknown>): MenuItem[] {
+    const up = stepBefore(ids, id, -1);
+    const down = stepBefore(ids, id, 1);
+    return [
+        {
+            label: 'Move up',
+            separated: true,
+            disabled: up === undefined,
+            onSelect: () => {
+                if (up !== undefined) {
+                    move(up).catch(reportError);
+                }
+            },
+        },
+        {
+            label: 'Move down',
+            disabled: down === undefined,
+            onSelect: () => {
+                if (down !== undefined) {
+                    move(down).catch(reportError);
+                }
+            },
+        },
+    ];
+}
+
 export function removeProject(project: Project): void {
     const sessions = useUi.getState().app?.sessions.filter((session) => session.projectId === project.id) ?? [];
     useUi.getState().openDialog({
@@ -126,6 +153,7 @@ export function projectMenu(project: Project, rename: () => void): MenuItem[] {
         },
         { label: collapsed ? 'Expand' : 'Collapse', onSelect: () => ui.toggleProject(project.id) },
         { label: 'Copy folder path', onSelect: () => copy(project.path, 'folder path') },
+        ...moveItems((ui.app?.projects ?? []).map((entry) => entry.id), project.id, (moveBefore) => api.updateProject(project.id, { moveBefore })),
         { label: 'Remove project…', danger: true, separated: true, onSelect: () => removeProject(project) },
     ];
 }
@@ -138,6 +166,7 @@ export function sessionMenu(session: Session, actions: { rename: () => void; edi
     const finished = panes.filter((pane) => pane.status === 'done');
     const link = session.link;
     const sidebar = where === 'sidebar';
+    const siblings = orderedSessions(ui.app, ui.showArchived).filter((entry) => entry.projectId === session.projectId).map((entry) => entry.id);
     return [
         ...(sidebar ? [{ label: 'Add pane', items: addPaneItems(session.id), disabled: session.archived }] : []),
         { label: 'Rename', onSelect: actions.rename },
@@ -152,6 +181,7 @@ export function sessionMenu(session: Session, actions: { rename: () => void; edi
         ...(finished.length > 0
             ? [{ label: finished.length === 1 ? 'Mark as seen' : 'Mark all as seen', onSelect: () => finished.forEach((pane) => api.seenPane(pane.id).catch(reportError)) }]
             : []),
+        ...(sidebar ? moveItems(siblings, session.id, (moveBefore) => api.updateSession(session.id, { moveBefore })) : []),
         session.archived
             ? { label: 'Restore session', separated: true, onSelect: () => api.updateSession(session.id, { archived: false }).catch(reportError) }
             : { label: 'Archive session', note: 'stops its processes', separated: true, onSelect: () => api.updateSession(session.id, { archived: true }).catch(reportError) },

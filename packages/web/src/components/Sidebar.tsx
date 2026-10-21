@@ -1,13 +1,22 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type PointerEvent } from 'react';
 import type { PaneView, Project, Session, SubagentView, Workspace } from '@voltran/shared';
 import { aggregateStatus, needsAttention, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
-import { PANE_DRAG_TYPE, SESSION_DRAG_TYPE } from '../drag.ts';
+import { PANE_DRAG_TYPE, PROJECT_DRAG_TYPE, SESSION_DRAG_TYPE } from '../drag.ts';
 import { enableNotifications, notificationsSupported, revealPane } from '../notify.ts';
-import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH_STEP, draggedSidebarWidth } from '../sidebar.ts';
+import {
+    DEFAULT_SIDEBAR_WIDTH,
+    MAX_SIDEBAR_WIDTH,
+    MIN_SIDEBAR_WIDTH,
+    SIDEBAR_WIDTH_STEP,
+    draggedSidebarWidth,
+    dropBefore,
+    dropSide,
+    type DropSide,
+} from '../sidebar.ts';
 import { gitLabels } from '../labels.ts';
 import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
-import { keys } from '../shortcuts.ts';
+import { keys, orderedSessions } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
@@ -39,6 +48,11 @@ function useNow(intervalMs: number): number {
         return () => clearInterval(timer);
     }, [intervalMs]);
     return now;
+}
+
+function sideOf(event: DragEvent<HTMLElement>): DropSide {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return dropSide(event.clientY - rect.top, rect.height);
 }
 
 function leadPane(panes: PaneView[]): PaneView | null {
@@ -116,14 +130,25 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         const from = moving ? state.app?.sessions.find((entry) => entry.id === moving.sessionId) : undefined;
         return Boolean(moving && from && moving.sessionId !== session.id && !session.archived && from.projectId === session.projectId);
     });
+    const reorders = useUi((state) => {
+        const moving = state.reordering?.kind === 'session' ? state.app?.sessions.find((entry) => entry.id === state.reordering?.id) : undefined;
+        return Boolean(moving && moving.id !== session.id && moving.projectId === session.projectId);
+    });
     const worktreeBranch = useUi((state) => (session.worktree ? state.app?.git[session.cwd]?.branch ?? null : null));
     const [over, setOver] = useState(false);
+    const [side, setSide] = useState<DropSide | null>(null);
     const [renaming, setRenaming] = useState(false);
     const lead = leadPane(panes);
     const status = lead?.status ?? null;
     const failed = status === 'exited' && lead?.exitCode !== 0 && lead?.exitCode !== null;
     const showDetail = lead && (needsAttention(lead.status) || lead.status === 'working') && lead.detail;
     const agents = panes.flatMap((pane) => (pane.subagents ?? []).map((agent) => ({ agent, paneId: pane.id })));
+
+    useEffect(() => {
+        if (!reorders) {
+            setSide(null);
+        }
+    }, [reorders]);
 
     if (renaming) {
         return (
@@ -151,15 +176,19 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
             >
                 <button
                     type="button"
-                    className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
+                    className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}${reorders && side ? ` is-drop-${side}` : ''}`}
                     onClick={() => selectSession(session.id)}
                     onDoubleClick={() => setRenaming(true)}
-                    title="Double-click to rename, drag onto a workspace to show its panes there"
-                    draggable={panes.length > 0}
+                    title="Double-click to rename. Drag to reorder, or onto a workspace to show its panes there"
+                    draggable
                     onDragStart={(event) => {
                         event.dataTransfer.setData(SESSION_DRAG_TYPE, session.id);
-                        event.dataTransfer.effectAllowed = 'copy';
-                        useUi.getState().setDraggingSession(session.id);
+                        event.dataTransfer.effectAllowed = 'copyMove';
+                        const ui = useUi.getState();
+                        ui.setReordering({ kind: 'session', id: session.id });
+                        if (panes.length > 0) {
+                            ui.setDraggingSession(session.id);
+                        }
                     }}
                     onDragEnd={endDrag}
                     onDragOver={(event) => {
@@ -167,12 +196,27 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                             event.preventDefault();
                             event.dataTransfer.dropEffect = 'move';
                             setOver(true);
+                        } else if (reorders) {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
+                            setSide(sideOf(event));
                         }
                     }}
-                    onDragLeave={() => setOver(false)}
-                    onDrop={(event) => {
-                        const moving = useUi.getState().draggingPaneId;
+                    onDragLeave={() => {
                         setOver(false);
+                        setSide(null);
+                    }}
+                    onDrop={(event) => {
+                        const { draggingPaneId: moving, reordering, app, showArchived } = useUi.getState();
+                        setOver(false);
+                        setSide(null);
+                        if (reorders && reordering) {
+                            event.preventDefault();
+                            endDrag();
+                            const siblings = orderedSessions(app, showArchived).filter((entry) => entry.projectId === session.projectId).map((entry) => entry.id);
+                            api.updateSession(reordering.id, { moveBefore: dropBefore(siblings, session.id, sideOf(event)) }).catch(reportError);
+                            return;
+                        }
                         if (!accepts || !moving) {
                             return;
                         }
@@ -313,13 +357,43 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
     const gitLabel = git ? gitLabels(git) : null;
     const toggleProject = useUi((state) => state.toggleProject);
     const openDialog = useUi((state) => state.openDialog);
+    const reorders = useUi((state) => state.reordering?.kind === 'project' && state.reordering.id !== project.id);
+    const [side, setSide] = useState<DropSide | null>(null);
     const [renaming, setRenaming] = useState(false);
     const waiting = sessions.filter((session) => panesOf(app, session.id).some((pane) => needsAttention(pane.status))).length;
+
+    useEffect(() => {
+        if (!reorders) {
+            setSide(null);
+        }
+    }, [reorders]);
 
     const menu = (): MenuItem[] => projectMenu(project, () => setRenaming(true));
 
     return (
-        <section className="project" style={{ '--project-color': project.color } as React.CSSProperties}>
+        <section
+            className={`project${reorders && side ? ` is-drop-${side}` : ''}`}
+            style={{ '--project-color': project.color } as React.CSSProperties}
+            onDragOver={(event) => {
+                if (reorders) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setSide(sideOf(event));
+                }
+            }}
+            onDragLeave={() => setSide(null)}
+            onDrop={(event) => {
+                const { reordering, app: current } = useUi.getState();
+                setSide(null);
+                if (!reorders || !reordering) {
+                    return;
+                }
+                event.preventDefault();
+                endDrag();
+                const ids = (current?.projects ?? []).map((entry) => entry.id);
+                api.updateProject(reordering.id, { moveBefore: dropBefore(ids, project.id, sideOf(event)) }).catch(reportError);
+            }}
+        >
             <ContextMenuArea label={project.name} items={menu}>
                 <div className="project__header">
                     {renaming ? (
@@ -341,7 +415,14 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
                             onClick={() => toggleProject(project.id)}
                             onDoubleClick={() => setRenaming(true)}
                             aria-expanded={!collapsed}
-                            title={`${project.path}\nDouble-click to rename`}
+                            title={`${project.path}\nDouble-click to rename, drag to reorder`}
+                            draggable
+                            onDragStart={(event) => {
+                                event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.id);
+                                event.dataTransfer.effectAllowed = 'move';
+                                useUi.getState().setReordering({ kind: 'project', id: project.id });
+                            }}
+                            onDragEnd={endDrag}
                         >
                             <ChevronIcon size={12} className={`project__chevron${collapsed ? '' : ' is-open'}`} />
                             <span className="project__name">{project.name}</span>

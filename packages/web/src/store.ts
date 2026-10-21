@@ -37,6 +37,11 @@ export interface Toast {
     tone: 'info' | 'error';
 }
 
+export interface Reordering {
+    kind: 'project' | 'session';
+    id: string;
+}
+
 export interface UiState {
     app: AppState | null;
     version: VersionInfo | null;
@@ -47,6 +52,7 @@ export interface UiState {
     maximizedPaneId: string | null;
     draggingPaneId: string | null;
     draggingSessionId: string | null;
+    reordering: Reordering | null;
     findPaneId: string | null;
     findToken: number;
     findStep: { direction: 'next' | 'previous'; token: number } | null;
@@ -81,6 +87,7 @@ export interface UiState {
     toggleMaximize: (id: string) => void;
     setDraggingPane: (id: string | null) => void;
     setDraggingSession: (id: string | null) => void;
+    setReordering: (reordering: Reordering | null) => void;
     openFind: (paneId: string) => void;
     closeFind: () => void;
     stepFind: (direction: 'next' | 'previous') => void;
@@ -203,6 +210,7 @@ export const useUi = create<UiState>((set, get) => ({
     maximizedPaneId: null,
     draggingPaneId: null,
     draggingSessionId: null,
+    reordering: null,
     findPaneId: null,
     findToken: 0,
     findStep: null,
@@ -237,6 +245,7 @@ export const useUi = create<UiState>((set, get) => ({
     toggleMaximize: (id) => set({ maximizedPaneId: get().maximizedPaneId === id ? null : id }),
     setDraggingPane: (draggingPaneId) => set({ draggingPaneId }),
     setDraggingSession: (draggingSessionId) => set({ draggingSessionId }),
+    setReordering: (reordering) => set({ reordering }),
     openFind: (paneId) => set({ findPaneId: paneId, findToken: get().findToken + 1 }),
     closeFind: () => set({ findPaneId: null }),
     stepFind: (direction) => set({ findStep: { direction, token: (get().findStep?.token ?? 0) + 1 } }),

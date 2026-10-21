@@ -115,6 +115,16 @@ const optionalLink = (value: unknown): string | null => {
     return url.toString();
 };
 
+const moveTarget = (value: unknown, siblings: string[], sibling: string): string | null => {
+    if (value === null) {
+        return null;
+    }
+    if (typeof value !== 'string' || !siblings.includes(value)) {
+        throw new HttpError(400, `moveBefore must be ${sibling}, or null for the end`);
+    }
+    return value;
+};
+
 function refusedAsHttp<T>(action: () => T): T {
     try {
         return action();
@@ -265,7 +275,13 @@ export class Hub {
             }
             patch.color = body.color;
         }
+        const before = body.moveBefore === undefined
+            ? undefined
+            : moveTarget(body.moveBefore, this.store.listProjects().map((project) => project.id), 'another project');
         this.store.updateProject(id, patch);
+        if (before !== undefined) {
+            this.store.moveProject(id, before);
+        }
         this.scheduleBroadcast();
         return this.mustGetProject(id);
     }
@@ -360,6 +376,9 @@ export class Hub {
             }
             patch.layout = body.layout;
         }
+        const before = body.moveBefore === undefined
+            ? undefined
+            : moveTarget(body.moveBefore, this.store.sessionsOfProject(session.projectId).map((entry) => entry.id), 'a session of the same project');
         if (body.archived !== undefined) {
             patch.archived = Boolean(body.archived);
             if (patch.archived && !session.archived) {
@@ -369,6 +388,9 @@ export class Hub {
             }
         }
         this.store.updateSession(id, patch);
+        if (before !== undefined) {
+            this.store.moveSession(id, before);
+        }
         this.scheduleBroadcast();
         return this.mustGetSession(id);
     }

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
+import type { Session } from '@voltran/shared';
 import { Hub, HttpError } from './hub.ts';
 import { Store } from './store.ts';
 
@@ -154,6 +155,101 @@ describe('Hub', () => {
             expect(existsSync(clean.worktree!)).toBe(false);
             expect(existsSync(join(dirty.cwd, 'wip.ts'))).toBe(true);
         });
+    });
+
+    describe('order', () => {
+        function opened(): { dir: string; hub: Hub } {
+            const dir = mkdtempSync(join(tmpdir(), 'voltran-order-'));
+            const { store, hub } = open(dir);
+            cleanups.push(async () => {
+                await hub.shutdown();
+                store.close();
+                rmSync(dir, { recursive: true, force: true });
+            });
+            return { dir, hub };
+        }
+        const project = (hub: Hub, dir: string, name: string) => {
+            mkdirSync(join(dir, name));
+            return hub.createProject({ path: join(dir, name) });
+        };
+        const projectNames = (hub: Hub): string[] => hub.state().projects.map((entry) => entry.name);
+        const sessionTitles = (hub: Hub, projectId: string): string[] =>
+            hub.state().sessions.filter((entry) => entry.projectId === projectId).map((entry) => entry.title);
+
+        it('moves a project in front of another, or to the end', () => {
+            const { dir, hub } = opened();
+            const [a, b, c] = ['a', 'b', 'c'].map((name) => project(hub, dir, name));
+            hub.updateProject(c.id, { moveBefore: a.id });
+            expect(projectNames(hub)).toEqual(['c', 'a', 'b']);
+            hub.updateProject(c.id, { moveBefore: null });
+            expect(projectNames(hub)).toEqual(['a', 'b', 'c']);
+            hub.updateProject(a.id, { moveBefore: c.id });
+            expect(projectNames(hub)).toEqual(['b', 'a', 'c']);
+            hub.updateProject(b.id, { moveBefore: b.id });
+            expect(projectNames(hub)).toEqual(['b', 'a', 'c']);
+            expect(project(hub, dir, 'd').name).toBe('d');
+            expect(projectNames(hub)).toEqual(['b', 'a', 'c', 'd']);
+        });
+
+        it('moves a session within its project and puts new sessions last', async () => {
+            const { dir, hub } = opened();
+            const web = project(hub, dir, 'web');
+            const api = project(hub, dir, 'api');
+            const created: Session[] = [];
+            for (const title of ['one', 'two', 'three']) {
+                created.push(await hub.createSession({ projectId: web.id, title }));
+            }
+            await hub.createSession({ projectId: api.id, title: 'elsewhere' });
+            hub.updateSession(created[2].id, { moveBefore: created[0].id });
+            expect(sessionTitles(hub, web.id)).toEqual(['three', 'one', 'two']);
+            hub.updateSession(created[2].id, { moveBefore: null });
+            expect(sessionTitles(hub, web.id)).toEqual(['one', 'two', 'three']);
+            hub.updateSession(created[0].id, { moveBefore: created[2].id, archived: true });
+            expect(sessionTitles(hub, web.id)).toEqual(['two', 'one', 'three']);
+            await hub.createSession({ projectId: web.id, title: 'four' });
+            expect(sessionTitles(hub, web.id)).toEqual(['two', 'one', 'three', 'four']);
+            expect(sessionTitles(hub, api.id)).toEqual(['elsewhere']);
+            hub.updateProject(api.id, { moveBefore: web.id });
+            expect(hub.state().sessions.map((entry) => entry.title)).toEqual(['elsewhere', 'two', 'one', 'three', 'four']);
+        });
+
+        it('refuses to move in front of anything but a sibling', async () => {
+            const { dir, hub } = opened();
+            const web = project(hub, dir, 'web');
+            const api = project(hub, dir, 'api');
+            const session = await hub.createSession({ projectId: web.id, title: 'web' });
+            const other = await hub.createSession({ projectId: api.id, title: 'api' });
+            const status = (action: () => unknown): number | null => {
+                try {
+                    action();
+                    return null;
+                } catch (error) {
+                    return error instanceof HttpError ? error.status : -1;
+                }
+            };
+            expect(status(() => hub.updateSession(session.id, { moveBefore: other.id }))).toBe(400);
+            expect(status(() => hub.updateSession(session.id, { moveBefore: 3 as unknown as string }))).toBe(400);
+            expect(status(() => hub.updateProject(web.id, { moveBefore: session.id }))).toBe(400);
+            expect(status(() => hub.updateProject(web.id, { name: 'renamed', moveBefore: 'gone' }))).toBe(400);
+            expect(projectNames(hub)).toEqual(['web', 'api']);
+        });
+    });
+
+    it('numbers the sessions of a database from before ordering in the order they were made', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'voltran-hub-'));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        const old = new DatabaseSync(join(dir, 'voltran.db'));
+        old.exec(`create table sessions (id text primary key, project_id text not null, title text not null, link text, cwd text not null,
+            layout text, archived integer not null default 0, created_at integer not null, updated_at integer not null)`);
+        old.exec(`insert into sessions values ('s3', 'p', 'third', null, '/tmp', null, 0, 30, 30), ('s1', 'p', 'first', null, '/tmp', null, 0, 10, 10),
+            ('q1', 'q', 'other', null, '/tmp', null, 0, 20, 20), ('s2', 'p', 'second', null, '/tmp', null, 0, 20, 20)`);
+        old.close();
+        const store = new Store(join(dir, 'voltran.db'));
+        cleanups.push(() => store.close());
+        expect(store.sessionsOfProject('p').map((session) => session.title)).toEqual(['first', 'second', 'third']);
+        store.moveSession('s3', 's1');
+        expect(store.sessionsOfProject('p').map((session) => session.title)).toEqual(['third', 'first', 'second']);
+        expect(store.sessionsOfProject('q').map((session) => session.title)).toEqual(['other']);
     });
 
     it('adds the worktree column to a database from before worktrees', async () => {

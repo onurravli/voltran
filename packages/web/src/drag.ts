@@ -2,6 +2,7 @@ import type { DropEdge } from '@voltran/shared';
 
 export const PANE_DRAG_TYPE = 'application/x-voltran-pane';
 export const SESSION_DRAG_TYPE = 'application/x-voltran-session';
+export const PROJECT_DRAG_TYPE = 'application/x-voltran-project';
 
 const CENTRE = [0.3, 0.7];
 

@@ -31,6 +31,7 @@ export function endDrag(): void {
     const state = useUi.getState();
     state.setDraggingPane(null);
     state.setDraggingSession(null);
+    state.setReordering(null);
 }
 
 export function dropIntoWorkspace(workspaceId: string, dragged: Dragged, targetId: string | null, edge: DropEdge): void {

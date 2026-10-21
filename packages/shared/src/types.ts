@@ -192,6 +192,7 @@ export interface CreateProjectBody {
 export interface UpdateProjectBody {
     name?: string;
     color?: string;
+    moveBefore?: string | null;
 }
 
 export interface CreateSessionBody {
@@ -215,6 +216,7 @@ export interface UpdateSessionBody {
     link?: string | null;
     archived?: boolean;
     layout?: Layout | null;
+    moveBefore?: string | null;
 }
 
 export interface CreatePaneBody extends PaneSpec {

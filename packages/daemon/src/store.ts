@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { AdapterId, Layout, Pane, Project, Session, TitleSource, Workspace } from '@voltran/shared';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const SCHEMA = `
 create table if not exists projects (
@@ -22,6 +22,7 @@ create table if not exists sessions (
     worktree text,
     layout text,
     archived integer not null default 0,
+    position integer not null default 0,
     created_at integer not null,
     updated_at integer not null
 );
@@ -105,6 +106,12 @@ export class Store {
         if (!sessionColumns.some((column) => column.name === 'title_source')) {
             this.db.exec(`alter table sessions add column title_source text not null default 'user'`);
         }
+        if (!sessionColumns.some((column) => column.name === 'position')) {
+            this.db.exec('alter table sessions add column position integer not null default 0');
+            this.db.exec(`update sessions set position = numbered.position
+                from (select id, row_number() over (partition by project_id order by created_at, id) - 1 as position from sessions) as numbered
+                where numbered.id = sessions.id`);
+        }
         // Gemini CLI panes from before Antigravity replaced it would name an adapter that no longer exists.
         this.db.exec(`update panes set adapter = 'antigravity' where adapter = 'gemini'`);
         this.db.exec(`pragma user_version = ${SCHEMA_VERSION}`);
@@ -119,7 +126,9 @@ export class Store {
     }
 
     listSessions(): Session[] {
-        return (this.db.prepare('select * from sessions order by created_at').all() as Row[]).map(toSession);
+        const rows = this.db.prepare(`select sessions.* from sessions left join projects on projects.id = sessions.project_id
+            order by projects.position, projects.created_at, sessions.position, sessions.created_at`).all() as Row[];
+        return rows.map(toSession);
     }
 
     listPanes(): Pane[] {
@@ -155,7 +164,7 @@ export class Store {
     }
 
     sessionsOfProject(projectId: string): Session[] {
-        return (this.db.prepare('select * from sessions where project_id = ? order by created_at').all(projectId) as Row[]).map(toSession);
+        return (this.db.prepare('select * from sessions where project_id = ? order by position, created_at').all(projectId) as Row[]).map(toSession);
     }
 
     insertProject(project: Project): void {
@@ -173,13 +182,19 @@ export class Store {
         this.db.prepare('update projects set name = ?, color = ? where id = ?').run(next.name, next.color, id);
     }
 
+    moveProject(id: string, before: string | null): void {
+        const ids = this.db.prepare('select id from projects order by position, created_at').all() as Row[];
+        this.reorder('projects', ids.map((row) => String(row.id)), id, before);
+    }
+
     deleteProject(id: string): void {
         this.db.prepare('delete from projects where id = ?').run(id);
     }
 
     insertSession(session: Session): void {
-        this.db.prepare(`insert into sessions (id, project_id, title, title_source, link, cwd, worktree, layout, archived, created_at, updated_at)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        const position = (this.db.prepare('select coalesce(max(position), -1) + 1 as next from sessions where project_id = ?').get(session.projectId) as Row).next;
+        this.db.prepare(`insert into sessions (id, project_id, title, title_source, link, cwd, worktree, layout, archived, position, created_at, updated_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
             .run(
                 session.id,
                 session.projectId,
@@ -190,6 +205,7 @@ export class Store {
                 session.worktree,
                 session.layout ? JSON.stringify(session.layout) : null,
                 session.archived ? 1 : 0,
+                Number(position),
                 session.createdAt,
                 session.updatedAt,
             );
@@ -203,6 +219,15 @@ export class Store {
         const next = { ...current, ...patch, updatedAt: Date.now() };
         this.db.prepare('update sessions set title = ?, title_source = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?')
             .run(next.title, next.titleSource, next.link, next.archived ? 1 : 0, next.layout ? JSON.stringify(next.layout) : null, next.updatedAt, id);
+    }
+
+    moveSession(id: string, before: string | null): void {
+        const session = this.getSession(id);
+        if (!session) {
+            return;
+        }
+        const ids = this.db.prepare('select id from sessions where project_id = ? order by position, created_at').all(session.projectId) as Row[];
+        this.reorder('sessions', ids.map((row) => String(row.id)), id, before);
     }
 
     deleteSession(id: string): void {
@@ -257,5 +282,23 @@ export class Store {
 
     deleteWorkspace(id: string): void {
         this.db.prepare('delete from workspaces where id = ?').run(id);
+    }
+
+    private reorder(table: 'projects' | 'sessions', ids: string[], id: string, before: string | null): void {
+        const rest = ids.filter((entry) => entry !== id);
+        const at = before === null ? rest.length : rest.indexOf(before);
+        if (!ids.includes(id) || at === -1) {
+            return;
+        }
+        rest.splice(at, 0, id);
+        const update = this.db.prepare(`update ${table} set position = ? where id = ?`);
+        this.db.exec('begin');
+        try {
+            rest.forEach((entry, position) => update.run(position, entry));
+            this.db.exec('commit');
+        } catch (error) {
+            this.db.exec('rollback');
+            throw error;
+        }
     }
 }
