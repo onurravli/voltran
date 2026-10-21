@@ -35,7 +35,13 @@ relative import. `packages/shared` is consumed as source by both the daemon and 
 `store.ts` persists projects, sessions and panes in SQLite (`node:sqlite`) under `~/.voltran`;
 `panes.ts` (`PaneManager`) owns the running terminals; `server.ts` exposes HTTP routes and two
 WebSockets: `/ws/events` (whole-app state, one per window) and `/ws/panes/:id` (one terminal).
-`security.ts` (`Guard`) checks token or cookie, `Host` and `Origin` on every request and upgrade.
+`security.ts` (`Guard`) checks the token or a browser credential, `Host` and `Origin` on every
+request and upgrade. A browser never gets the token and never a cookie (browsers send cookies to
+every port of 127.0.0.1): `voltran up` opens `/auth?code=…`, `signInFromUrl` (`web/src/api.ts`) trades
+the code at `POST /api/session` for a credential signed with the token, keeps it in `localStorage`
+and sends it as `Authorization`, and on WebSockets as a subprotocol next to `voltran`. The UI's
+files need no credential. `ensureHome` keeps `~/.voltran` at 0700 and refuses a home another user
+owns.
 
 **Settings** live in `~/.voltran/settings.json` (JSONC, nested sections). `shared/src/settings.ts` is
 the only place that decides whether a setting is valid, for the file and for `PATCH /api/settings`
@@ -61,9 +67,12 @@ are easy to get wrong here:
 - Only the focused browser window asks for sizes; otherwise every attached window would push its
   own size and the last one would win.
 
-**Agent status** comes from two places. Claude Code panes are launched with `--settings` pointing at a
-generated file (`adapters.ts` → `claudeHookSettings`) whose hooks `curl` `/api/hooks/:pane/:event`
-with a secret unique to that pane's process; `status.ts` maps hook events to statuses. OpenCode V2
+**Agent status** comes from two places. Claude Code panes are launched with `--settings` set to a
+JSON string built for that pane (`adapters.ts` → `claudeHookSettings`), whose hooks `curl`
+`/api/hooks/:pane/:event` with a secret unique to that pane's process; curl reads the header from
+`~/.voltran/hooks/<pane>` (0600) so the secret is never in `ps`, and `status.ts` maps hook events to
+statuses. A hook's `session_id` is kept only when it is a UUID (`isClaudeSessionId`), because it is
+launched as `--resume <id>` and Claude reads a dash-prefixed value as a flag. OpenCode V2
 runs plugins in a background service shared by every client, so an OpenCode pane runs
 `opencode --standalone` (a private server that inherits the pane's environment) with
 `OPENCODE_CONFIG_CONTENT` adding `daemon/src/opencode-plugin/` (a folder plugin OpenCode loads with
@@ -97,11 +106,13 @@ footer draws it (`web/src/usage.ts`).
 has the id but no description, so starts are paired with the preceding `Agent` tool call, corrected by
 `PostToolUse`, and background agents are reconciled against the `background_tasks` list on `Stop`.
 `transcripts.ts` derives a subagent's transcript path from the parent transcript in the hook payload
-(never from a client), validates it, and parses Claude's JSONL. An agent that a workflow starts writes
-under `subagents/workflows/<run>/` instead, and no hook names the run, so reads look the file up there
-by agent id; the derived path stays the subagent's identity. A `subagent` pane runs
-`subagent-view.ts` as its process, which renders the transcript with `subagent-render.ts`; the daemon
-sends it `SIGUSR2` when the subagent stops. Claude's transcript format is internal and may change.
+(never from a client), validates it, and parses Claude's JSONL, dropping control characters from
+every string it keeps (`clip`), because the viewer writes them to a terminal. An agent that a
+workflow starts writes under `subagents/workflows/<run>/` instead, and no hook names the run, so
+reads look the file up there by agent id; the derived path stays the subagent's identity. A
+`subagent` pane runs `subagent-view.ts` as its process, which renders the transcript with
+`subagent-render.ts`; the daemon sends it `SIGUSR2` when the subagent stops. Claude's transcript
+format is internal and may change.
 
 **Notes.** `daemon/src/notes.ts` (`NotesStore`) keeps each pane's notes in
 `~/.voltran/notes/<pane>/notes.md`, one folder per pane so a lock can make the folder read-only as
@@ -113,9 +124,13 @@ watches the folder and reports every write it did not make as the agent's, and C
 `PreToolUse`/`PostToolUse` on the notes file hold an agent lock that refuses the drawer's. Every
 pane but subagent viewers gets `VOLTRAN_NOTES`. Claude's settings add `notes-hook.sh` (the notes into
 context on `SessionStart`, again on `UserPromptSubmit` after a drawer save marks `<pane>.changed`, and
-a `PreToolUse` deny while the folder is read-only) and Read/Edit permission for the folder; OpenCode
-gets `GUIDE.md` and the notes as `instructions`. `NOTES_GUIDE` is the one copy of what agents are
-told. A daemon start restores permissions and deletes the notes of panes that no longer exist.
+a `PreToolUse` deny while the folder is read-only) and Read/Edit permission for that pane's folder
+only, which Claude's sandbox also takes as write access; OpenCode gets `GUIDE.md` and the notes as
+`instructions`. Agents can write in these folders, so every write goes through `replaceFile` (a fresh
+name opened with O_EXCL, then a rename), modes change only on real files and folders, and a linked or
+non-regular notes file reads as empty, in the daemon and in `notes-hook.sh`. `NOTES_GUIDE` is the
+one copy of what agents are told. A daemon start restores permissions and deletes the notes of panes
+that no longer exist.
 
 **Layout** is a tree in `shared/src/layout.ts` (`insertPane`, `removePane`, `movePane`). The web app
 edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hub rejects a layout
@@ -139,7 +154,9 @@ folder an open session works in, one command at a time with a timeout, every 10 
 open and a second after a Claude pane's `PostToolUse`/`Stop` or an OpenCode pane's
 `ToolEnd`/`TurnEnd`; `AppState.git` is keyed by folder. Keep `core.fsmonitor=false` and
 `--no-optional-locks` in `STATUS_ARGS`: the first stops a repository from running a command through
-`git status`, the second keeps polling off `index.lock`. Pull requests come from `gh pr view`,
+`git status`, the second keeps polling off `index.lock`. `git status` also runs clean filters, so
+`repositoryFilterOverrides` blanks those the repository's own config defines before every poll and
+before `Worktrees.changes`. Pull requests come from `gh pr view`,
 cached per branch for two minutes and skipped when `git.pullRequests` is off or `gh` is missing.
 Tests inject a `GitRunner` instead of the real `gh`.
 
@@ -162,8 +179,6 @@ Themes (`themes.ts`) derive the UI's CSS variables from each terminal palette; `
 a cached copy before first paint.
 
 **Installed app.** Chrome can install Voltran as an app (`install.ts`, `public/manifest.webmanifest`).
-Every file stays behind the session cookie, so `index.html` fetches the manifest with
-`crossorigin="use-credentials"`; without it the manifest gets a 401 and Chrome refuses to install.
 `daemon/src/macos.ts` finds the installed app through the bundle Chrome writes to
 `~/Applications/Chrome Apps.localized` (its Info.plist names the app id, URL and profile), and the CLI
 opens it with `--app-id` plus `--app-launch-url-for-shortcuts-menu-item=<login URL>`, which signs it in.

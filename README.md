@@ -140,8 +140,8 @@ branch's pull request appears next to it with its state and checks, and opens on
 `git.pullRequests` to `false` to stop asking GitHub. The project's row in the sidebar shows the
 branch too. Voltran reads the status every 10 seconds while a window is open, and a second after a
 Claude Code or OpenCode pane uses a tool, so an agent's edits show up straight away. It runs
-`git status` with `core.fsmonitor` off and without optional locks, so it neither runs a command a
-repository configures nor holds `index.lock` while an agent commits.
+`git status` with `core.fsmonitor` and the repository's own filters off and without optional locks,
+so it neither runs a command a repository configures nor holds `index.lock` while an agent commits.
 
 ### Worktrees
 
@@ -307,11 +307,12 @@ packages/
 - **Several windows.** Every window shows the same panes. Only the focused one asks for sizes, and a
   window asks again when it regains focus, so a background window of a different size shows its
   terminals cut off or with empty space until you switch to it.
-- **Claude Code status.** Voltran launches Claude with `--settings <file>` that adds hooks for
-  `SessionStart`, `UserPromptSubmit`, `Pre/PostToolUse`, `Notification`, `Stop`, `SubagentStart`,
-  `SubagentStop` and `SessionEnd`. The hooks `curl` the daemon with a secret that is unique to that
-  pane's process. Your own and your repositories' Claude settings stay untouched, because settings
-  passed this way add to them rather than replacing them.
+- **Claude Code status.** Voltran launches Claude with `--settings` built for that pane, which adds
+  hooks for `SessionStart`, `UserPromptSubmit`, `Pre/PostToolUse`, `Notification`, `Stop`,
+  `SubagentStart`, `SubagentStop` and `SessionEnd`. The hooks `curl` the daemon with a secret that is
+  unique to that pane's process, read from a file only you can read so it never shows up in `ps`.
+  Your own and your repositories' Claude settings stay untouched, because settings passed this way
+  add to them rather than replacing them.
 - **Usage limits.** Claude Code hands the account's usage limits only to its status line, so the
   settings Voltran passes also set one: a script that sends the limits to the daemon with the pane's
   secret, then runs your own status line command with the same input, taken from the project's
@@ -330,7 +331,7 @@ packages/
   conversation, or the one you switched to inside it.
 - **Notes.** Each pane's notes are `~/.voltran/notes/<pane>/notes.md`. Claude Code panes get hooks
   that print them into Claude's context and refuse its edits while you type, and permission to read
-  and edit that folder without asking (so a Claude pane could also edit another pane's notes).
+  and edit their own pane's notes folder without asking, and no other pane's.
   OpenCode panes get them, with a short guide, as instructions. The lock while you type makes the
   file and its folder read-only on disk and expires if the window goes away.
 - **Codex status.** Voltran starts Codex with its hooks as `-c` overrides, which add to your own
@@ -348,18 +349,27 @@ packages/
 A local server that can start processes is reachable from every web page you open, so the daemon:
 
 - listens on `127.0.0.1` only;
-- requires a token (`~/.voltran/token`, mode 0600) on every request, sent as a bearer header by the
-  CLI and as an `HttpOnly`, `SameSite=Strict` cookie by the browser;
+- requires a credential on every API request and WebSocket: the token (`~/.voltran/token`, mode
+  0600) from the CLI, or from a browser a credential of its own, signed with the token, which the page
+  keeps in its own storage and sends as a header. It sets no cookie, because a browser sends cookies
+  to every port of a host;
 - signs browsers in through one-time login codes that expire after 60 seconds;
 - rejects any `Host` header other than its own, which blocks DNS rebinding;
 - rejects any `Origin` other than its own, on HTTP and WebSocket alike;
 - accepts agent hooks only with the per-pane secret, never the main token;
 - reads a subagent transcript only at the path derived from Claude's own hook data, never from a
-  path a client sends, and refuses one reached through a symlink.
+  path a client sends, refuses one reached through a symlink, and drops control characters from it
+  before the viewer writes it to a terminal;
+- never writes, reads or changes the mode of a notes file through a link an agent planted;
+- keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns.
 
 Child processes do not inherit the environment of a Claude session that launched the daemon
 (`CLAUDECODE`, messaging sockets and tokens) or the identity variables of the terminal that launched
 it.
+
+None of this walls panes off from each other: everything in a pane runs as you and can read the
+token. [SECURITY.md](SECURITY.md) says what Voltran does not protect against and how to report a
+vulnerability.
 
 ## Development
 

@@ -5,9 +5,9 @@ issue first so the approach is agreed on before you spend time on it.
 
 ## Security issues
 
-Voltran runs a local server that starts processes, so do not report a vulnerability in a public
-issue. Email onur@onurravli.com instead, with the steps to reproduce it. A change must keep every
-guarantee listed under [Security](README.md#security) in the README.
+Do not report a vulnerability in a public issue; [SECURITY.md](SECURITY.md) says how to report one
+and what Voltran does and does not protect against. A change must keep every guarantee listed under
+[Security](README.md#security) in the README.
 
 ## Setting up
 
