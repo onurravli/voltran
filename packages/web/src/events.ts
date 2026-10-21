@@ -1,5 +1,5 @@
 import type { ServerEvent } from '@voltran/shared';
-import { wsUrl } from './api.ts';
+import { authHeaders, socketProtocols, wsUrl } from './api.ts';
 import { applyNotesEvent } from './notes.ts';
 import { notifyAttention } from './notify.ts';
 import { useUi } from './store.ts';
@@ -39,7 +39,7 @@ export function connectEvents(): () => void {
             return;
         }
         try {
-            const probe = await fetch('/api/health', { credentials: 'same-origin' });
+            const probe = await fetch('/api/health', { headers: authHeaders() });
             if (probe.status === 401) {
                 clearOfflineTimer();
                 useUi.getState().setConnection('unauthenticated');
@@ -58,7 +58,7 @@ export function connectEvents(): () => void {
         if (stopped) {
             return;
         }
-        const current = new WebSocket(wsUrl('/ws/events'));
+        const current = new WebSocket(wsUrl('/ws/events'), socketProtocols());
         socket = current;
 
         current.onopen = () => {

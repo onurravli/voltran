@@ -5,7 +5,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { PaneServerMessage } from '@voltran/shared';
-import { wsUrl } from './api.ts';
+import { socketProtocols, wsUrl } from './api.ts';
 import { fontStack, type TerminalFont } from './fonts.ts';
 import { translateKey } from './keymap.ts';
 import { isAppShortcut } from './shortcuts.ts';
@@ -228,7 +228,7 @@ export class TerminalSession {
         if (this.disposed) {
             return;
         }
-        const socket = new WebSocket(wsUrl(`/ws/panes/${encodeURIComponent(this.paneId)}`));
+        const socket = new WebSocket(wsUrl(`/ws/panes/${encodeURIComponent(this.paneId)}`), socketProtocols());
         socket.binaryType = 'arraybuffer';
         this.socket = socket;
 

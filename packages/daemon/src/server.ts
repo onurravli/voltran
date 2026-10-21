@@ -7,7 +7,7 @@ import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { parseSettingsPatch, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
 import type { Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
-import { bearerToken, type Guard } from './security.ts';
+import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
 import { editorCommand, type SettingsFile } from './settings.ts';
 import type { VersionWatch } from './version.ts';
 
@@ -116,11 +116,6 @@ export function openInEditor(path: string): void {
     child.on('error', () => undefined);
     child.unref();
 }
-
-const UNAUTHENTICATED_PAGE = `<!doctype html><meta charset="utf-8"><title>Voltran</title>
-<body style="font:15px system-ui;background:#0d0f14;color:#c8cdd8;display:grid;place-items:center;height:100vh;margin:0">
-<div style="text-align:center"><h1 style="font-weight:600;letter-spacing:.2em">VOLTRAN</h1>
-<p>This browser is not signed in. Run <code style="background:#1a1e27;padding:2px 6px;border-radius:4px">voltran up</code> in a terminal to open it.</p></div>`;
 
 export function createVoltranServer(options: ServerOptions): Server {
     const { config, hub, guard, settings } = options;
@@ -258,8 +253,7 @@ export function createVoltranServer(options: ServerOptions): Server {
 
     const server = createServer(async (req, res) => {
         try {
-            const url = requestUrl(req);
-            const pathname = url.pathname;
+            const { pathname } = requestUrl(req);
             const hookMatch = req.method === 'POST' ? pathname.match(hookPattern) : null;
             if (hookMatch) {
                 const verdict = guard.checkRequest(req, { allowAnonymous: true });
@@ -271,52 +265,53 @@ export function createVoltranServer(options: ServerOptions): Server {
                 return;
             }
 
-            if (pathname === '/auth') {
+            // The UI's files hold nothing secret, so a window loads them before it is signed in; the
+            // page at /auth?code=… then trades the one-time code for its own credential.
+            if (!pathname.startsWith('/api/')) {
                 const verdict = guard.checkRequest(req, { allowAnonymous: true });
                 if (!verdict.ok) {
                     sendText(res, verdict.status, verdict.reason);
                     return;
                 }
-                const code = url.searchParams.get('code') ?? '';
-                if (!guard.redeemLoginCode(code)) {
-                    sendText(res, 401, UNAUTHENTICATED_PAGE, 'text/html; charset=utf-8');
+                if (req.method !== 'GET' && req.method !== 'HEAD') {
+                    sendJson(res, 405, { error: 'method not allowed' });
                     return;
                 }
-                res.writeHead(302, { ...SECURITY_HEADERS, 'Set-Cookie': guard.sessionCookie(), Location: '/' });
-                res.end();
+                serveStatic(req, res, pathname);
+                return;
+            }
+
+            if (pathname === '/api/session' && req.method === 'POST') {
+                const verdict = guard.checkRequest(req, { allowAnonymous: true });
+                if (!verdict.ok) {
+                    sendJson(res, verdict.status, { error: verdict.reason });
+                    return;
+                }
+                const body = await readJson<{ code?: unknown } | null>(req);
+                if (!guard.redeemLoginCode(typeof body?.code === 'string' ? body.code : '')) {
+                    sendJson(res, 401, { error: 'this sign-in link has expired or was used already' });
+                    return;
+                }
+                sendJson(res, 200, { session: guard.issueBrowserSession() });
                 return;
             }
 
             const verdict = guard.checkRequest(req);
             if (!verdict.ok) {
-                if (verdict.status === 401 && !pathname.startsWith('/api/')) {
-                    sendText(res, 401, UNAUTHENTICATED_PAGE, 'text/html; charset=utf-8');
-                } else {
-                    sendJson(res, verdict.status, { error: verdict.reason });
+                sendJson(res, verdict.status, { error: verdict.reason });
+                return;
+            }
+            for (const entry of routes) {
+                if (entry.method !== req.method) {
+                    continue;
                 }
-                return;
-            }
-
-            if (pathname.startsWith('/api/')) {
-                for (const entry of routes) {
-                    if (entry.method !== req.method) {
-                        continue;
-                    }
-                    const match = pathname.match(entry.pattern);
-                    if (match) {
-                        await entry.handler(req, res, match.slice(1).map(decodeURIComponent));
-                        return;
-                    }
+                const match = pathname.match(entry.pattern);
+                if (match) {
+                    await entry.handler(req, res, match.slice(1).map(decodeURIComponent));
+                    return;
                 }
-                sendJson(res, 404, { error: 'not found' });
-                return;
             }
-
-            if (req.method !== 'GET' && req.method !== 'HEAD') {
-                sendJson(res, 405, { error: 'method not allowed' });
-                return;
-            }
-            serveStatic(req, res, pathname);
+            sendJson(res, 404, { error: 'not found' });
         } catch (error) {
             if (res.headersSent) {
                 res.end();
@@ -355,7 +350,11 @@ function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
 }
 
 function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: SettingsFile, version: VersionWatch | undefined): void {
-    const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
+    const wss = new WebSocketServer({
+        noServer: true,
+        maxPayload: WS_MAX_PAYLOAD,
+        handleProtocols: (protocols) => (protocols.has(WS_PROTOCOL) ? WS_PROTOCOL : false),
+    });
     const alive = new WeakMap<WebSocket, boolean>();
 
     const heartbeat = setInterval(() => {

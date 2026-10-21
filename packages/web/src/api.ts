@@ -32,11 +32,55 @@ export class ApiError extends Error {
     }
 }
 
+const SESSION_KEY = 'voltran.session';
+const WS_PROTOCOL = 'voltran';
+
+// The credential this window signed in with. It stays in this origin's storage and goes out as a
+// header, never as a cookie, which the browser would also send to every other port on this host.
+function browserSession(): string | null {
+    try {
+        return localStorage.getItem(SESSION_KEY);
+    } catch {
+        return null;
+    }
+}
+
+export function authHeaders(): Record<string, string> {
+    const session = browserSession();
+    return session ? { Authorization: `Bearer ${session}` } : {};
+}
+
+export function socketProtocols(): string[] {
+    const session = browserSession();
+    return session ? [WS_PROTOCOL, session] : [WS_PROTOCOL];
+}
+
+// `voltran up` opens /auth?code=…: the one-time code is traded for this window's credential and
+// dropped from the address bar before anything else runs.
+export async function signInFromUrl(): Promise<void> {
+    if (window.location.pathname !== '/auth') {
+        return;
+    }
+    const code = new URLSearchParams(window.location.search).get('code');
+    window.history.replaceState(null, '', '/');
+    if (!code) {
+        return;
+    }
+    try {
+        const response = await fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+        const body = response.ok ? (await response.json()) as { session?: unknown } : null;
+        if (typeof body?.session === 'string') {
+            localStorage.setItem(SESSION_KEY, body.session);
+        }
+    } catch {
+        // The window stays signed out and says how to sign in.
+    }
+}
+
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
     const init: RequestInit = {
         method,
-        credentials: 'same-origin',
-        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         body: body === undefined ? undefined : JSON.stringify(body),
         keepalive,
     };

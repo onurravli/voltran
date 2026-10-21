@@ -15,17 +15,32 @@ describe('Guard.checkRequest', () => {
         expect(guard.checkRequest(request({ host: 'localhost:4800', authorization: `Bearer ${TOKEN}` }))).toEqual({ ok: true });
     });
 
-    it('accepts the session cookie from the same origin', () => {
-        const verdict = guard.checkRequest(request({ host: '127.0.0.1:4800', origin: 'http://127.0.0.1:4800', cookie: `other=1; voltran_session=${TOKEN}` }));
-        expect(verdict).toEqual({ ok: true });
+    it('accepts a browser credential it signed, as a header or as a WebSocket subprotocol', () => {
+        const session = guard.issueBrowserSession();
+        const origin = 'http://127.0.0.1:4800';
+        expect(session).not.toContain(TOKEN);
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', origin, authorization: `Bearer ${session}` }))).toEqual({ ok: true });
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', origin, 'sec-websocket-protocol': `voltran, ${session}` }))).toEqual({ ok: true });
+        expect(guard.issueBrowserSession()).not.toBe(session);
+    });
+
+    it('refuses a forged or foreign browser credential, and ignores cookies', () => {
+        const session = guard.issueBrowserSession();
+        const [id, mac] = session.split('.');
+        const other = new Guard(config, 'b'.repeat(64)).issueBrowserSession();
+        for (const credential of [`${id}.${mac.replace(/^./, (c) => (c === '0' ? '1' : '0'))}`, `${'0'.repeat(32)}.${mac}`, other, id, `${session}x`]) {
+            expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({ ok: false, status: 401 });
+            expect(guard.checkRequest(request({ host: '127.0.0.1:4800', 'sec-websocket-protocol': `voltran, ${credential}` }))).toMatchObject({ ok: false, status: 401 });
+        }
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', cookie: `voltran_session=${TOKEN}` }))).toMatchObject({ ok: false, status: 401 });
     });
 
     it('refuses a rebinding host even with a valid token', () => {
         expect(guard.checkRequest(request({ host: 'attacker.example:4800', authorization: `Bearer ${TOKEN}` }))).toMatchObject({ ok: false, status: 421 });
     });
 
-    it('refuses cross-origin requests even with a valid cookie', () => {
-        const verdict = guard.checkRequest(request({ host: '127.0.0.1:4800', origin: 'https://attacker.example', cookie: `voltran_session=${TOKEN}` }));
+    it('refuses cross-origin requests even with a valid credential', () => {
+        const verdict = guard.checkRequest(request({ host: '127.0.0.1:4800', origin: 'https://attacker.example', authorization: `Bearer ${guard.issueBrowserSession()}` }));
         expect(verdict).toMatchObject({ ok: false, status: 403 });
     });
 

@@ -172,7 +172,7 @@ describe('access control', () => {
 
     it('refuses WebSocket upgrades from another origin', async () => {
         const outcome = await new Promise<string>((resolveOutcome) => {
-            const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, { headers: { Origin: 'https://attacker.example', Cookie: `voltran_session=${daemon.token}` } });
+            const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, { headers: { Origin: 'https://attacker.example', Authorization: `Bearer ${daemon.token}` } });
             socket.on('open', () => resolveOutcome('opened'));
             socket.on('error', (error) => resolveOutcome(error.message));
         });
@@ -214,20 +214,37 @@ describe('access control', () => {
         await until(async () => (await api<{ open: number }>('GET', '/api/windows')).body.open === before.open);
     });
 
-    it('signs a browser in with a one-time code', async () => {
+    it('signs a browser in with a one-time code, giving it a credential of its own and never a cookie', async () => {
+        const page = await fetch(`${base}/auth?code=whatever`);
+        expect(page.headers.get('set-cookie')).toBeNull();
+        expect(page.status === 200 || page.status === 503).toBe(true);
+
         const { body } = await api<{ code: string }>('POST', '/api/login-code');
-        const first = await fetch(`${base}/auth?code=${body.code}`, { redirect: 'manual' });
-        expect(first.status).toBe(302);
-        const cookie = first.headers.get('set-cookie') ?? '';
-        expect(cookie).toContain('HttpOnly');
-        expect(cookie).toContain('SameSite=Strict');
+        const exchange = (code: string) => fetch(`${base}/api/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: base },
+            body: JSON.stringify({ code }),
+        });
+        const first = await exchange(body.code);
+        expect(first.status).toBe(200);
+        expect(first.headers.get('set-cookie')).toBeNull();
+        const { session } = await first.json() as { session: string };
+        expect(session).not.toContain(daemon.token);
 
-        const session = cookie.split(';')[0];
-        const state = await fetch(`${base}/api/state`, { headers: { Cookie: session } });
-        expect(state.status).toBe(200);
+        expect((await fetch(`${base}/api/state`, { headers: { Authorization: `Bearer ${session}` } })).status).toBe(200);
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, ['voltran', session], { headers: { Origin: base } });
+        await new Promise((resolveMessage) => socket.once('message', resolveMessage));
+        expect(socket.protocol).toBe('voltran');
+        socket.close();
 
-        const replay = await fetch(`${base}/auth?code=${body.code}`, { redirect: 'manual' });
-        expect(replay.status).toBe(401);
+        expect((await exchange(body.code)).status).toBe(401);
+        const { body: fresh } = await api<{ code: string }>('POST', '/api/login-code');
+        const crossSite = await fetch(`${base}/api/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: 'https://attacker.example' },
+            body: JSON.stringify({ code: fresh.code }),
+        });
+        expect(crossSite.status).toBe(403);
     });
 });
 

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@xterm/xterm/css/xterm.css';
 import './styles.css';
+import { signInFromUrl } from './api.ts';
 import { App } from './App.tsx';
 import { uiFontStack, type UiFont } from './fonts.ts';
 import { watchInstallOffer } from './install.ts';
@@ -46,8 +47,10 @@ useUi.subscribe((state, previous) => {
 
 watchInstallOffer();
 
-createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-        <App />
-    </StrictMode>,
-);
+void signInFromUrl().then(() => {
+    createRoot(document.getElementById('root')!).render(
+        <StrictMode>
+            <App />
+        </StrictMode>,
+    );
+});

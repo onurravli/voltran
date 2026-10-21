@@ -1,32 +1,15 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Config } from './config.ts';
 
-export const COOKIE_NAME = 'voltran_session';
+export const WS_PROTOCOL = 'voltran';
 const LOGIN_CODE_TTL_MS = 60_000;
+const BROWSER_SESSION = /^([0-9a-f]{32})\.([0-9a-f]{64})$/;
 
 export function safeEqual(a: string, b: string): boolean {
     const left = Buffer.from(a, 'utf8');
     const right = Buffer.from(b, 'utf8');
     return left.length === right.length && timingSafeEqual(left, right);
-}
-
-export function readCookie(req: IncomingMessage, name: string): string | null {
-    const header = req.headers.cookie;
-    if (!header) {
-        return null;
-    }
-    for (const part of header.split(';')) {
-        const [key, ...rest] = part.trim().split('=');
-        if (key === name) {
-            try {
-                return decodeURIComponent(rest.join('='));
-            } catch {
-                return null;
-            }
-        }
-    }
-    return null;
 }
 
 export function bearerToken(req: IncomingMessage): string | null {
@@ -35,6 +18,13 @@ export function bearerToken(req: IncomingMessage): string | null {
         return null;
     }
     return header.slice('Bearer '.length).trim();
+}
+
+// A browser cannot set headers on a WebSocket upgrade, so it offers its credential as a subprotocol
+// next to WS_PROTOCOL, the one the server picks.
+export function offeredProtocols(req: IncomingMessage): string[] {
+    const header = req.headers['sec-websocket-protocol'];
+    return typeof header === 'string' ? header.split(',').map((protocol) => protocol.trim()).filter(Boolean) : [];
 }
 
 export type GuardResult = { ok: true } | { ok: false; status: number; reason: string };
@@ -69,15 +59,27 @@ export class Guard {
 
     isAuthenticated(req: IncomingMessage): boolean {
         const bearer = bearerToken(req);
-        if (bearer && safeEqual(bearer, this.token)) {
+        if (bearer && (safeEqual(bearer, this.token) || this.isBrowserSession(bearer))) {
             return true;
         }
-        const cookie = readCookie(req, COOKIE_NAME);
-        return cookie !== null && safeEqual(cookie, this.token);
+        return offeredProtocols(req).some((protocol) => this.isBrowserSession(protocol));
     }
 
-    sessionCookie(): string {
-        return `${COOKIE_NAME}=${encodeURIComponent(this.token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`;
+    // A signed-in browser holds a credential of its own, never the token, and keeps it in the page's
+    // storage, which no other port on this host can read; a cookie would go to every port. It is
+    // signed with the token, so it survives a restart and a new token signs every browser out.
+    issueBrowserSession(): string {
+        const id = randomBytes(16).toString('hex');
+        return `${id}.${this.sign(id)}`;
+    }
+
+    private isBrowserSession(value: string): boolean {
+        const match = BROWSER_SESSION.exec(value);
+        return match !== null && safeEqual(match[2], this.sign(match[1]));
+    }
+
+    private sign(id: string): string {
+        return createHmac('sha256', this.token).update(`browser-session:${id}`).digest('hex');
     }
 
     issueLoginCode(): string {
