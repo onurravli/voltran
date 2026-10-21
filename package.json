@@ -5,6 +5,15 @@
   "description": "Local multi-agent session and terminal orchestrator",
   "type": "module",
   "license": "Apache-2.0",
+  "author": "Onur Ravli <onur@onurravli.com>",
+  "homepage": "https://github.com/onurravli/voltran#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onurravli/voltran.git"
+  },
+  "bugs": {
+    "url": "https://github.com/onurravli/voltran/issues"
+  },
   "engines": {
     "node": ">=22.18"
   },
