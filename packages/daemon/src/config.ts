@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,10 +60,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     };
 }
 
+// Everything Voltran keeps is readable by the user alone. A home that already exists keeps the mode
+// it was made with, so it is set again on every start, and one another user owns, such as a folder
+// in /tmp someone else made first, is refused.
 export function ensureHome(config: Config): void {
     mkdirSync(config.home, { recursive: true, mode: 0o700 });
-    mkdirSync(config.scrollbackDir, { recursive: true, mode: 0o700 });
-    mkdirSync(config.notesDir, { recursive: true, mode: 0o700 });
+    const owner = statSync(config.home).uid;
+    if (process.getuid && owner !== process.getuid()) {
+        throw new Error(`${config.home} belongs to another user; Voltran will not keep its data there`);
+    }
+    chmodSync(config.home, 0o700);
+    for (const dir of [config.scrollbackDir, config.notesDir]) {
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        chmodSync(dir, 0o700);
+    }
+}
+
+export function privateFile(path: string): string {
+    closeSync(openSync(path, 'a', 0o600));
+    chmodSync(path, 0o600);
+    return path;
 }
 
 export function readOrCreateToken(config: Config): string {

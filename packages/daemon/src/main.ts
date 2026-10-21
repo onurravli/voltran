@@ -1,10 +1,10 @@
-import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describeAdapters, resolveShellPath } from './adapters.ts';
 import { startDaemonProcess } from './cli.ts';
-import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
+import { ensureHome, loadConfig, privateFile, readOrCreateToken, type Config } from './config.ts';
 import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
 import type { GitRunner } from './git.ts';
@@ -46,6 +46,12 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
     // The settings every Claude pane shared before each pane got its own.
     rmSync(join(config.home, 'claude-settings.json'), { force: true });
 
+    // SQLite gives the -wal and -shm files the database's own mode.
+    for (const file of [config.dbFile, `${config.dbFile}-wal`, `${config.dbFile}-shm`]) {
+        if (file === config.dbFile || existsSync(file)) {
+            privateFile(file);
+        }
+    }
     const store = new Store(config.dbFile);
     const hub = new Hub({
         store,
@@ -143,7 +149,7 @@ export async function startDaemon(): Promise<void> {
     });
 
     daemon.server.listen(config.port, '127.0.0.1', () => {
-        writeFileSync(config.pidFile, `${process.pid}\n`);
+        writeFileSync(privateFile(config.pidFile), `${process.pid}\n`);
         console.log(`[voltran] daemon listening on ${config.url} (pid ${process.pid}${config.dev ? ', dev' : ''})`);
     });
 

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -201,6 +201,13 @@ describe('access control', () => {
         expect(await upgrade('/ws/events', { Cookie: 'voltran_session=%' })).toContain('401');
         expect(await upgrade('/ws/panes/%', { Authorization: `Bearer ${daemon.token}` })).toContain('400');
         expect((await api('GET', '/api/health')).status).toBe(200);
+    });
+
+    it('keeps its home, database and token readable by the user alone', () => {
+        const data = join(home, 'data');
+        expect(statSync(data).mode & 0o777).toBe(0o700);
+        expect(statSync(join(data, 'voltran.db')).mode & 0o777).toBe(0o600);
+        expect(statSync(join(data, 'token')).mode & 0o777).toBe(0o600);
     });
 
     it('counts the open windows for the CLI, for signed-in callers only', async () => {

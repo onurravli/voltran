@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AppState } from '@voltran/shared';
-import { ensureHome, loadConfig, readOrCreateToken, type Config } from './config.ts';
+import { ensureHome, loadConfig, privateFile, readOrCreateToken, type Config } from './config.ts';
 import { SYSTEMD_UNIT_FILE, SYSTEMD_UNIT_NAME, findChrome, systemdUnit } from './linux.ts';
 import { LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, launchAgentPlist } from './macos.ts';
 
@@ -104,7 +104,7 @@ function ensureUiBuilt(config: Config): void {
 }
 
 export function startDaemonProcess(config: Config): void {
-    const log = openSync(config.logFile, 'a');
+    const log = openSync(privateFile(config.logFile), 'a');
     const child = spawn(process.execPath, [DAEMON_ENTRY], {
         cwd: config.home,
         detached: true,
