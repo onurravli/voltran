@@ -89,7 +89,7 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
 function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projectId?: string; worktree?: boolean; onClose: () => void }) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
-    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent');
+    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
     const currentProjectId = useUi((state) => state.app?.sessions.find((session) => session.id === state.selectedSessionId)?.projectId);
     const [project, setProject] = useState(projectId ?? currentProjectId ?? projects[0]?.id ?? '');
     const [title, setTitle] = useState('');
@@ -419,7 +419,7 @@ export function PaneMenu() {
 
     return (
         <div className="menu" ref={ref} style={{ left, top, width }} role="menu">
-            {adapters.filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent').map((adapter) => (
+            {adapters.filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent').map((adapter) => (
                 <button
                     key={adapter.id}
                     type="button"
@@ -445,9 +445,9 @@ export function PaneMenu() {
                     className="field__input field__input--mono"
                     value={command}
                     onChange={(event) => setCommand(event.target.value)}
-                    placeholder="Run a command…"
+                    placeholder="Run a command or open localhost:…"
                     spellCheck={false}
-                    aria-label="Command to run"
+                    aria-label="Command to run or page to open"
                 />
             </form>
         </div>

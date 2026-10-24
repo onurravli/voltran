@@ -1,8 +1,8 @@
 import type { SettingsState } from './settings.ts';
 
-export type AdapterId = 'claude' | 'opencode' | 'codex' | 'antigravity' | 'shell' | 'command' | 'subagent';
+export type AdapterId = 'claude' | 'opencode' | 'codex' | 'antigravity' | 'shell' | 'command' | 'subagent' | 'preview';
 
-export type PaneKind = 'agent' | 'shell' | 'process';
+export type PaneKind = 'agent' | 'shell' | 'process' | 'page';
 
 export type StatusSource = 'hooks' | 'heuristic' | 'process';
 
@@ -273,6 +273,7 @@ export interface UpdateWorkspaceBody {
 
 export interface UpdatePaneBody {
     title?: string;
+    url?: string;
 }
 
 export interface MovePaneBody {

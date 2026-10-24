@@ -41,7 +41,7 @@ function copy(text: string, what: string): void {
 }
 
 function addPaneItems(sessionId: string): MenuItem[] {
-    const adapters = (useUi.getState().app?.adapters ?? []).filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent');
+    const adapters = (useUi.getState().app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
     return adapters.map((adapter) => ({
         label: adapter.label,
         note: adapter.available ? (adapter.kind === 'agent' ? 'agent' : undefined) : 'not installed',
@@ -220,7 +220,7 @@ export function paneMenu(pane: PaneView): MenuItem[] {
     return [
         { label: 'Show', onSelect: () => revealPane(session.id, pane.id) },
         { label: maximized ? 'Restore size' : 'Maximize', onSelect: () => maximize(pane, !maximized) },
-        ...(pane.adapter === 'subagent' ? [] : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
+        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' ? [] : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
         {
             label: adapter?.resumable ? 'Restart and resume' : 'Restart',
             separated: true,

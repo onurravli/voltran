@@ -860,6 +860,7 @@ describe('headers', () => {
         const policy = contentSecurityPolicy(`<head><script>${script}</script><script type="module" src="/assets/a.js"></script></head>`);
         expect(policy).toContain(`script-src 'self' 'sha256-${createHash('sha256').update(script).digest('base64')}'`);
         expect(policy).toContain("frame-ancestors 'none'");
+        expect(policy).toContain('frame-src http://localhost:* https://localhost:* http://*.localhost:*');
         expect(contentSecurityPolicy('<head></head>')).toContain("script-src 'self';");
     });
 });

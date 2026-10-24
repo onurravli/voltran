@@ -7,3 +7,4 @@ export * from './settings.ts';
 export * from './notes.ts';
 export * from './worktrees.ts';
 export * from './diagnostics.ts';
+export * from './preview.ts';

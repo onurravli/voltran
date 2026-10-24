@@ -2085,6 +2085,28 @@ button.git-count:hover {
     background-color: transparent !important;
 }
 
+.pane__frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+}
+
+body:has(.separator[data-separator='active']) .pane__frame {
+    pointer-events: none;
+}
+
+.pane__address {
+    font-family: var(--font-mono);
+}
+
+.pane__address.inline-edit {
+    height: calc(22px * var(--ui-scale));
+    color: var(--text);
+}
+
 .pane__placeholder {
     display: grid;
     place-items: center;

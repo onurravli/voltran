@@ -7,6 +7,7 @@ import {
     insertPane,
     isValidLayout,
     paneIds,
+    previewUrl,
     removePane,
     samePanes,
     type AdapterInfo,
@@ -452,7 +453,15 @@ export class Hub {
     }
 
     updatePane(id: string, body: UpdatePaneBody): Pane {
-        this.mustGetPane(id);
+        const pane = this.mustGetPane(id);
+        if (body.url !== undefined) {
+            if (pane.adapter !== 'preview') {
+                throw new HttpError(400, 'only a preview pane has a URL');
+            }
+            const command = this.requirePreviewUrl(body.url);
+            this.store.updatePane(id, { command });
+            this.panes.updatePane(id, { command });
+        }
         if (body.title !== undefined) {
             const title = requireString(body.title, 'title', MAX_TITLE);
             this.store.updatePane(id, { title });
@@ -695,6 +704,9 @@ export class Hub {
         if (spec.adapter === 'command') {
             requireString(spec.command, 'command', MAX_COMMAND);
         }
+        if (spec.adapter === 'preview') {
+            this.requirePreviewUrl(spec.command);
+        }
         if ((spec.adapter === 'claude' || spec.adapter === 'opencode') && spec.command !== undefined) {
             const command = requireString(spec.command, 'command', MAX_COMMAND);
             const problem = spec.adapter === 'claude' ? claudeArgsProblem(command) : opencodeArgsProblem(command);
@@ -707,15 +719,25 @@ export class Hub {
         }
     }
 
+    private requirePreviewUrl(value: unknown): string {
+        const url = previewUrl(requireString(value, 'url', MAX_COMMAND));
+        if (!url) {
+            throw new HttpError(400, 'a preview shows a page on this computer, such as localhost:5173');
+        }
+        return url;
+    }
+
     private insertPaneRecord(session: Session, spec: PaneSpec): Pane {
         const adapter = adapterFor(spec.adapter);
         const takesArgs = spec.adapter === 'claude' || spec.adapter === 'opencode';
-        const command = spec.adapter === 'command' || spec.adapter === 'subagent' || takesArgs ? spec.command?.trim() || null : null;
+        const command = spec.adapter === 'preview'
+            ? this.requirePreviewUrl(spec.command)
+            : spec.adapter === 'command' || spec.adapter === 'subagent' || takesArgs ? spec.command?.trim() || null : null;
         const pane: Pane = {
             id: randomUUID(),
             sessionId: session.id,
             adapter: spec.adapter,
-            title: spec.title?.trim() || (command && !takesArgs ? command.slice(0, 40) : adapter.label),
+            title: spec.title?.trim() || (spec.adapter === 'preview' && command ? new URL(command).host : command && !takesArgs ? command.slice(0, 40) : adapter.label),
             command,
             cwd: session.cwd,
             agentSessionId: voltranSessionId(spec.adapter),
