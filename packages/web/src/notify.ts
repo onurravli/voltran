@@ -7,11 +7,11 @@ type AttentionEvent = Extract<ServerEvent, { type: 'attention' }>;
 const BASE_ICON = '/favicon.svg';
 
 const ATTENTION_ICON = `data:image/svg+xml,${encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#181c26"/>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#16171a"/>'
     + '<g transform="translate(16 17.1) scale(0.9) translate(-16 -17.1)" stroke-linecap="round" stroke-width="3.4">'
     + '<path d="M6 7l3.4 7.4" stroke="#7aa2f7"/><path d="M11 18l2.8 6.2" stroke="#f7768e"/>'
     + '<path d="M18.2 24.2 21 18" stroke="#9ece6a"/><path d="M22.6 14.4 26 7" stroke="#bb9af7"/></g>'
-    + '<circle cx="25" cy="25" r="6" fill="#ffb547" stroke="#181c26" stroke-width="2"/></svg>',
+    + '<circle cx="25" cy="25" r="6" fill="#ebb862" stroke="#16171a" stroke-width="2"/></svg>',
 )}`;
 
 export function syncAttentionBadge(): () => void {

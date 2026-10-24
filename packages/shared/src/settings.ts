@@ -31,7 +31,7 @@ export interface SettingsState {
 export const APPEARANCES: readonly Appearance[] = ['system', 'dark', 'light'];
 export const SIDEBAR_POSITIONS: readonly SidebarPosition[] = ['left', 'right'];
 export const DARK_THEME_IDS: readonly string[] = ['voltran', 'tokyo-night', 'catppuccin-mocha', 'dracula', 'nord', 'gruvbox-dark', 'one-dark', 'rose-pine', 'solarized-dark'];
-export const LIGHT_THEME_IDS: readonly string[] = ['catppuccin-latte', 'solarized-light', 'github-light'];
+export const LIGHT_THEME_IDS: readonly string[] = ['voltran-light', 'catppuccin-latte', 'solarized-light', 'github-light'];
 export const MIN_FONT_SIZE = 9;
 export const MAX_FONT_SIZE = 28;
 export const MIN_UI_FONT_SIZE = 11;
@@ -41,7 +41,7 @@ export const MAX_EDITOR_COMMAND_LENGTH = 200;
 
 export const DEFAULT_SETTINGS: Settings = {
     appearance: 'system',
-    theme: { dark: 'voltran', light: 'github-light' },
+    theme: { dark: 'voltran', light: 'voltran-light' },
     terminal: { fontFamily: 'JetBrains Mono', fontSize: 13 },
     ui: { fontFamily: '', fontSize: 13 },
     sidebar: { position: 'left' },

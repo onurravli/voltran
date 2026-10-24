@@ -34,6 +34,7 @@ export type TerminalTheme = Record<(typeof TERMINAL_KEYS)[number], string> & { s
 export const UI_VARIABLES = [
     '--hull',
     '--bay',
+    '--raised',
     '--plate-solid',
     '--plate-hover',
     '--rivet',
@@ -109,7 +110,10 @@ function deriveUi(scheme: Scheme, t: TerminalTheme, accents: Partial<Record<Acce
     const dark = scheme === 'dark';
     const extreme = dark ? '#ffffff' : '#000000';
     const tone = (amount: number): string => mix(t.background, t.foreground, amount);
-    const bay = tone(0.04);
+    // The sidebar and bars sit a step back from the terminals, the way a window's frame does, and
+    // menus and dialogs a step forward.
+    const bay = dark ? mix(t.background, '#000000', 0.3) : mix(t.background, t.foreground, 0.045);
+    const raised = dark ? tone(0.055) : mix(t.background, '#ffffff', 0.7);
     const plate = tone(0.09);
     const text = withContrast(t.foreground, plate, 4.5, extreme);
     const textAt = (ratio: number): string => withContrast(t.background, bay, ratio, text);
@@ -124,6 +128,7 @@ function deriveUi(scheme: Scheme, t: TerminalTheme, accents: Partial<Record<Acce
     return {
         '--hull': t.background,
         '--bay': bay,
+        '--raised': raised,
         '--plate-solid': plate,
         '--plate-hover': tone(0.12),
         '--rivet': tone(0.15),
@@ -164,62 +169,29 @@ export const DEFAULT_THEME_ID = DEFAULT_SETTINGS.theme.dark;
 
 export const DEFAULT_THEME_IDS: Record<Scheme, string> = { ...DEFAULT_SETTINGS.theme };
 
-const VOLTRAN: Theme = {
-    id: DEFAULT_THEME_ID,
-    name: 'Voltran',
-    scheme: 'dark',
-    terminal: {
-        background: '#12151d',
-        foreground: '#d8dce6',
-        cursor: '#d8dce6',
-        cursorAccent: '#12151d',
-        selectionBackground: '#3a4565',
-        black: '#1d2130',
-        red: '#ff6b6b',
-        green: '#8fd18b',
-        yellow: '#ffcb6b',
-        blue: '#7aa2f7',
-        magenta: '#c49cf7',
-        cyan: '#6cc4ff',
-        white: '#c3c8d4',
-        brightBlack: '#5b6378',
-        brightRed: '#ff8f8f',
-        brightGreen: '#a8e2a4',
-        brightYellow: '#ffd98f',
-        brightBlue: '#9bbaff',
-        brightMagenta: '#d7b8ff',
-        brightCyan: '#94d6ff',
-        brightWhite: '#eef0f5',
-    },
-    minimumContrastRatio: 1,
-    ui: {
-        '--hull': '#12151d',
-        '--bay': '#181c26',
-        '--plate-solid': '#222838',
-        '--plate-hover': '#283044',
-        '--rivet': '#2e3446',
-        '--rivet-soft': '#262b3a',
-        '--rivet-strong': '#3c4459',
-        '--text': '#d8dce6',
-        '--text-strong': '#ffffff',
-        '--text-muted': '#8a91a3',
-        '--text-faint': '#5e6578',
-        '--signal': '#ffb547',
-        '--on-signal': '#261a05',
-        '--finished': '#6cc4ff',
-        '--working': '#a594ff',
-        '--live': '#78c49a',
-        '--fault': '#ff6b6b',
-        '--fault-hover': '#ff8585',
-        '--on-fault': '#1b0d0d',
-        '--error-text': '#ff9a9a',
-        '--toast-error-text': '#ffb0b0',
-        '--focus': '#8fb0ff',
-        '--hover-tint': 'rgba(255, 255, 255, 0.04)',
-        '--shadow': '#000000',
-        '--backdrop': 'rgba(8, 10, 15, 0.6)',
-    },
-};
+const VOLTRAN = defineTheme(DEFAULT_THEME_ID, 'Voltran', 'dark', {
+    background: '#111214',
+    foreground: '#d4d5d8',
+    cursor: '#e6e6e8',
+    cursorAccent: '#111214',
+    selectionBackground: '#2a3140',
+    black: '#1b1c1f',
+    red: '#e8776f',
+    green: '#98c98a',
+    yellow: '#e4bd7a',
+    blue: '#7fa6e3',
+    magenta: '#c39ae0',
+    cyan: '#72c0c4',
+    white: '#c8c9cc',
+    brightBlack: '#5c5f66',
+    brightRed: '#f09890',
+    brightGreen: '#b3dca6',
+    brightYellow: '#eed09a',
+    brightBlue: '#a0bfee',
+    brightMagenta: '#d5b5ec',
+    brightCyan: '#93d3d6',
+    brightWhite: '#eeeef0',
+}, { signal: '#ebb862', finished: '#86ade8', working: '#b894e6', live: '#7fc690', fault: '#eb7a70', focus: '#93b4ec' });
 
 export const THEMES: Theme[] = [
     VOLTRAN,
@@ -414,6 +386,29 @@ export const THEMES: Theme[] = [
         brightCyan: '#93a1a1',
         brightWhite: '#fdf6e3',
     }, { signal: '#b58900', finished: '#268bd2', working: '#6c71c4', live: '#2aa198', fault: '#dc322f', focus: '#268bd2' }),
+    defineTheme('voltran-light', 'Voltran Light', 'light', {
+        background: '#fcfcfb',
+        foreground: '#26272b',
+        cursor: '#26272b',
+        cursorAccent: '#fcfcfb',
+        selectionBackground: '#d9e2f1',
+        black: '#3a3b40',
+        red: '#c4463c',
+        green: '#3f7f37',
+        yellow: '#9a6a12',
+        blue: '#2f62b8',
+        magenta: '#8a4bb0',
+        cyan: '#1f7a80',
+        white: '#8b8d93',
+        brightBlack: '#6b6d73',
+        brightRed: '#d9574c',
+        brightGreen: '#4f9446',
+        brightYellow: '#b07d1c',
+        brightBlue: '#3d73cc',
+        brightMagenta: '#9d5cc4',
+        brightCyan: '#2a8d93',
+        brightWhite: '#b5b7bc',
+    }),
     defineTheme('catppuccin-latte', 'Catppuccin Latte', 'light', {
         background: '#eff1f5',
         foreground: '#4c4f69',

@@ -29,7 +29,7 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
                 <SidebarIcon size={16} />
             </button>
             <div className="session-header__crumb">
-                <span className="session-header__project">Workspace</span>
+                <span className="session-header__project session-header__project--plain">Workspace</span>
                 <span className="session-header__slash" aria-hidden="true">/</span>
                 <InlineEdit
                     className="session-header__title"
