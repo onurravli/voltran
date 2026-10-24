@@ -2010,6 +2010,10 @@ kbd {
     box-shadow: none;
 }
 
+.welcome .mark {
+    color: var(--text-strong);
+}
+
 .welcome__title {
     margin: 10px 0 0;
     color: var(--text-strong);
