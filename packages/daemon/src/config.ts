@@ -25,7 +25,9 @@ export interface Config {
 }
 
 const DEFAULT_PORT = 4747;
-const DEV_WEB_PORT = 5173;
+// Not Vite's default, which other projects' dev servers take: a page there would share the dev UI's
+// origin and storage.
+export const DEV_WEB_PORT = 4774;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const home = resolve(env.VOLTRAN_HOME || join(homedir(), '.voltran'));
@@ -84,6 +86,13 @@ export function privateFile(path: string): string {
     return path;
 }
 
+export function writeNewToken(config: Config): string {
+    const token = randomBytes(32).toString('hex');
+    writeFileSync(config.tokenFile, `${token}\n`, { mode: 0o600 });
+    chmodSync(config.tokenFile, 0o600);
+    return token;
+}
+
 export function readOrCreateToken(config: Config): string {
     if (existsSync(config.tokenFile)) {
         const token = readFileSync(config.tokenFile, 'utf8').trim();
@@ -92,7 +101,5 @@ export function readOrCreateToken(config: Config): string {
             return token;
         }
     }
-    const token = randomBytes(32).toString('hex');
-    writeFileSync(config.tokenFile, `${token}\n`, { mode: 0o600 });
-    return token;
+    return writeNewToken(config);
 }

@@ -12,6 +12,9 @@ Fixes go to the latest `main`; there are no maintained older releases.
   but its own, and needs a credential on every API request and WebSocket. A browser gets a
   credential of its own when `voltran up` signs it in, keeps it in the page's own storage and sends
   it as a header. Voltran sets no cookie, because a browser sends cookies to every port of a host.
+  A credential lapses after 30 days unless the window renews it, and `voltran signout` replaces the
+  token, which ends every credential at once. The page runs only its own scripts, and other sites
+  can neither embed it nor load its files to learn that Voltran runs.
 - **Other people on the machine, as far as files go.** `~/.voltran` is 0700 and its files 0600,
   and the secret each pane's hooks use is read from a file rather than passed on a command line.
 - **A repository you open.** Polling `git status` runs neither a file system monitor nor a filter

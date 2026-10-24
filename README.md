@@ -45,6 +45,7 @@ is already open, `voltran up` does not open another one.
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
 | `voltran autostart [on\|off]` | Start the daemon when you log in (a LaunchAgent on macOS, a systemd user service on Linux); with no argument, say whether it does |
+| `voltran signout` | Sign out every window and replace the token. `voltran up` signs this computer in again |
 
 ### In the Dock
 
@@ -357,7 +358,13 @@ A local server that can start processes is reachable from every web page you ope
   0600) from the CLI, or from a browser a credential of its own, signed with the token, which the page
   keeps in its own storage and sends as a header. It sets no cookie, because a browser sends cookies
   to every port of a host;
-- signs browsers in through one-time login codes that expire after 60 seconds;
+- signs browsers in through one-time login codes that expire after 60 seconds. A browser's
+  credential lapses after 30 days unless the window renews it, which an open window does when it
+  loads and every few hours, and `voltran signout` replaces the token, which signs out every window
+  and every copy of a credential at once. A credential a development daemon issues works only there;
+- sends a Content-Security-Policy that lets the page run only its own scripts, and tells the browser
+  not to let other sites embed the page or load any of its files, which would also tell them
+  Voltran runs on your computer;
 - rejects any `Host` header other than its own, which blocks DNS rebinding;
 - rejects any `Origin` other than its own, on HTTP and WebSocket alike;
 - accepts agent hooks only with the per-pane secret, never the main token;
@@ -366,7 +373,9 @@ A local server that can start processes is reachable from every web page you ope
   before the viewer writes it to a terminal;
 - never writes, reads or changes the mode of a notes file through a link or hard link an agent
   planted, and gives Claude the notes through the daemon rather than by reading the agent's folder;
-- keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns.
+- keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns;
+- drops control characters from session titles and status lines taken from what agents report, so
+  `voltran status` never writes an agent's escape sequence to your terminal.
 
 Child processes do not inherit the environment of a Claude session that launched the daemon
 (`CLAUDECODE`, messaging sockets and tokens) or the identity variables of the terminal that launched
@@ -380,7 +389,7 @@ vulnerability.
 
 ```bash
 npm run dev:daemon   # daemon with --watch, allows the Vite origin
-npm run dev:web      # Vite on http://localhost:5173, proxies /api and /ws to the daemon
+npm run dev:web      # Vite on http://localhost:4774, proxies /api and /ws to the daemon
 npm test             # vitest: shared layout, daemon (PTYs, hooks, subagents, server) and web helpers
 npm run typecheck
 npm run build        # rebuilds the UI the daemon serves

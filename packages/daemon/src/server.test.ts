@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -10,6 +11,7 @@ import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Lay
 import { loadConfig } from './config.ts';
 import { commandRunner } from './git.ts';
 import { buildDaemon, type Daemon } from './main.ts';
+import { contentSecurityPolicy } from './server.ts';
 
 // Stands in for the real CLI: runs the exact hook commands Voltran handed it through --settings,
 // so the env plumbing and the per-pane secret are exercised end to end. With --notes-test it also
@@ -243,6 +245,13 @@ describe('access control', () => {
         await new Promise((resolveMessage) => socket.once('message', resolveMessage));
         expect(socket.protocol).toBe('voltran');
         socket.close();
+
+        const renew = (credential: string) => fetch(`${base}/api/session/renew`, { method: 'POST', headers: { Authorization: `Bearer ${credential}` } });
+        const renewed = await renew(session);
+        const { session: next } = await renewed.json() as { session: string };
+        expect(next).not.toBe(session);
+        expect((await fetch(`${base}/api/state`, { headers: { Authorization: `Bearer ${next}` } })).status).toBe(200);
+        expect((await renew(daemon.token)).status).toBe(400);
 
         expect((await exchange(body.code)).status).toBe(401);
         const { body: fresh } = await api<{ code: string }>('POST', '/api/login-code');
@@ -828,6 +837,49 @@ describe('settings', () => {
         expect((await fetch(`${base}/api/settings/edit`, { method: 'POST', body: JSON.stringify({ sessionId: session.id }) })).status).toBe(401);
         await api('PATCH', '/api/settings', { editor: { command: '' } });
         await api('DELETE', `/api/sessions/${session.id}`);
+    });
+});
+
+describe('headers', () => {
+    it('keeps other sites from loading anything and the page from running scripts it did not ship', async () => {
+        const response = await fetch(`${base}/api/health`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+        expect(response.headers.get('cross-origin-opener-policy')).toBe('same-origin');
+        const script = 'document.title = 1;';
+        const policy = contentSecurityPolicy(`<head><script>${script}</script><script type="module" src="/assets/a.js"></script></head>`);
+        expect(policy).toContain(`script-src 'self' 'sha256-${createHash('sha256').update(script).digest('base64')}'`);
+        expect(policy).toContain("frame-ancestors 'none'");
+        expect(contentSecurityPolicy('<head></head>')).toContain("script-src 'self';");
+    });
+});
+
+describe('signout', () => {
+    it('replaces the token, signs every window out and closes their sockets', async () => {
+        const signoutPort = await freePort();
+        const signoutBase = `http://127.0.0.1:${signoutPort}`;
+        const config = loadConfig({ VOLTRAN_HOME: join(home, 'signout'), VOLTRAN_PORT: String(signoutPort) });
+        const signingOut = buildDaemon(config, { shell: '/bin/sh', path: '/usr/bin:/bin', baseEnv: process.env });
+        await new Promise<void>((resolveListen) => signingOut.server.listen(signoutPort, '127.0.0.1', resolveListen));
+        try {
+            const auth = { Authorization: `Bearer ${signingOut.token}` };
+            const { code } = await (await fetch(`${signoutBase}/api/login-code`, { method: 'POST', headers: auth })).json() as { code: string };
+            const { session } = await (await fetch(`${signoutBase}/api/session`, { method: 'POST', body: JSON.stringify({ code }) })).json() as { session: string };
+            const socket = new WebSocket(`ws://127.0.0.1:${signoutPort}/ws/events`, ['voltran', session], { headers: { Origin: signoutBase } });
+            await new Promise((resolveMessage) => socket.once('message', resolveMessage));
+            const closed = new Promise<number>((resolveClose) => socket.once('close', resolveClose));
+
+            expect((await fetch(`${signoutBase}/api/signout`, { method: 'POST', headers: auth })).status).toBe(200);
+            expect(await closed).toBe(4401);
+            for (const credential of [signingOut.token, session]) {
+                expect((await fetch(`${signoutBase}/api/state`, { headers: { Authorization: `Bearer ${credential}` } })).status).toBe(401);
+            }
+            const token = readFileSync(config.tokenFile, 'utf8').trim();
+            expect(token).not.toBe(signingOut.token);
+            expect(statSync(config.tokenFile).mode & 0o777).toBe(0o600);
+            expect((await fetch(`${signoutBase}/api/state`, { headers: { Authorization: `Bearer ${token}` } })).status).toBe(200);
+        } finally {
+            await signingOut.shutdown();
+        }
     });
 });
 

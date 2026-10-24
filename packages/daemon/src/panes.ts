@@ -23,6 +23,8 @@ interface Attachment {
     queue: (string | PaneServerMessage)[];
 }
 
+// The id is stored and passed back as --session on the next launch, so it must look like one.
+const OPENCODE_SESSION_ID = /^ses_[A-Za-z0-9]{1,100}$/;
 const CODEX_TRUST_HINT = 'Trust the Voltran hooks once in Codex with /hooks for exact status';
 
 interface Runtime {
@@ -314,7 +316,7 @@ export class PaneManager {
     // The plugin reports subagents' sessions only for their prompts, so any other session it names is
     // one the user opened in the pane, which is the one to resume.
     private opencodeHook(runtime: Runtime, status: OpencodeStatus, event: OpencodeEvent, payload: Record<string, unknown>): void {
-        const sessionId = typeof payload.session_id === 'string' && payload.session_id.startsWith('ses') ? payload.session_id : null;
+        const sessionId = typeof payload.session_id === 'string' && OPENCODE_SESSION_ID.test(payload.session_id) ? payload.session_id : null;
         let recordChanged = false;
         if (sessionId && sessionId !== runtime.pane.agentSessionId) {
             this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: true });

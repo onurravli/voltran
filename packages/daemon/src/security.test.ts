@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from './config.ts';
-import { Guard, safeEqual } from './security.ts';
+import { BROWSER_SESSION_MAX_AGE_MS, Guard, safeEqual } from './security.ts';
 
 const TOKEN = 'a'.repeat(64);
 const config = loadConfig({ VOLTRAN_HOME: '/tmp/voltran-guard-test', VOLTRAN_PORT: '4800' });
@@ -26,13 +26,47 @@ describe('Guard.checkRequest', () => {
 
     it('refuses a forged or foreign browser credential, and ignores cookies', () => {
         const session = guard.issueBrowserSession();
-        const [id, mac] = session.split('.');
+        const [id, issued, mac] = session.split('.');
         const other = new Guard(config, 'b'.repeat(64)).issueBrowserSession();
-        for (const credential of [`${id}.${mac.replace(/^./, (c) => (c === '0' ? '1' : '0'))}`, `${'0'.repeat(32)}.${mac}`, other, id, `${session}x`]) {
+        const forged = [
+            `${id}.${issued}.${mac.replace(/^./, (c) => (c === '0' ? '1' : '0'))}`,
+            `${'0'.repeat(32)}.${issued}.${mac}`,
+            `${id}.${Number(issued) + 1}.${mac}`,
+            `${id}.${mac}`,
+            other,
+            id,
+            `${session}x`,
+        ];
+        for (const credential of forged) {
             expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({ ok: false, status: 401 });
             expect(guard.checkRequest(request({ host: '127.0.0.1:4800', 'sec-websocket-protocol': `voltran, ${credential}` }))).toMatchObject({ ok: false, status: 401 });
         }
         expect(guard.checkRequest(request({ host: '127.0.0.1:4800', cookie: `voltran_session=${TOKEN}` }))).toMatchObject({ ok: false, status: 401 });
+    });
+
+    it('lets a browser credential lapse unless the window renews it', () => {
+        vi.useFakeTimers();
+        const session = guard.issueBrowserSession();
+        const signedIn = request({ host: '127.0.0.1:4800', authorization: `Bearer ${session}` });
+        vi.advanceTimersByTime(BROWSER_SESSION_MAX_AGE_MS - 60_000);
+        expect(guard.checkRequest(signedIn)).toEqual({ ok: true });
+        const renewed = guard.issueBrowserSession();
+        vi.advanceTimersByTime(120_000);
+        expect(guard.checkRequest(signedIn)).toMatchObject({ ok: false, status: 401 });
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${renewed}` }))).toEqual({ ok: true });
+        vi.useRealTimers();
+    });
+
+    it('signs every browser and the old token out when the token is replaced', () => {
+        const rotating = new Guard(config, TOKEN);
+        const session = rotating.issueBrowserSession();
+        const code = rotating.issueLoginCode();
+        rotating.rotate('c'.repeat(64));
+        for (const credential of [session, TOKEN]) {
+            expect(rotating.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({ ok: false, status: 401 });
+        }
+        expect(rotating.redeemLoginCode(code)).toBe(false);
+        expect(rotating.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${'c'.repeat(64)}` }))).toEqual({ ok: true });
     });
 
     it('refuses a rebinding host even with a valid token', () => {
@@ -56,9 +90,16 @@ describe('Guard.checkRequest', () => {
 
     it('allows the Vite dev origin only in dev mode', () => {
         const devGuard = new Guard(loadConfig({ VOLTRAN_HOME: '/tmp/x', VOLTRAN_PORT: '4800', VOLTRAN_DEV: '1' }), TOKEN);
-        const devRequest = request({ host: 'localhost:5173', origin: 'http://localhost:5173', authorization: `Bearer ${TOKEN}` });
+        const devRequest = request({ host: 'localhost:4774', origin: 'http://localhost:4774', authorization: `Bearer ${TOKEN}` });
         expect(devGuard.checkRequest(devRequest)).toEqual({ ok: true });
         expect(guard.checkRequest(devRequest)).toMatchObject({ ok: false });
+    });
+
+    it('does not take a credential the dev daemon issued, which lives in the dev origin\'s storage', () => {
+        const devGuard = new Guard(loadConfig({ VOLTRAN_HOME: '/tmp/x', VOLTRAN_PORT: '4800', VOLTRAN_DEV: '1' }), TOKEN);
+        const devSession = devGuard.issueBrowserSession();
+        expect(devGuard.isBrowserSession(devSession)).toBe(true);
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${devSession}` }))).toMatchObject({ ok: false, status: 401 });
     });
 });
 

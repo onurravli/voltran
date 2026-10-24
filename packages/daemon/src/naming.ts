@@ -1,4 +1,5 @@
 import type { Pane, Session, TitleSource } from '@voltran/shared';
+import { withoutControls } from './status.ts';
 import { readAiTitle } from './transcripts.ts';
 
 export const PENDING_TITLE = 'New session';
@@ -19,7 +20,7 @@ export function titleFromPrompt(prompt: unknown): string | null {
     if (typeof prompt !== 'string') {
         return null;
     }
-    const line = (prompt.split('\n').find((entry) => entry.trim()) ?? '').trim().replace(/\s+/g, ' ');
+    const line = withoutControls((prompt.split('\n').find((entry) => entry.trim()) ?? '').replace(/\s+/g, ' ')).trim();
     if (!line || line.startsWith('/')) {
         return null;
     }
