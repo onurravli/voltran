@@ -26,6 +26,13 @@ you trust once; other agents (Antigravity, anything else) get status from termin
 ## Getting started
 
 ```bash
+brew install onurravli/tap/voltran
+voltran up
+```
+
+Or with npm:
+
+```bash
 npm install -g --allow-scripts=voltran,node-pty voltran
 voltran up
 ```
