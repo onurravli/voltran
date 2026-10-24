@@ -147,9 +147,18 @@ function dropLabel(edge: DropEdge, joining: boolean): string {
     return `Place ${edge === 'top' ? 'above' : edge === 'bottom' ? 'below' : `on the ${edge}`}`;
 }
 
+function typingElsewhere(): boolean {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || active.classList.contains('xterm-helper-textarea')) {
+        return false;
+    }
+    return active.matches('input, textarea, select, [contenteditable="true"]') || active.closest('.notes, [role="dialog"]') !== null;
+}
+
 export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const focused = useUi((state) => state.focusedPaneId === pane.id);
+    const focusToken = useUi((state) => (state.focusedPaneId === pane.id ? state.focusToken : null));
     const maximized = useUi((state) => state.maximizedPaneId === pane.id);
     const toggleMaximize = useUi((state) => state.toggleMaximize);
     const openPaneMenu = useUi((state) => state.openPaneMenu);
@@ -187,7 +196,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
         terminal.mount(container);
         const offLink = terminal.onLinkState(setLink);
         const offFocus = terminal.onFocus(() => {
-            useUi.getState().focusPane(pane.id);
+            useUi.getState().focusPane(pane.id, false);
             const current = useUi.getState().app?.panes.find((entry) => entry.id === pane.id);
             if (current && (current.status === 'done' || current.status === 'needs-input')) {
                 api.seenPane(pane.id).catch(() => undefined);
@@ -205,10 +214,10 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
             return;
         }
         const terminal = peekTerminal(pane.id);
-        if (terminal && document.activeElement !== terminal.term.textarea && !document.activeElement?.closest('.notes')) {
+        if (terminal && document.activeElement !== terminal.term.textarea && !typingElsewhere()) {
             terminal.focus();
         }
-    }, [focused, pane.id]);
+    }, [focused, focusToken, pane.id]);
 
     const split = (event: ReactMouseEvent<HTMLButtonElement>, direction: 'horizontal' | 'vertical'): void => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -247,7 +256,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const close = (): void => (inWorkspace ? removeFromWorkspace(host.id, pane.id) : closePane(pane));
 
     return (
-        <div className={`pane${focused ? ' is-focused' : ''}${dragging === pane.id ? ' is-dragging' : ''} pane--${pane.status}`} onMouseDown={() => useUi.getState().focusPane(pane.id)}>
+        <div className={`pane${focused ? ' is-focused' : ''}${dragging === pane.id ? ' is-dragging' : ''} pane--${pane.status}`} onMouseDown={() => useUi.getState().focusPane(pane.id, false)}>
             <div
                 className="pane__header"
                 draggable={!maximized}

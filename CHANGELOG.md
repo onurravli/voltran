@@ -7,6 +7,8 @@ full.
 
 - Option-drag selects text in a pane whose program takes the mouse, such as Claude Code in
   fullscreen mode.
+- Switching to a session, workspace or pane puts the keyboard in its terminal, on the pane you
+  used there last; closing the focused pane moves to the one next to it.
 
 ## 1.0.1 (2026-10-24)
 

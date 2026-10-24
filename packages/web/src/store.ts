@@ -49,6 +49,7 @@ export interface UiState {
     selectedSessionId: string | null;
     selectedWorkspaceId: string | null;
     focusedPaneId: string | null;
+    focusToken: number;
     maximizedPaneId: string | null;
     draggingPaneId: string | null;
     draggingSessionId: string | null;
@@ -83,7 +84,7 @@ export interface UiState {
     setConnection: (connection: Connection) => void;
     selectSession: (id: string | null) => void;
     selectWorkspace: (id: string) => void;
-    focusPane: (id: string | null) => void;
+    focusPane: (id: string | null, enter?: boolean) => void;
     toggleMaximize: (id: string) => void;
     setDraggingPane: (id: string | null) => void;
     setDraggingSession: (id: string | null) => void;
@@ -178,6 +179,7 @@ const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 const systemScheme = (): Scheme => (darkScheme.matches ? 'dark' : 'light');
 
 let toastId = 0;
+const lastFocused = new Map<string, string>();
 let migrated = false;
 
 // What this window shows, as settings. Before settings.json existed these lived in localStorage,
@@ -207,6 +209,7 @@ export const useUi = create<UiState>((set, get) => ({
     previewThemeId: null,
     settingsFile: null,
     focusedPaneId: null,
+    focusToken: 0,
     maximizedPaneId: null,
     draggingPaneId: null,
     draggingSessionId: null,
@@ -228,20 +231,39 @@ export const useUi = create<UiState>((set, get) => ({
         const sessionExists = selectedSessionId !== null && app.sessions.some((session) => session.id === selectedSessionId);
         const paneIds = new Set(app.panes.map((pane) => pane.id));
         const staleNotes = Object.keys(notesOpen).some((id) => !paneIds.has(id));
-        set({
+        const next = {
             app,
             notesOpen: staleNotes ? Object.fromEntries(Object.entries(notesOpen).filter(([id]) => paneIds.has(id))) : notesOpen,
             selectedWorkspaceId: workspaceExists ? selectedWorkspaceId : null,
             selectedSessionId: workspaceExists ? null : sessionExists ? selectedSessionId : firstOpenSession(app)?.id ?? null,
             focusedPaneId: focusedPaneId && paneIds.has(focusedPaneId) ? focusedPaneId : null,
             maximizedPaneId: maximizedPaneId && paneIds.has(maximizedPaneId) ? maximizedPaneId : null,
-        });
+        };
+        if (get().app === null) {
+            set({ ...next, ...enterView({ ...get(), ...next }) });
+            return;
+        }
+        const nearest = focusedPaneId && !next.focusedPaneId ? nearestPane(shownPaneIds(get()), focusedPaneId, shownPaneIds({ ...get(), ...next })) : null;
+        set(nearest ? { ...next, focusedPaneId: nearest, focusToken: get().focusToken + 1 } : next);
     },
     setVersion: (version) => set({ version }),
     setConnection: (connection) => set({ connection }),
-    selectSession: (id) => set({ selectedSessionId: id, selectedWorkspaceId: null, maximizedPaneId: null, findPaneId: null }),
-    selectWorkspace: (id) => set({ selectedWorkspaceId: id, selectedSessionId: null, maximizedPaneId: null, findPaneId: null }),
-    focusPane: (id) => set({ focusedPaneId: id }),
+    selectSession: (id) => {
+        const next = { selectedSessionId: id, selectedWorkspaceId: null, maximizedPaneId: null, findPaneId: null };
+        set({ ...next, ...enterView({ ...get(), ...next }) });
+    },
+    selectWorkspace: (id) => {
+        const next = { selectedWorkspaceId: id, selectedSessionId: null, maximizedPaneId: null, findPaneId: null };
+        set({ ...next, ...enterView({ ...get(), ...next }) });
+    },
+    focusPane: (id, enter = true) => {
+        const state = get();
+        const view = state.selectedWorkspaceId ?? state.selectedSessionId;
+        if (id && view && shownPaneIds(state).includes(id)) {
+            lastFocused.set(view, id);
+        }
+        set(enter ? { focusedPaneId: id, focusToken: state.focusToken + 1 } : { focusedPaneId: id });
+    },
     toggleMaximize: (id) => set({ maximizedPaneId: get().maximizedPaneId === id ? null : id }),
     setDraggingPane: (draggingPaneId) => set({ draggingPaneId }),
     setDraggingSession: (draggingSessionId) => set({ draggingSessionId }),
@@ -370,6 +392,29 @@ function firstOpenSession(app: AppState): Session | undefined {
 
 export function selectedWorkspace(state: UiState): Workspace | undefined {
     return state.selectedWorkspaceId ? state.app?.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId) : undefined;
+}
+
+// A view opens on the pane it had focused last, so switching back and forth keeps your place.
+function enterView(state: UiState): Pick<UiState, 'focusedPaneId' | 'focusToken'> {
+    const shown = shownPaneIds(state);
+    const view = state.selectedWorkspaceId ?? state.selectedSessionId;
+    const remembered = view ? lastFocused.get(view) : undefined;
+    const target = [state.focusedPaneId, remembered].find((id) => id && shown.includes(id)) ?? shown[0] ?? null;
+    return { focusedPaneId: target, focusToken: state.focusToken + 1 };
+}
+
+function nearestPane(before: string[], gone: string, after: string[]): string | null {
+    const index = before.indexOf(gone);
+    if (index < 0) {
+        return null;
+    }
+    for (let distance = 1; distance < before.length; distance++) {
+        const near = [before[index + distance], before[index - distance]].find((id) => id !== undefined && after.includes(id));
+        if (near) {
+            return near;
+        }
+    }
+    return after[0] ?? null;
 }
 
 export function shownPaneIds(state: UiState): string[] {
