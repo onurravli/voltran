@@ -51,6 +51,7 @@
     --bar-height: calc(44px * var(--ui-scale));
     --row-height: calc(28px * var(--ui-scale));
     --ease: cubic-bezier(0.2, 0, 0, 1);
+    --sidebar-slide: 220ms;
 
     --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace;
@@ -133,8 +134,9 @@ kbd {
 
 .app {
     display: grid;
-    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     height: 100%;
+    overflow: hidden;
     background: var(--bay);
 }
 
@@ -149,8 +151,40 @@ kbd {
 }
 
 @media (min-width: 761px) {
+    .app {
+        transition: grid-template-columns var(--sidebar-slide) var(--ease);
+    }
+
+    .app:has(.sidebar__resizer.is-dragging) {
+        transition: none;
+    }
+
+    .sidebar {
+        width: var(--sidebar-width);
+        transition: transform var(--sidebar-slide) var(--ease), visibility 0s;
+    }
+
+    .app.app--no-sidebar {
+        grid-template-columns: 0px minmax(0, 1fr);
+    }
+
+    .app--no-sidebar .sidebar {
+        display: flex;
+        visibility: hidden;
+        transform: translateX(-100%);
+        transition: transform var(--sidebar-slide) var(--ease), visibility 0s var(--sidebar-slide);
+    }
+
     .app--sidebar-right {
         grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    }
+
+    .app.app--sidebar-right.app--no-sidebar {
+        grid-template-columns: minmax(0, 1fr) 0px;
+    }
+
+    .app--sidebar-right.app--no-sidebar .sidebar {
+        transform: translateX(100%);
     }
 
     .app--sidebar-right .sidebar {
@@ -1411,6 +1445,7 @@ kbd {
     border-radius: var(--radius-l);
     background: var(--hull);
     box-shadow: 0 0 0 1px var(--line), 0 1px 3px rgba(var(--shadow-rgb), 0.14);
+    transition: margin var(--sidebar-slide) var(--ease);
 }
 
 .app--sidebar-right .session__body,
@@ -2653,5 +2688,11 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
     .mark--form path {
         animation: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --sidebar-slide: 0s;
     }
 }
