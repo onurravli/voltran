@@ -2643,9 +2643,16 @@ kbd {
 }
 
 .toast--error {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     padding-left: 14px;
-    box-shadow: var(--elevation), inset 3px 0 0 var(--fault);
     color: var(--toast-error-text);
+}
+
+.toast__lamp {
+    top: -1px;
+    background: var(--fault);
 }
 
 @media (max-width: 760px) {

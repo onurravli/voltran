@@ -423,5 +423,10 @@ export function ToastView() {
     if (!toast) {
         return null;
     }
-    return <div className={`toast toast--${toast.tone}`} role={toast.tone === 'error' ? 'alert' : 'status'}>{toast.message}</div>;
+    return (
+        <div className={`toast toast--${toast.tone}`} role={toast.tone === 'error' ? 'alert' : 'status'}>
+            {toast.tone === 'error' ? <span className="lamp lamp--sm toast__lamp" /> : null}
+            <span>{toast.message}</span>
+        </div>
+    );
 }
