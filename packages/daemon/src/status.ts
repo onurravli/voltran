@@ -6,11 +6,15 @@ export interface StatusChange {
     detail: string | null;
 }
 
+// Agents and hook payloads write these texts, and `voltran status` prints them to a terminal, where
+// an escape sequence could hide or forge lines.
+export const withoutControls = (text: string): string => text.replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
+
 const oneLine = (value: unknown, max: number): string | null => {
     if (typeof value !== 'string') {
         return null;
     }
-    const text = value.replace(/\s+/g, ' ').trim();
+    const text = withoutControls(value.replace(/\s+/g, ' ')).trim();
     if (!text) {
         return null;
     }
@@ -65,6 +69,9 @@ export function codexTransition(event: CodexHookEvent, payload: Record<string, u
 
 // A subagent's permission prompt or question can be open next to the main session's, so the pane
 // needs input until every one of them is answered.
+const MAX_REQUEST_ID = 128;
+const MAX_PENDING = 64;
+
 export class OpencodeStatus {
     private readonly pending = new Map<string, string>();
 
@@ -113,8 +120,11 @@ export class OpencodeStatus {
     }
 
     private ask(requestId: unknown, detail: string): StatusChange {
-        if (typeof requestId === 'string') {
+        if (typeof requestId === 'string' && requestId.length <= MAX_REQUEST_ID) {
             this.pending.set(requestId, detail);
+            if (this.pending.size > MAX_PENDING) {
+                this.pending.delete(this.pending.keys().next().value!);
+            }
         }
         return { status: 'needs-input', detail };
     }

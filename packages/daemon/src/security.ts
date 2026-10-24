@@ -4,7 +4,9 @@ import type { Config } from './config.ts';
 
 export const WS_PROTOCOL = 'voltran';
 const LOGIN_CODE_TTL_MS = 60_000;
-const BROWSER_SESSION = /^([0-9a-f]{32})\.([0-9a-f]{64})$/;
+export const BROWSER_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const CLOCK_SKEW_MS = 60_000;
+const BROWSER_SESSION = /^([0-9a-f]{32})\.([1-9][0-9]{0,14})\.([0-9a-f]{64})$/;
 
 export function safeEqual(a: string, b: string): boolean {
     const left = Buffer.from(a, 'utf8');
@@ -34,12 +36,18 @@ export type GuardResult = { ok: true } | { ok: false; status: number; reason: st
 // hijacking, and the token stops every other local client.
 export class Guard {
     private readonly config: Config;
-    private readonly token: string;
+    private token: string;
     private loginCodes = new Map<string, number>();
 
     constructor(config: Config, token: string) {
         this.config = config;
         this.token = token;
+    }
+
+    // A new token signs every browser out and stops the old one from working for the CLI.
+    rotate(token: string): void {
+        this.token = token;
+        this.loginCodes.clear();
     }
 
     checkRequest(req: IncomingMessage, options: { allowAnonymous?: boolean } = {}): GuardResult {
@@ -67,19 +75,28 @@ export class Guard {
 
     // A signed-in browser holds a credential of its own, never the token, and keeps it in the page's
     // storage, which no other port on this host can read; a cookie would go to every port. It is
-    // signed with the token, so it survives a restart and a new token signs every browser out.
+    // signed with the token, so it survives a restart and a new token signs every browser out. It
+    // carries the time it was issued and lapses after a while unless the window renews it, and one a
+    // dev daemon issued, which a page on the dev server's port keeps, works only on a dev daemon.
     issueBrowserSession(): string {
         const id = randomBytes(16).toString('hex');
-        return `${id}.${this.sign(id)}`;
+        const issued = Date.now();
+        return `${id}.${issued}.${this.sign(id, issued)}`;
     }
 
-    private isBrowserSession(value: string): boolean {
-        const match = BROWSER_SESSION.exec(value);
-        return match !== null && safeEqual(match[2], this.sign(match[1]));
+    isBrowserSession(value: string | null): boolean {
+        const match = value === null ? null : BROWSER_SESSION.exec(value);
+        if (match === null) {
+            return false;
+        }
+        const issued = Number(match[2]);
+        const age = Date.now() - issued;
+        return safeEqual(match[3], this.sign(match[1], issued)) && age > -CLOCK_SKEW_MS && age < BROWSER_SESSION_MAX_AGE_MS;
     }
 
-    private sign(id: string): string {
-        return createHmac('sha256', this.token).update(`browser-session:${id}`).digest('hex');
+    private sign(id: string, issued: number): string {
+        const realm = this.config.dev ? 'dev' : 'app';
+        return createHmac('sha256', this.token).update(`browser-session:${realm}:${issued}:${id}`).digest('hex');
     }
 
     issueLoginCode(): string {

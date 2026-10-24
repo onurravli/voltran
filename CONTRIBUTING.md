@@ -24,7 +24,7 @@ neither touches your real sessions:
 
 ```bash
 VOLTRAN_HOME=/tmp/voltran-dev VOLTRAN_PORT=4950 npm run dev:daemon   # daemon with --watch
-VOLTRAN_PORT=4950 npm run dev:web                                    # Vite on http://localhost:5173
+VOLTRAN_PORT=4950 npm run dev:web                                    # Vite on http://localhost:4774
 VOLTRAN_HOME=/tmp/voltran-dev VOLTRAN_PORT=4950 VOLTRAN_DEV=1 node bin/voltran.mjs up   # signed-in window
 ```
 

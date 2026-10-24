@@ -15,7 +15,7 @@ npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # on
 npm run typecheck                # tsc for daemon and web (each includes shared)
 npm run build                    # builds packages/web/dist, which the daemon serves
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
-npm run dev:web                  # Vite on :5173, proxies /api and /ws to the daemon
+npm run dev:web                  # Vite on :4774, proxies /api and /ws to the daemon
 node bin/voltran.mjs up|down|status|add|autostart   # the CLI, same as `voltran` after npm link
 ```
 
@@ -39,8 +39,13 @@ WebSockets: `/ws/events` (whole-app state, one per window) and `/ws/panes/:id` (
 request and upgrade. A browser never gets the token and never a cookie (browsers send cookies to
 every port of 127.0.0.1): `voltran up` opens `/auth?code=…`, `signInFromUrl` (`web/src/api.ts`) trades
 the code at `POST /api/session` for a credential signed with the token, keeps it in `localStorage`
-and sends it as `Authorization`, and on WebSockets as a subprotocol next to `voltran`. The UI's
-files need no credential. `ensureHome` keeps `~/.voltran` at 0700 and refuses a home another user
+and sends it as `Authorization`, and on WebSockets as a subprotocol next to `voltran`. A credential
+carries the time it was issued and lapses after `BROWSER_SESSION_MAX_AGE_MS` unless
+`keepSessionFresh` renews it (`POST /api/session/renew`); a dev daemon signs with a key of its own,
+so a credential from the Vite origin never works on the real daemon. `voltran signout`
+(`POST /api/signout`) writes a new token, which ends every credential and closes every socket. The
+UI's files need no credential; `index.html` gets a Content-Security-Policy with the hash of each
+inline script it carries (`contentSecurityPolicy`), so a new inline script needs no change there. `ensureHome` keeps `~/.voltran` at 0700 and refuses a home another user
 owns.
 
 **Settings** live in `~/.voltran/settings.json` (JSONC, nested sections). `shared/src/settings.ts` is

@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { parseSettingsPatch, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
-import type { Config } from './config.ts';
+import { writeNewToken, type Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
 import { editorCommand, type SettingsFile } from './settings.ts';
@@ -29,12 +30,35 @@ const MIME: Record<string, string> = {
     '.webmanifest': 'application/manifest+json',
 };
 
+// Cross-Origin-Resource-Policy keeps other sites from loading even the UI's files, which would tell
+// them Voltran runs here.
 const SECURITY_HEADERS = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
     'Cache-Control': 'no-store',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Cross-Origin-Opener-Policy': 'same-origin',
 };
+
+const INLINE_SCRIPT = /<script>([\s\S]*?)<\/script>/g;
+
+// The page holds a credential that can run commands, so it runs no script but its own files and the
+// inline scripts index.html carries, by hash. xterm adds <style> elements, so styles may be inline.
+export function contentSecurityPolicy(html: string): string {
+    const hashes = [...html.matchAll(INLINE_SCRIPT)].map((match) => `'sha256-${createHash('sha256').update(match[1]).digest('base64')}'`);
+    return [
+        "default-src 'self'",
+        `script-src 'self' ${hashes.join(' ')}`.trim(),
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    ].join('; ');
+}
 
 export interface ServerOptions {
     config: Config;
@@ -137,6 +161,18 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('POST', '/api/restart', (_req, res) => {
         sendJson(res, 202, { ok: true });
         setImmediate(options.onRestart);
+    });
+    // A window renews its credential when it loads and every few hours, so only one left unused lapses.
+    route('POST', '/api/session/renew', (req, res) => {
+        if (!guard.isBrowserSession(bearerToken(req))) {
+            throw new HttpError(400, 'only a browser credential is renewed');
+        }
+        sendJson(res, 200, { session: guard.issueBrowserSession() });
+    });
+    route('POST', '/api/signout', (_req, res) => {
+        guard.rotate(writeNewToken(config));
+        sendJson(res, 200, { ok: true });
+        closeSockets();
     });
 
     route('GET', '/api/settings', (_req, res) => sendJson(res, 200, settings.state()));
@@ -258,8 +294,12 @@ export function createVoltranServer(options: ServerOptions): Server {
         if (file !== index && relative.startsWith('assets/')) {
             headers['Cache-Control'] = 'public, max-age=31536000, immutable';
         }
+        const body = readFileSync(file);
+        if (file === index) {
+            headers['Content-Security-Policy'] = contentSecurityPolicy(body.toString('utf8'));
+        }
         res.writeHead(200, headers);
-        res.end(req.method === 'HEAD' ? undefined : readFileSync(file));
+        res.end(req.method === 'HEAD' ? undefined : body);
     };
 
     const server = createServer(async (req, res) => {
@@ -346,7 +386,7 @@ export function createVoltranServer(options: ServerOptions): Server {
         }
     });
 
-    attachWebSockets(server, hub, guard, settings, options.version);
+    const closeSockets = attachWebSockets(server, hub, guard, settings, options.version);
     const version = options.version;
     if (version) {
         const poll = setInterval(() => {
@@ -365,7 +405,8 @@ function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
     socket.destroy();
 }
 
-function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: SettingsFile, version: VersionWatch | undefined): void {
+// Returns what closes every open socket, for when the credentials they were opened with stop working.
+function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: SettingsFile, version: VersionWatch | undefined): () => void {
     const wss = new WebSocketServer({
         noServer: true,
         maxPayload: WS_MAX_PAYLOAD,
@@ -425,6 +466,11 @@ function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: Sett
             refuseUpgrade(socket, 400, 'Bad Request');
         }
     });
+    return () => {
+        for (const client of wss.clients) {
+            client.close(4401, 'signed out');
+        }
+    };
 }
 
 function serveEvents(ws: WebSocket, hub: Hub, settings: SettingsFile, version: VersionWatch | undefined): void {

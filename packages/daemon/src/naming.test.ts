@@ -55,6 +55,7 @@ describe('titleFromPrompt', () => {
         ['fix the login redirect', 'fix the login redirect'],
         ['\n\n  fix   the\tlogin redirect  \nand then the tests', 'fix the login redirect'],
         ['make the sidebar remember which projects are collapsed after a reload, please', 'make the sidebar remember which projects are collapsed after…'],
+        ['fix \u001b[2Jthe\u009b login', 'fix [2Jthe login'],
         ['/review', null],
         ['   ', null],
         [42, null],
@@ -67,6 +68,8 @@ describe('readAiTitle', () => {
     it('reads the title Claude Code gave the conversation', () => {
         const file = transcript([{ type: 'user', message: { content: 'hi' } }, { type: 'ai-title', aiTitle: '  Login  redirect fix ', sessionId: CONVERSATION }]);
         expect(readAiTitle(file, CONVERSATION)).toBe('Login redirect fix');
+        const escaped = transcript([{ type: 'ai-title', aiTitle: 'Login\u001b]0;x\u0007 fix', sessionId: CONVERSATION }]);
+        expect(readAiTitle(escaped, CONVERSATION)).toBe('Login]0;x fix');
     });
 
     it('refuses a path that does not name the reported conversation, a link or a relative path', () => {

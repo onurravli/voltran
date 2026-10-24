@@ -34,6 +34,7 @@ export class ApiError extends Error {
 
 const SESSION_KEY = 'voltran.session';
 const WS_PROTOCOL = 'voltran';
+const RENEW_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 // The credential this window signed in with. It stays in this origin's storage and goes out as a
 // header, never as a cookie, which the browser would also send to every other port on this host.
@@ -66,15 +67,32 @@ export async function signInFromUrl(): Promise<void> {
     if (!code) {
         return;
     }
+    // On failure the window stays signed out and says how to sign in.
+    await storeSession(fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) }));
+}
+
+async function storeSession(response: Promise<Response>): Promise<void> {
     try {
-        const response = await fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
-        const body = response.ok ? (await response.json()) as { session?: unknown } : null;
+        const reply = await response;
+        const body = reply.ok ? (await reply.json()) as { session?: unknown } : null;
         if (typeof body?.session === 'string') {
             localStorage.setItem(SESSION_KEY, body.session);
         }
     } catch {
-        // The window stays signed out and says how to sign in.
+        // The window keeps the credential it has.
     }
+}
+
+// A credential lapses a while after it was issued, so a window trades it for a fresh one when it loads
+// and every few hours while it stays open.
+export function keepSessionFresh(): void {
+    const renew = (): void => {
+        if (browserSession()) {
+            void storeSession(fetch('/api/session/renew', { method: 'POST', headers: authHeaders() }));
+        }
+    };
+    renew();
+    setInterval(renew, RENEW_INTERVAL_MS);
 }
 
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {

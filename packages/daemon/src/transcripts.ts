@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { TranscriptChunk, TranscriptEntry } from '@voltran/shared';
 
@@ -10,8 +10,30 @@ const MAX_TEXT = 20_000;
 const MAX_RESULT = 2_000;
 const MAX_SUMMARY = 140;
 const MAX_TITLE_SCAN_BYTES = 512 * 1024;
+const MAX_META_BYTES = 64 * 1024;
 
 export const isClaudeSessionId = (value: unknown): value is string => typeof value === 'string' && SESSION_ID.test(value);
+
+// Hook payloads name these files, so the file is checked on the descriptor that is read: a link or a
+// pipe swapped in after a check of the path would otherwise be followed, or block the daemon.
+function openRegular(path: string): number | null {
+    let fd: number;
+    try {
+        fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    } catch {
+        return null;
+    }
+    if (fstatSync(fd).isFile()) {
+        return fd;
+    }
+    closeSync(fd);
+    return null;
+}
+
+function readStart(fd: number, limit: number): string {
+    const buffer = Buffer.alloc(Math.min(fstatSync(fd).size, limit));
+    return buffer.toString('utf8', 0, readSync(fd, buffer, 0, buffer.length, 0));
+}
 
 export interface SubagentMeta {
     description: string | null;
@@ -40,21 +62,17 @@ export function readAiTitle(transcript: unknown, sessionId: unknown): string | n
     if (!SESSION_ID.test(sessionId) || basename(transcript) !== `${sessionId}.jsonl`) {
         return null;
     }
+    const fd = openRegular(transcript);
+    if (fd === null) {
+        return null;
+    }
     let text: string;
-    let fd: number | null = null;
     try {
-        if (!lstatSync(transcript).isFile()) {
-            return null;
-        }
-        fd = openSync(transcript, 'r');
-        const buffer = Buffer.alloc(Math.min(fstatSync(fd).size, MAX_TITLE_SCAN_BYTES));
-        text = buffer.toString('utf8', 0, readSync(fd, buffer, 0, buffer.length, 0));
+        text = readStart(fd, MAX_TITLE_SCAN_BYTES);
     } catch {
         return null;
     } finally {
-        if (fd !== null) {
-            closeSync(fd);
-        }
+        closeSync(fd);
     }
     let title: string | null = null;
     for (const line of text.split('\n')) {
@@ -64,7 +82,7 @@ export function readAiTitle(transcript: unknown, sessionId: unknown): string | n
         try {
             const entry = JSON.parse(line) as { type?: unknown; aiTitle?: unknown };
             if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string' && entry.aiTitle.trim()) {
-                title = entry.aiTitle.trim().replace(/\s+/g, ' ');
+                title = entry.aiTitle.replace(/\s+/g, ' ').replace(CONTROL, '').trim() || title;
             }
         } catch {
             continue;
@@ -112,17 +130,20 @@ function locate(path: string): string | null {
 
 export function readSubagentMeta(transcriptPath: string): SubagentMeta | null {
     const metaPath = locate(transcriptPath.replace(/\.jsonl$/, '.meta.json'));
-    if (!metaPath) {
+    const fd = metaPath ? openRegular(metaPath) : null;
+    if (fd === null) {
         return null;
     }
     try {
-        const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>;
+        const meta = JSON.parse(readStart(fd, MAX_META_BYTES)) as Record<string, unknown>;
         return {
             description: typeof meta.description === 'string' ? meta.description : null,
             type: typeof meta.agentType === 'string' ? meta.agentType : null,
         };
     } catch {
         return null;
+    } finally {
+        closeSync(fd);
     }
 }
 
@@ -232,10 +253,10 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
 
 export function readTranscript(path: string, from: number): TranscriptChunk | null {
     const file = locate(path);
-    if (!file) {
+    const fd = file ? openRegular(file) : null;
+    if (fd === null) {
         return null;
     }
-    const fd = openSync(file, 'r');
     try {
         const size = fstatSync(fd).size;
         const start = Number.isSafeInteger(from) && from >= 0 && from <= size ? from : 0;

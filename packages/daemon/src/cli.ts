@@ -3,9 +3,10 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AppState } from '@voltran/shared';
-import { ensureHome, loadConfig, privateFile, readOrCreateToken, type Config } from './config.ts';
+import { DEV_WEB_PORT, ensureHome, loadConfig, privateFile, readOrCreateToken, writeNewToken, type Config } from './config.ts';
 import { SYSTEMD_UNIT_FILE, SYSTEMD_UNIT_NAME, findChrome, systemdUnit } from './linux.ts';
 import { LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, launchAgentPlist } from './macos.ts';
+import { withoutControls } from './status.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
@@ -30,6 +31,7 @@ Usage:
   voltran down                         stop the daemon (agents resume on next open)
   voltran restart                      restart the daemon to load new code; takes up's options
   voltran autostart [on|off]           start the daemon when you log in
+  voltran signout                      sign out every window and replace the token
 
 On macOS, once Voltran is installed as an app (⌘K → Install Voltran as an app), up opens that app.
 
@@ -201,7 +203,7 @@ async function openUi(api: Client, args: string[], started: boolean): Promise<vo
         }
     }
     const { code } = await api.request<{ code: string }>('POST', '/api/login-code');
-    const base = api.config.dev ? 'http://localhost:5173' : api.config.url;
+    const base = api.config.dev ? `http://localhost:${DEV_WEB_PORT}` : api.config.url;
     openWindow(base, `/auth?code=${code}`, args.includes('--browser'));
 }
 
@@ -338,7 +340,8 @@ async function status(): Promise<void> {
     console.log(`${count(state.projects.length, 'project')}, ${count(open, 'session')}, ${count(state.panes.length, 'pane')}`);
     for (const pane of attention) {
         const session = state.sessions.find((entry) => entry.id === pane.sessionId);
-        console.log(`  ${pane.status === 'needs-input' ? '●' : '○'} ${session?.title ?? '?'} · ${pane.title}${pane.detail ? ` — ${pane.detail}` : ''}`);
+        const line = `${session?.title ?? '?'} · ${pane.title}${pane.detail ? ` — ${pane.detail}` : ''}`;
+        console.log(`  ${pane.status === 'needs-input' ? '●' : '○'} ${withoutControls(line)}`);
     }
 }
 
@@ -354,6 +357,17 @@ async function add(args: string[]): Promise<void> {
     const path = resolve(positional[0] ?? process.cwd());
     const project = await api.request<{ name: string; path: string }>('POST', '/api/projects', { path, name });
     console.log(`Added project ${project.name} → ${project.path}`);
+}
+
+// A new token signs out every window and every copy of a browser credential, wherever it went.
+async function signout(): Promise<void> {
+    const api = client();
+    if (await isRunning(api)) {
+        await api.request('POST', '/api/signout');
+    } else {
+        writeNewToken(api.config);
+    }
+    console.log('Signed out every window. `voltran up` signs this computer in again.');
 }
 
 export async function runCli(argv: string[]): Promise<void> {
@@ -373,6 +387,8 @@ export async function runCli(argv: string[]): Promise<void> {
             return add(args);
         case 'autostart':
             return autostart(args);
+        case 'signout':
+            return signout();
         default:
             console.log(HELP);
     }

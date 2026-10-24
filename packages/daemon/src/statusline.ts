@@ -71,6 +71,8 @@ function repositoryRoot(dir: string): string | null {
 // Voltran's --settings outranks the user's and the project's settings, so its status line runs the one
 // Claude would have shown. Claude reads settings.local.json at the repository root as well as in the
 // folder it starts in, and settings.json only in that folder.
+// Claude runs no status line, wherever it comes from, until the folder is trusted, so a project's
+// command still waits for that.
 export function userStatusLine(cwd: string, configDir: string | null): string | null {
     const root = repositoryRoot(cwd);
     const files = [

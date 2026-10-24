@@ -35,6 +35,10 @@ describe('claudeTransition', () => {
         expect(claudeTransition('Notification', { notification_type: 'auth_success' })).toBeNull();
     });
 
+    it('drops escape sequences and other control characters from details', () => {
+        expect(claudeTransition('Notification', { message: 'Allow\u001b]0;pwned\u0007 rm?\u009b2J' })?.detail).toBe('Allow]0;pwned rm?2J');
+    });
+
     it('truncates long details', () => {
         const change = claudeTransition('Stop', { last_assistant_message: 'x'.repeat(500) });
         expect(change?.detail).toHaveLength(280);
@@ -67,6 +71,17 @@ describe('OpencodeStatus', () => {
         expect(status.transition('PermissionReplied', { request_id: 'per_1' }, 'needs-input')).toEqual({ status: 'needs-input', detail: 'Red or blue?' });
         expect(status.transition('QuestionAnswered', { request_id: 'frm_1' }, 'needs-input')).toEqual({ status: 'working', detail: null });
         expect(status.transition('QuestionAnswered', { request_id: 'frm_1' }, 'working')).toBeNull();
+    });
+
+    it('keeps a bounded number of open prompts with ids of a sane length', () => {
+        const status = new OpencodeStatus();
+        status.transition('Permission', { request_id: 'x'.repeat(129), action: 'shell' }, 'working');
+        expect(status.transition('PermissionReplied', { request_id: 'x'.repeat(129) }, 'needs-input')).toBeNull();
+        for (let index = 0; index < 100; index++) {
+            status.transition('Question', { request_id: `frm_${index}`, message: `Question ${index}` }, 'needs-input');
+        }
+        expect(status.transition('QuestionAnswered', { request_id: 'frm_0' }, 'needs-input')).toBeNull();
+        expect(status.transition('QuestionAnswered', { request_id: 'frm_99' }, 'needs-input')).toEqual({ status: 'needs-input', detail: 'Question 36' });
     });
 
     it('reports failures and treats an interruption as idle', () => {
