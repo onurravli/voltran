@@ -38,11 +38,13 @@ an agent writes the code.
 ```bash
 npm run typecheck
 npm test
+npm run test:e2e     # builds the UI and drives it in headless Chrome
 npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # one file or test
 npm run build        # the UI the daemon serves
 ```
 
-CI runs the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and every run must pass.
+CI runs the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and the browser tests on
+Ubuntu and macOS with Node 24; every run must pass.
 
 - Tests run in Node, so web logic that needs a test goes in a module without DOM access, such as
   `packages/web/src/usage.ts`, and the component only renders it.
@@ -50,8 +52,12 @@ CI runs the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and
   fake `claude` that runs the real hook command.
 - The daemon takes its `PATH` from a login shell, so a fake agent binary must come first there:
   point `SHELL` at a wrapper that runs `zsh -f` with your `PATH`, or your real agent starts instead.
-- There are no UI tests. Check a UI change in a browser against a development copy, in a dark and a
-  light theme, and add a screenshot to the pull request.
+- The browser tests in `e2e/` cover the workflows that break unseen: typing and terminal sizes,
+  splitting, dragging and resizing panes, workspaces, sidebar menus and reconnecting after a restart.
+  A change to one of them gets a test there. They find Chrome on their own, or take its path from
+  `VOLTRAN_E2E_CHROME`.
+- Check how a UI change looks in a browser against a development copy, in a dark and a light theme,
+  and add a screenshot to the pull request.
 
 ## Code style
 

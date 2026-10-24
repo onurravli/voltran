@@ -333,6 +333,24 @@ describe('PaneManager', () => {
         expect(client.snapshot()).toContain('last words before shutdown');
     });
 
+    it('puts the restored notice after the restored output', async () => {
+        const first = setup();
+        const pane = makePane({ ended: true });
+        first.manager.add(pane);
+        const internals = first.manager as unknown as Internals;
+        internals.write(internals.runtimes.get(pane.id), 'first line\r\nsecond line\r\nthird line\r\n$ ');
+        await first.manager.shutdown();
+
+        const second = setup(first.dir);
+        second.manager.load(pane);
+        const client = new FakeClient();
+        second.manager.attach(pane.id, client);
+        await until(() => client.texts.length > 0);
+        const lines = client.snapshot().replace(/\x1b\[[0-9;]*m/g, '').split('\r\n');
+        expect(lines.slice(0, 4)).toEqual(['first line', 'second line', 'third line', '$ ']);
+        expect(lines[4]).toContain('restored');
+    });
+
     it('reports a pane that cannot start instead of throwing', () => {
         const { manager } = setup();
         const pane = makePane({ cwd: '/definitely/not/here' });
