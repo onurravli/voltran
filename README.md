@@ -46,6 +46,7 @@ is already open, `voltran up` does not open another one.
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
 | `voltran autostart [on\|off]` | Start the daemon when you log in (a LaunchAgent on macOS, a systemd user service on Linux); with no argument, say whether it does |
 | `voltran signout` | Sign out every window and replace the token. `voltran up` signs this computer in again |
+| `voltran doctor [--report]` | Check the installation: Node, terminals, the daemon, the agents it finds, git and the browser. `--report` opens a bug report with the results filled in |
 | `voltran version` | Print the installed version (`--version` and `-v` work too) |
 
 ### In the Dock
@@ -282,6 +283,15 @@ Saving the file changes every open window at once, and a choice made in ⌘K is 
 without touching your comments. A value Voltran does not accept keeps its default, and the window
 says which one and why; while the file is not valid JSON, the last valid settings stay in effect.
 The first window to connect after an update moves the choices it had in the browser into the file.
+
+### Reporting a problem
+
+⌘K → **Report a problem…**, or the speech bubble at the bottom of the sidebar, opens a bug report on
+GitHub in your browser with Voltran's version and the results of `voltran doctor` filled in. When the
+window does not open at all, `voltran doctor --report` does the same from a terminal. The results
+name your agents' versions and Voltran's folders, with your home folder written as `~`; they never
+include the token, your notes or anything a pane printed. Nothing is sent until you submit the issue,
+and Voltran itself sends nothing.
 
 ## How it works
 

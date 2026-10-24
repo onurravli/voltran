@@ -137,6 +137,13 @@ hard-linked or non-regular notes file reads as empty and never has its mode chan
 one copy of what agents are told. A daemon start restores permissions and deletes the notes of panes
 that no longer exist.
 
+**Diagnostics.** `daemon/src/doctor.ts` (`diagnose`) runs the checks behind `voltran doctor` and
+`GET /api/diagnostics`; `shared/src/diagnostics.ts` formats them and builds the pre-filled bug report
+URL, whose query keys are the field ids in `.github/ISSUE_TEMPLATE/bug_report.yml`. The CLI runs
+the checks itself so they work while the daemon is down, and never creates the home or the token.
+The results go into a public issue: keep secrets, file contents and pane output out of them, and
+write paths through `redactHome`.
+
 **Layout** is a tree in `shared/src/layout.ts` (`insertPane`, `removePane`, `movePane`). The web app
 edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hub rejects a layout
 whose set of panes differs from the session's. Moving a pane to another session is a separate
