@@ -1,0 +1,11 @@
+{
+  "extends": "./packages/daemon/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "packages",
+    "outDir": "build/npm/packages"
+  },
+  "include": ["packages/daemon/src", "packages/shared/src"],
+  "exclude": ["**/*.test.ts", "packages/daemon/src/opencode-plugin"]
+}

@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bugReportUrl, formatDiagnostics, type AppState } from '@voltran/shared';
 import { resolveShellPath } from './adapters.ts';
@@ -11,7 +11,7 @@ import { CHROME, LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, laun
 import { withoutControls } from './status.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DAEMON_ENTRY = join(HERE, 'main.ts');
+const DAEMON_ENTRY = join(HERE, `main${extname(import.meta.url)}`);
 const CLI_ENTRY = join(REPO_ROOT, 'bin', 'voltran.mjs');
 
 const LOGO = String.raw`__     __    _ _

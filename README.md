@@ -26,6 +26,17 @@ you trust once; other agents (Antigravity, anything else) get status from termin
 ## Getting started
 
 ```bash
+npm install -g --allow-scripts=voltran,node-pty voltran
+voltran up
+```
+
+npm 11 skips the install scripts of a global package unless you allow them, and Voltran needs both:
+node-pty's compiles its terminal support on Linux, and Voltran's makes node-pty's macOS helper
+executable.
+
+Or run it from a clone, which is what you want for working on Voltran itself:
+
+```bash
 git clone https://github.com/onurravli/voltran.git
 cd voltran
 npm install
@@ -33,8 +44,8 @@ npm link            # optional: puts `voltran` on your PATH
 voltran up          # or: npm run up
 ```
 
-`voltran up` builds the UI on first run, starts the daemon in the background, and opens a signed-in
-window. Closing the window stops nothing; run `voltran up` again to reopen it. When a Voltran window
+`voltran up` starts the daemon in the background and opens a signed-in window (from a clone, it
+builds the UI first). Closing the window stops nothing; run `voltran up` again to reopen it. When a Voltran window
 is already open, `voltran up` does not open another one.
 
 | Command | What it does |
@@ -404,6 +415,7 @@ npm run dev:web      # Vite on http://localhost:4774, proxies /api and /ws to th
 npm test             # vitest: shared layout, daemon (PTYs, hooks, subagents, server) and web helpers
 npm run typecheck
 npm run build        # rebuilds the UI the daemon serves
+npm run package      # the npm package in build/npm; publish it with `npm publish ./build/npm`
 ```
 
 With both dev servers running, `VOLTRAN_DEV=1 voltran up` opens the Vite URL signed in.

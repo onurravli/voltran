@@ -14,6 +14,7 @@ npm test                         # vitest, all packages
 npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # one file / one test
 npm run typecheck                # tsc for daemon and web (each includes shared)
 npm run build                    # builds packages/web/dist, which the daemon serves
+npm run package                  # the npm package in build/npm (compiled JS, built UI)
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
 npm run dev:web                  # Vite on :4774, proxies /api and /ws to the daemon
 node bin/voltran.mjs up|down|status|add|autostart   # the CLI, same as `voltran` after npm link
@@ -28,6 +29,9 @@ Node ≥ 22.18 runs the daemon's `.ts` files directly (type stripping), and `tsc
 what that allows: `erasableSyntaxOnly` (no enums, namespaces or parameter properties),
 `verbatimModuleSyntax` (use `import type` for type-only imports) and `.ts` extensions in every
 relative import. `packages/shared` is consumed as source by both the daemon and the web app.
+Node does not strip types under `node_modules`, so `scripts/package.mjs` compiles daemon and shared
+with `tsconfig.package.json` in the repository's layout, which keeps every `import.meta.url` path
+valid; a file the daemon runs by path takes its extension from `import.meta.url`, not `.ts`.
 
 ## Architecture
 

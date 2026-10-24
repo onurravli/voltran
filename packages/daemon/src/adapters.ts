@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { accessSync, constants } from 'node:fs';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
 import { userStatusLine } from './statusline.ts';
@@ -22,7 +22,7 @@ export interface LaunchContext {
     notesGuide: string | null;
 }
 
-const SUBAGENT_VIEWER = fileURLToPath(new URL('./subagent-view.ts', import.meta.url));
+const SUBAGENT_VIEWER = fileURLToPath(new URL(`./subagent-view${extname(import.meta.url)}`, import.meta.url));
 export const OPENCODE_PLUGIN = fileURLToPath(new URL('./opencode-plugin', import.meta.url));
 export const NOTES_HOOK = fileURLToPath(new URL('./notes-hook.sh', import.meta.url));
 export const STATUS_LINE = fileURLToPath(new URL('./statusline.sh', import.meta.url));
