@@ -138,9 +138,8 @@ describe('PushNotifier', () => {
     it('sends one message for panes that need the user together, and waits a minute before the next', async () => {
         const { notifier, sent } = setup();
         notifier.attention(item('a'));
-        await vi.advanceTimersByTimeAsync(10_000);
         notifier.attention(item('b'));
-        await vi.advanceTimersByTimeAsync(20_000);
+        await vi.advanceTimersByTimeAsync(30_000);
         expect(sent.map((entry) => (entry.payload as { body: string }).body)).toEqual(['2 panes need your input']);
 
         notifier.attention(item('c'));
@@ -148,6 +147,60 @@ describe('PushNotifier', () => {
         expect(sent).toHaveLength(1);
         await vi.advanceTimersByTimeAsync(30_000);
         expect(sent).toHaveLength(2);
+    });
+
+    it('gives a pane that needs the user later its own delay', async () => {
+        let current: AttentionStatus | 'idle' = 'needs-input';
+        const { notifier, sent } = setup({}, (paneId) => (paneId === 'b' ? current : 'needs-input'));
+        notifier.attention(item('a'));
+        await vi.advanceTimersByTimeAsync(29_500);
+        notifier.attention(item('b'));
+        await vi.advanceTimersByTimeAsync(500);
+        expect(sent.map((entry) => (entry.payload as { body: string }).body)).toEqual(['A pane needs your input']);
+        current = 'idle';
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(sent).toHaveLength(1);
+    });
+
+    it('sends a pane that came up during the minute between pushes once that minute is over', async () => {
+        const { notifier, sent } = setup();
+        notifier.attention(item('a'));
+        await vi.advanceTimersByTimeAsync(30_000);
+        notifier.attention(item('b'));
+        await vi.advanceTimersByTimeAsync(59_000);
+        expect(sent).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(sent).toHaveLength(2);
+    });
+
+    it('drops what is waiting when notifications are turned off before the delay ends', async () => {
+        const settings: Partial<Settings['push']> = { events: ['needs-input', 'done'] };
+        const { notifier, sent } = setup(settings, (paneId) => (paneId === 'a' ? 'needs-input' : 'done'));
+        notifier.attention(item('a'));
+        notifier.attention(item('b', 'done'));
+        await vi.advanceTimersByTimeAsync(10_000);
+        settings.events = ['done'];
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(sent.map((entry) => (entry.payload as { body: string }).body)).toEqual(['An agent finished']);
+
+        notifier.attention(item('c', 'done'));
+        await vi.advanceTimersByTimeAsync(10_000);
+        settings.enabled = false;
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(sent).toHaveLength(1);
+    });
+
+    it('does not throw out of a timer when it cannot write down the result', async () => {
+        const { devices, notifier, sent } = setup();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        cleanups.push(() => error.mockRestore());
+        vi.spyOn(devices, 'record').mockImplementation(() => {
+            throw new Error('ENOSPC');
+        });
+        notifier.attention(item('a'));
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(sent).toHaveLength(1);
+        expect(error).toHaveBeenCalledWith('[voltran] could not send a push notification:', expect.any(Error));
     });
 
     it('follows push.enabled and push.events', async () => {

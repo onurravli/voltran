@@ -173,7 +173,9 @@ export class PaneManager {
         if (!isUserInput(data)) {
             return;
         }
-        this.options.onUserInput?.();
+        if (isTyped(data)) {
+            this.options.onUserInput?.();
+        }
         runtime.tracker?.input();
         if (runtime.state.status === 'done') {
             this.setStatus(runtime, { status: 'idle', detail: runtime.state.detail });
@@ -716,6 +718,14 @@ const FOCUS_REPORT = /\x1b\[[IO]/g;
 
 function isUserInput(data: string): boolean {
     return data.replace(FOCUS_REPORT, '').length > 0;
+}
+
+// xterm.js answers a program's device, cursor, mode, window and colour queries through the same input
+// channel as keystrokes, while nobody is at the keyboard.
+const TERMINAL_REPLY = /\x1b\[[IO]|\x1b\[[?>=]?[\d;]*(?:[cnRt]|\$y)|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP[^\x1b]*\x1b\\/g;
+
+export function isTyped(data: string): boolean {
+    return data.replace(TERMINAL_REPLY, '').length > 0;
 }
 
 function parsed(term: headless.Terminal, timeoutMs: number): Promise<void> {

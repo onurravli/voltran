@@ -188,7 +188,8 @@ export class Hub {
             onChange: () => this.scheduleBroadcast(),
             onPaired: (device) => {
                 this.scheduleBroadcast();
-                void this.push.test(device.id, 'Paired. This is how Voltran tells you an agent needs you.');
+                this.push.test(device.id, 'Paired. This is how Voltran tells you an agent needs you.')
+                    .catch((error: unknown) => console.error('[voltran] could not send a push notification:', error));
             },
             network: options.pairingNetwork,
             reveal: options.revealPairing,

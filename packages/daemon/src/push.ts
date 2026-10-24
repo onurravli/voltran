@@ -205,25 +205,34 @@ export class PushNotifier {
         if (!this.timer) {
             this.timer = setTimeout(() => {
                 this.timer = null;
-                void this.flush();
-            }, delayMs);
+                this.flush().catch((error: unknown) => console.error('[voltran] could not send a push notification:', error));
+            }, Math.max(0, delayMs));
         }
     }
 
     async flush(): Promise<void> {
-        const due = [...this.waiting.values()].filter((item) => item.at > this.lastInputAt && this.options.pending(item.paneId, item.status));
-        this.waiting.clear();
-        if (due.length === 0) {
-            return;
+        const settings = this.options.settings();
+        const now = this.now();
+        const delayMs = settings.delaySeconds * 1000;
+        for (const item of this.waiting.values()) {
+            const wanted = settings.enabled && settings.events.includes(item.status);
+            if (!wanted || item.at <= this.lastInputAt || !this.options.pending(item.paneId, item.status)) {
+                this.waiting.delete(item.paneId);
+            }
         }
-        const wait = this.lastPushAt + MIN_GAP_MS - this.now();
-        if (wait > 0) {
-            due.forEach((item) => this.waiting.set(item.paneId, item));
-            this.schedule(wait);
-            return;
+        const due = [...this.waiting.values()].filter((item) => item.at + delayMs <= now);
+        const send = due.length > 0 && this.lastPushAt + MIN_GAP_MS <= now;
+        if (send) {
+            due.forEach((item) => this.waiting.delete(item.paneId));
+            this.lastPushAt = now;
         }
-        this.lastPushAt = this.now();
-        await this.deliver(this.options.devices.list(), pushMessage(due, this.options.settings().content));
+        if (this.waiting.size > 0) {
+            const next = Math.min(...[...this.waiting.values()].map((item) => item.at + delayMs));
+            this.schedule(Math.max(next, this.lastPushAt + MIN_GAP_MS) - now);
+        }
+        if (send) {
+            await this.deliver(this.options.devices.list(), pushMessage(due, settings.content));
+        }
     }
 
     test(deviceId?: string, body = 'This is how Voltran tells you an agent needs you.'): Promise<void> {
@@ -232,10 +241,17 @@ export class PushNotifier {
     }
 
     private async deliver(devices: PushDevice[], message: PushMessage): Promise<void> {
-        const vapid = this.options.devices.vapid();
-        await Promise.all(devices.map(async (device) => {
-            try {
-                const { status } = await this.send(device.subscription, message, vapid);
+        try {
+            const vapid = this.options.devices.vapid();
+            await Promise.all(devices.map(async (device) => {
+                let status: number;
+                try {
+                    ({ status } = await this.send(device.subscription, message, vapid));
+                } catch (error) {
+                    const reason = withoutControls(error instanceof Error ? (error.cause instanceof Error ? error.cause.message : error.message) : String(error));
+                    this.options.devices.record(device.id, { lastSentAt: device.lastSentAt, lastError: `Could not reach the push service: ${reason.slice(0, MAX_ERROR)}` });
+                    return;
+                }
                 if (status === 404 || status === 410) {
                     this.options.devices.remove(device.id);
                 } else if (status >= 200 && status < 300) {
@@ -243,12 +259,10 @@ export class PushNotifier {
                 } else {
                     this.options.devices.record(device.id, { lastSentAt: device.lastSentAt, lastError: `The push service answered ${status}` });
                 }
-            } catch (error) {
-                const reason = withoutControls(error instanceof Error ? (error.cause instanceof Error ? error.cause.message : error.message) : String(error));
-                this.options.devices.record(device.id, { lastSentAt: device.lastSentAt, lastError: `Could not reach the push service: ${reason.slice(0, MAX_ERROR)}` });
-            }
-        }));
-        this.options.onChange();
+            }));
+        } finally {
+            this.options.onChange();
+        }
     }
 
     close(): void {

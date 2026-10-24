@@ -130,6 +130,18 @@ describe('Pairing', () => {
         expect(pairing.view()).toBeNull();
     });
 
+    it('opens one listener when asked twice at once', async () => {
+        const { pairing } = await startPairing();
+        pairing.stop();
+        const [first, second] = await Promise.all([pairing.start(), pairing.start()]);
+        expect(second).toEqual(first);
+        const url = new URL(pairing.pairingUrl()!);
+        pairing.stop();
+        await expect(new Promise((resolveConnect, reject) => {
+            request({ host: '127.0.0.1', port: Number(url.port), path: '/', rejectUnauthorized: false }, resolveConnect).on('error', reject).end();
+        })).rejects.toThrow(/ECONNREFUSED/);
+    });
+
     it('closes after ten wrong codes', async () => {
         const { port, ca, pairing } = await startPairing();
         for (let attempt = 0; attempt < 10; attempt++) {

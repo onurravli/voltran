@@ -246,6 +246,7 @@ const CONTENT_SECURITY_POLICY = [
 export class Pairing {
     private readonly options: PairingOptions;
     private active: Active | null = null;
+    private starting: Promise<PushPairingView> | null = null;
 
     constructor(options: PairingOptions) {
         this.options = options;
@@ -256,10 +257,17 @@ export class Pairing {
         return this.active ? { expiresAt: this.active.expiresAt, fingerprint: this.active.fingerprint } : null;
     }
 
-    async start(): Promise<PushPairingView> {
+    start(): Promise<PushPairingView> {
         if (this.active) {
-            return this.view()!;
+            return Promise.resolve(this.view()!);
         }
+        this.starting ??= this.open().finally(() => {
+            this.starting = null;
+        });
+        return this.starting;
+    }
+
+    private async open(): Promise<PushPairingView> {
         const network = (this.options.network ?? lanNetwork)();
         if (!network) {
             throw new Error('This computer has no Wi-Fi or Ethernet address on a private network. Connect it to the same network as your phone.');

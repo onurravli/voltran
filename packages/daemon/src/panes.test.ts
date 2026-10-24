@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AttentionStatus, Pane } from '@voltran/shared';
-import { PaneManager, type PaneClient, type PaneManagerOptions } from './panes.ts';
+import { PaneManager, isTyped, type PaneClient, type PaneManagerOptions } from './panes.ts';
 
 interface Recorded {
     records: Pane[];
@@ -372,5 +372,20 @@ describe('PaneManager', () => {
         internals.maintain();
         expect(view(manager, pane.id)).toMatchObject({ status: 'needs-input', detail: 'Waiting at a startup prompt' });
         runtime.pty = null;
+    });
+});
+
+describe('isTyped', () => {
+    it('ignores what xterm.js answers to a program on its own', () => {
+        for (const reply of ['\x1b[I', '\x1b[O', '\x1b[?1;2c', '\x1b[>0;276;0c', '\x1b[0n', '\x1b[24;80R', '\x1b[?2026;2$y', '\x1b[8;24;80t',
+            '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\', '\x1b]10;rgb:ffff/ffff/ffff\x07', '\x1bP>|xterm.js(5.5.0)\x1b\\', '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07']) {
+            expect(isTyped(reply), JSON.stringify(reply)).toBe(false);
+        }
+    });
+
+    it('counts keys, pastes and clicks', () => {
+        for (const input of ['a', '\r', '\x03', '\x1b', '\x1b[A', '\x1bOP', '\x1b[15~', '\x1b[200~text\x1b[201~', '\x1b[<0;10;5M', '\x1b[I\r']) {
+            expect(isTyped(input), JSON.stringify(input)).toBe(true);
+        }
     });
 });
