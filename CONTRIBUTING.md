@@ -41,7 +41,7 @@ npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # on
 npm run build        # the UI the daemon serves
 ```
 
-CI runs the typecheck and the tests on Ubuntu and macOS with Node 22, and both must pass.
+CI runs the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and every run must pass.
 
 - Tests run in Node, so web logic that needs a test goes in a module without DOM access, such as
   `packages/web/src/usage.ts`, and the component only renders it.
