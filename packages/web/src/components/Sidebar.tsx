@@ -657,7 +657,7 @@ export function Sidebar() {
         <aside className="sidebar">
             <header className="sidebar__header">
                 <div className="wordmark">
-                    <VoltranMark size={18} mono form />
+                    <VoltranMark size={18} form />
                     <span>Voltran</span>
                 </div>
                 <button
