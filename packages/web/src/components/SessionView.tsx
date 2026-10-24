@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import type { AdapterInfo, DropEdge, GitStatus, Layout, PaneView, Project, Session } from '@voltran/shared';
+import type { AdapterInfo, DropEdge, GitStatus, Layout, PaneKind, PaneView, Project, Session } from '@voltran/shared';
 import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
@@ -19,6 +19,7 @@ import {
     LinkIcon,
     MaximizeIcon,
     NotesIcon,
+    OpenIcon,
     PlusIcon,
     RestartIcon,
     RestoreIcon,
@@ -31,7 +32,7 @@ import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
-function paneSummary(pane: PaneView, kind: 'agent' | 'shell' | 'process' | undefined): string {
+function paneSummary(pane: PaneView, kind: PaneKind | undefined): string {
     if (pane.adapter === 'subagent' && pane.status === 'running') {
         return pane.detail ?? 'Following the subagent live';
     }
@@ -140,6 +141,15 @@ function notesHint(adapter: AdapterInfo | undefined): string {
     return 'Notes for this pane, kept until the pane is closed.';
 }
 
+// The sandbox lets a page keep its own origin, which would be Voltran's for a page Voltran serves.
+function sameOrigin(url: string): boolean {
+    try {
+        return new URL(url).origin === window.location.origin;
+    } catch {
+        return true;
+    }
+}
+
 function dropLabel(edge: DropEdge, joining: boolean): string {
     if (edge === 'swap') {
         return joining ? 'Place on the right' : 'Swap panes';
@@ -168,10 +178,13 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const dragging = useUi((state) => state.draggingPaneId);
     const draggingSession = useUi((state) => state.draggingSessionId);
     const finding = useUi((state) => state.findPaneId === pane.id);
-    const hasNotes = pane.adapter !== 'subagent';
+    const preview = pane.adapter === 'preview' ? pane.command : null;
+    const hasNotes = pane.adapter !== 'subagent' && preview === null;
     const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
     const [link, setLink] = useState<LinkState>('connecting');
     const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
+    const [loads, setLoads] = useState(0);
+    const frameRef = useRef<HTMLIFrameElement>(null);
     const pressedOn = useRef<Element | null>(null);
     const archived = session?.archived ?? false;
     const inWorkspace = host.kind === 'workspace';
@@ -186,6 +199,22 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
             setDropEdge(null);
         }
     }, [canDrop]);
+
+    useEffect(() => {
+        if (preview === null) {
+            return;
+        }
+        // A click inside the frame reaches only the framed page; the window just loses focus to it.
+        const onBlur = (): void => {
+            setTimeout(() => {
+                if (frameRef.current && document.activeElement === frameRef.current) {
+                    useUi.getState().focusPane(pane.id, false);
+                }
+            });
+        };
+        window.addEventListener('blur', onBlur);
+        return () => window.removeEventListener('blur', onBlur);
+    }, [pane.id, preview]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -295,7 +324,17 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     value={pane.title}
                     onSave={(title) => api.updatePane(pane.id, { title })}
                 />
-                <span className="pane__summary" title={pane.detail ?? undefined}>{paneSummary(pane, adapter?.kind)}</span>
+                {preview !== null ? (
+                    <InlineEdit
+                        className="pane__summary pane__address"
+                        label="Page address"
+                        hint="Double-click to change the address"
+                        value={preview}
+                        onSave={(url) => api.updatePane(pane.id, { url })}
+                    />
+                ) : (
+                    <span className="pane__summary" title={pane.detail ?? undefined}>{paneSummary(pane, adapter?.kind)}</span>
+                )}
                 {hasNotes ? (
                     <button
                         type="button"
@@ -322,14 +361,25 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                             <StopIcon size={14} />
                         </button>
                     ) : null}
-                    <button
-                        type="button"
-                        className="icon-button"
-                        title={adapter?.resumable ? 'Restart and resume the conversation' : 'Restart'}
-                        onClick={() => api.restartPane(pane.id).catch(reportError)}
-                    >
-                        <RestartIcon size={14} />
-                    </button>
+                    {preview !== null ? (
+                        <>
+                            <button type="button" className="icon-button" title="Reload" onClick={() => setLoads((count) => count + 1)}>
+                                <RestartIcon size={14} />
+                            </button>
+                            <a className="icon-button" href={preview} target="_blank" rel="noreferrer noopener" title="Open in a browser tab">
+                                <OpenIcon size={14} />
+                            </a>
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            className="icon-button"
+                            title={adapter?.resumable ? 'Restart and resume the conversation' : 'Restart'}
+                            onClick={() => api.restartPane(pane.id).catch(reportError)}
+                        >
+                            <RestartIcon size={14} />
+                        </button>
+                    )}
                     <button type="button" className="icon-button" title={inWorkspace ? `Remove from this workspace (${keys('⌃⌥W')})` : `Close pane (${keys('⌃⌥W')})`} onClick={close}>
                         <CloseIcon size={14} />
                     </button>
@@ -338,6 +388,20 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
             <div className={`pane__body${notesOpen ? ' pane__body--notes' : ''}`}>
                 {archived ? (
                     <div className="pane__placeholder">Archived. Restore the session to resume this pane.</div>
+                ) : preview !== null ? (
+                    sameOrigin(preview) ? (
+                        <div className="pane__placeholder">Voltran does not preview itself.</div>
+                    ) : (
+                        <iframe
+                            key={`${preview}#${loads}`}
+                            ref={frameRef}
+                            className="pane__frame"
+                            src={preview}
+                            title={pane.title}
+                            referrerPolicy="no-referrer"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
+                        />
+                    )
                 ) : (
                     <div className="pane__terminal" ref={containerRef} />
                 )}

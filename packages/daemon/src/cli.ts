@@ -47,8 +47,9 @@ Options:
 
 new:
   --pane      a pane, in order: claude, codex, opencode, antigravity or shell, followed by
-              arguments for it, or command and a command to run. Repeat it for more panes;
-              without it the session starts with one Claude Code pane.
+              arguments for it, command and a command to run, or preview and a local page
+              (localhost:5173). Repeat it for more panes; without it the session starts with
+              one Claude Code pane.
               voltran new . --pane "claude --model opus" --pane "command npm run dev"
   --title     the session's title; agents name an untitled session from its first prompt
   --worktree  work in a new git worktree on this branch, from <base> or the current HEAD
@@ -398,7 +399,7 @@ export interface NewSessionArgs {
     windowArgs: string[];
 }
 
-const PANE_ADAPTERS = new Set(['claude', 'codex', 'opencode', 'antigravity', 'shell', 'command']);
+const PANE_ADAPTERS = new Set(['claude', 'codex', 'opencode', 'antigravity', 'shell', 'command', 'preview']);
 
 // A pane is its adapter's name and the rest of the words as they were typed: arguments for an agent,
 // or the command line of a `command` pane.
@@ -420,10 +421,13 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
             const [adapter] = spec.split(/\s+/, 1);
             const rest = spec.slice(adapter.length).trim();
             if (!PANE_ADAPTERS.has(adapter)) {
-                throw new Error(`unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell or command`);
+                throw new Error(`unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell, command or preview`);
             }
             if (adapter === 'command' && !rest) {
                 throw new Error('a command pane needs the command to run, such as --pane "command npm run dev"');
+            }
+            if (adapter === 'preview' && !rest) {
+                throw new Error('a preview pane needs the page to show, such as --pane "preview localhost:5173"');
             }
             if (adapter === 'shell' && rest) {
                 throw new Error('a shell pane takes no arguments; use --pane "command …" to run a command');

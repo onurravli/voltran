@@ -28,6 +28,7 @@ export const SplitDownIcon = (props: IconProps) => <Icon {...props}><rect x="2.5
 export const MaximizeIcon = (props: IconProps) => <Icon {...props}><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" /></Icon>;
 export const RestoreIcon = (props: IconProps) => <Icon {...props}><path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5 14 2M6.5 9.5 2 14" /></Icon>;
 export const RestartIcon = (props: IconProps) => <Icon {...props}><path d="M13 8a5 5 0 1 1-1.6-3.7" /><path d="M13 2.5v3h-3" /></Icon>;
+export const OpenIcon = (props: IconProps) => <Icon {...props}><path d="M9.5 2.5h4v4" /><path d="m13.5 2.5-6 6" /><path d="M12 9.5v4H2.5V4H6.5" /></Icon>;
 export const CloseIcon = (props: IconProps) => <Icon {...props}><path d="m4 4 8 8M12 4l-8 8" /></Icon>;
 export const LinkIcon = (props: IconProps) => <Icon {...props}><path d="M6.5 9.5 9.5 6.5" /><path d="M7 4.5 8.3 3.2a2.8 2.8 0 0 1 4 4L11 8.5M9 11.5l-1.3 1.3a2.8 2.8 0 0 1-4-4L5 7.5" /></Icon>;
 export const ChevronIcon = (props: IconProps) => <Icon {...props}><path d="m6 4 4 4-4 4" /></Icon>;
