@@ -35,7 +35,7 @@ jobs:
       - id: pack
         run: |
           file=$(npm pack ./build/npm --pack-destination build --json | node -p 'JSON.parse(require("fs").readFileSync(0))[0].filename')
-          echo "file=build/$file" >> "$GITHUB_OUTPUT"
+          echo "file=./build/$file" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum "build/$file" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       # Trusted publishing: npm accepts this workflow's OIDC token, so there is no npm token to keep.
       - run: npm publish "$TARBALL"
