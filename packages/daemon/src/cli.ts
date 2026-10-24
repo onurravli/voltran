@@ -32,6 +32,7 @@ Usage:
   voltran restart                      restart the daemon to load new code; takes up's options
   voltran autostart [on|off]           start the daemon when you log in
   voltran signout                      sign out every window and replace the token
+  voltran version                      print the installed version
 
 On macOS, once Voltran is installed as an app (⌘K → Install Voltran as an app), up opens that app.
 
@@ -42,6 +43,10 @@ Options:
 
 Environment:
   VOLTRAN_PORT  (default 4747)   VOLTRAN_HOME  (default ~/.voltran)`;
+
+export function version(): string {
+    return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).version;
+}
 
 interface Client {
     config: Config;
@@ -389,6 +394,11 @@ export async function runCli(argv: string[]): Promise<void> {
             return autostart(args);
         case 'signout':
             return signout();
+        case 'version':
+        case '--version':
+        case '-v':
+            console.log(version());
+            return;
         default:
             console.log(HELP);
     }

@@ -46,6 +46,7 @@ is already open, `voltran up` does not open another one.
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
 | `voltran autostart [on\|off]` | Start the daemon when you log in (a LaunchAgent on macOS, a systemd user service on Linux); with no argument, say whether it does |
 | `voltran signout` | Sign out every window and replace the token. `voltran up` signs this computer in again |
+| `voltran version` | Print the installed version (`--version` and `-v` work too) |
 
 ### In the Dock
 
