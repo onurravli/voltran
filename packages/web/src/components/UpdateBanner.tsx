@@ -23,6 +23,7 @@ export function UpdateBanner() {
     }
     return (
         <div className={`update update--${notice}`} role="status">
+            {notice === 'reload' ? null : <span className="lamp lamp--sm update__lamp" />}
             <span>{MESSAGES[notice]}</span>
             {notice === 'reload' ? (
                 <button type="button" className="button button--small button--primary" onClick={() => window.location.reload()}>Reload</button>

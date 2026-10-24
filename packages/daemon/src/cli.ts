@@ -2,17 +2,17 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AppState } from '@voltran/shared';
-import { DEV_WEB_PORT, ensureHome, loadConfig, privateFile, readOrCreateToken, writeNewToken, type Config } from './config.ts';
+import { bugReportUrl, formatDiagnostics, type AppState } from '@voltran/shared';
+import { resolveShellPath } from './adapters.ts';
+import { DEV_WEB_PORT, REPO_ROOT, ensureHome, loadConfig, privateFile, readOrCreateToken, voltranVersion, writeNewToken, type Config } from './config.ts';
+import { diagnose, type DaemonInfo } from './doctor.ts';
 import { SYSTEMD_UNIT_FILE, SYSTEMD_UNIT_NAME, findChrome, systemdUnit } from './linux.ts';
-import { LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, launchAgentPlist } from './macos.ts';
+import { CHROME, LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, launchAgentPlist } from './macos.ts';
 import { withoutControls } from './status.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, '../../..');
 const DAEMON_ENTRY = join(HERE, 'main.ts');
 const CLI_ENTRY = join(REPO_ROOT, 'bin', 'voltran.mjs');
-const CHROME = '/Applications/Google Chrome.app';
 
 const LOGO = String.raw`__     __    _ _
 \ \   / /__ | | |_ _ __ __ _ _ __
@@ -32,6 +32,7 @@ Usage:
   voltran restart                      restart the daemon to load new code; takes up's options
   voltran autostart [on|off]           start the daemon when you log in
   voltran signout                      sign out every window and replace the token
+  voltran doctor [--report]            check the installation; --report opens a bug report with the result
   voltran version                      print the installed version
 
 On macOS, once Voltran is installed as an app (⌘K → Install Voltran as an app), up opens that app.
@@ -43,10 +44,6 @@ Options:
 
 Environment:
   VOLTRAN_PORT  (default 4747)   VOLTRAN_HOME  (default ~/.voltran)`;
-
-export function version(): string {
-    return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).version;
-}
 
 interface Client {
     config: Config;
@@ -375,6 +372,35 @@ async function signout(): Promise<void> {
     console.log('Signed out every window. `voltran up` signs this computer in again.');
 }
 
+// Reads the token without creating it, so a check on a broken install changes nothing.
+async function daemonInfo(config: Config): Promise<DaemonInfo | null> {
+    try {
+        const token = readFileSync(config.tokenFile, 'utf8').trim();
+        const response = await fetch(`${config.url}/api/health`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });
+        const health = await response.json() as { pid: number; version: string };
+        return response.ok ? { pid: health.pid, version: health.version } : null;
+    } catch {
+        return null;
+    }
+}
+
+async function doctor(args: string[]): Promise<void> {
+    const config = loadConfig();
+    const shell = process.env.SHELL || '/bin/zsh';
+    const path = await resolveShellPath(shell, process.env.PATH ?? '/usr/bin:/bin');
+    const report = await diagnose({ config, shell, path, daemon: await daemonInfo(config) });
+    console.log(formatDiagnostics(report));
+    if (args.includes('--report')) {
+        openWindow(bugReportUrl(report), '', true);
+        console.log('\nOpened a bug report with these results in your browser.');
+    } else {
+        console.log('\nTo report a problem with these results attached, run `voltran doctor --report`.');
+    }
+    if (report.checks.some((check) => check.status === 'fail')) {
+        process.exitCode = 1;
+    }
+}
+
 export async function runCli(argv: string[]): Promise<void> {
     const [command = 'help', ...args] = argv;
     switch (command) {
@@ -394,10 +420,12 @@ export async function runCli(argv: string[]): Promise<void> {
             return autostart(args);
         case 'signout':
             return signout();
+        case 'doctor':
+            return doctor(args);
         case 'version':
         case '--version':
         case '-v':
-            console.log(version());
+            console.log(voltranVersion());
             return;
         default:
             console.log(HELP);

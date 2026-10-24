@@ -1,4 +1,4 @@
-import type { AppState, PaneView, Session } from '@voltran/shared';
+import { bugReportUrl, type AppState, type PaneView, type Session } from '@voltran/shared';
 import { api } from './api.ts';
 import { isPrimaryChord, keyLabel } from './keymap.ts';
 import { revealPane } from './notify.ts';
@@ -82,6 +82,20 @@ function splitFocused(direction: 'horizontal' | 'vertical'): void {
 export function openSettingsInApp(): void {
     api.openSettings()
         .then(({ path }) => useUi.getState().showToast(`Opened ${path}`))
+        .catch(reportError);
+}
+
+// The browser opens the issue, so Voltran itself sends the diagnostics nowhere.
+export function reportProblem(): void {
+    api.diagnostics()
+        .then((report) => {
+            const tab = window.open(bugReportUrl(report), '_blank');
+            if (tab) {
+                tab.opener = null;
+            } else {
+                useUi.getState().showToast('The browser blocked the bug report. Allow pop-ups, or run `voltran doctor --report`.', 'error');
+            }
+        })
         .catch(reportError);
 }
 

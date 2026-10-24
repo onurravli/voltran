@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describeAdapters, resolveShellPath } from './adapters.ts';
 import { startDaemonProcess } from './cli.ts';
-import { ensureHome, loadConfig, privateFile, readOrCreateToken, type Config } from './config.ts';
+import { ensureHome, loadConfig, privateFile, readOrCreateToken, voltranVersion, type Config } from './config.ts';
+import { diagnose } from './doctor.ts';
 import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
 import type { GitRunner } from './git.ts';
@@ -118,6 +119,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         openFile: options.openFile ?? openInEditor,
         onShutdown: shutdown,
         onRestart: restart,
+        diagnose: () => diagnose({ config, shell: options.shell, path: options.path, daemon: { pid: process.pid, version: voltranVersion() } }),
     });
     return { config, token, hub, server, shutdown };
 }

@@ -17,7 +17,7 @@ import {
 import { installApp } from '../install.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
-import { FIND_SHORTCUT, SHORTCUTS, editSettings, openSettingsInApp, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
+import { FIND_SHORTCUT, SHORTCUTS, editSettings, openSettingsInApp, reportProblem, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { APPEARANCES, THEMES, schemeOf, themeById, type Appearance, type Scheme, type Theme } from '../themes.ts';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -202,6 +202,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'sidebar-side', label: `Move the sidebar to the ${otherSide}`, keywords: 'sidebar position left right', run: () => saveSettings({ sidebar: { position: otherSide } }) },
             { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
             { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
+            { id: 'report-problem', label: 'Report a problem…', keywords: 'bug issue feedback doctor diagnostics github', run: reportProblem },
             ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),
             ...SHORTCUTS
                 .filter((shortcut) => shortcut.run !== togglePalette)

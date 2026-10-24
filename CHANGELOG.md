@@ -3,6 +3,12 @@
 Voltran follows [Semantic Versioning](https://semver.org/). The README describes each feature in
 full.
 
+## Unreleased
+
+- `voltran doctor` checks the installation, and `voltran doctor --report`, ⌘K → **Report a
+  problem…** and a button in the sidebar open a bug report with its results filled in.
+- The daemon reports its real version to `voltran doctor` and the CLI instead of `0.1.0`.
+
 ## 1.0.0 (2026-10-24)
 
 The first release.

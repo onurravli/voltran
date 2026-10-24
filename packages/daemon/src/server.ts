@@ -5,8 +5,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Duplex } from 'node:stream';
 import { extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import { parseSettingsPatch, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
-import { writeNewToken, type Config } from './config.ts';
+import { parseSettingsPatch, type Diagnostics, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
+import { voltranVersion, writeNewToken, type Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
 import { editorCommand, type SettingsFile } from './settings.ts';
@@ -71,6 +71,7 @@ export interface ServerOptions {
     openFile: (path: string) => void;
     onShutdown: () => void;
     onRestart: () => void;
+    diagnose?: () => Promise<Diagnostics>;
 }
 
 const VERSION_POLL_MS = 2000;
@@ -150,7 +151,13 @@ export function createVoltranServer(options: ServerOptions): Server {
         routes.push({ method, pattern, handler });
     };
 
-    route('GET', '/api/health', (_req, res) => sendJson(res, 200, { ok: true, pid: process.pid, version: '0.1.0' }));
+    route('GET', '/api/health', (_req, res) => sendJson(res, 200, { ok: true, pid: process.pid, version: voltranVersion() }));
+    route('GET', '/api/diagnostics', async (_req, res) => {
+        if (!options.diagnose) {
+            throw new HttpError(404, 'diagnostics are not available');
+        }
+        sendJson(res, 200, await options.diagnose());
+    });
     route('GET', '/api/state', (_req, res) => sendJson(res, 200, hub.state()));
     route('POST', '/api/login-code', (_req, res) => sendJson(res, 200, { code: guard.issueLoginCode() }));
     route('GET', '/api/windows', (_req, res) => sendJson(res, 200, { open: hub.openWindows(), previous: options.previousWindows }));

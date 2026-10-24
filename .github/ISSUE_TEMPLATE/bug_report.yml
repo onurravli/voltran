@@ -67,6 +67,14 @@ body:
       label: Agent version
       description: When the problem is about an agent's pane, its version, such as the output of `claude --version`.
   - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        The output of `voltran doctor`. `voltran doctor --report`, or ⌘K → **Report a problem…** in
+        Voltran, opens this form with it filled in.
+      render: text
+  - type: textarea
     id: logs
     attributes:
       label: Daemon log

@@ -16,13 +16,13 @@ import {
 } from '../sidebar.ts';
 import { gitLabels } from '../labels.ts';
 import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
-import { keys, orderedSessions, togglePalette } from '../shortcuts.ts';
+import { keys, orderedSessions, reportProblem, togglePalette } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
 import { ContextMenuArea, InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
-import { BellIcon, BranchIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, SearchIcon, VoltranMark } from './Icons.tsx';
+import { BellIcon, BranchIcon, ChevronIcon, FeedbackIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, SearchIcon, VoltranMark } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
 export function relativeTime(timestamp: number, now: number): string {
@@ -564,6 +564,9 @@ function Footer() {
                 ) : null}
                 <button type="button" className="icon-button sidebar__keys" title={`Keyboard shortcuts (${keys('⌃⌥/')})`} onClick={() => openDialog({ kind: 'shortcuts' })}>
                     <KeyboardIcon size={15} />
+                </button>
+                <button type="button" className="icon-button" title="Report a problem" aria-label="Report a problem" onClick={reportProblem}>
+                    <FeedbackIcon size={15} />
                 </button>
             </div>
         </footer>

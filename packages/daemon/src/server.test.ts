@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
-import { loadConfig } from './config.ts';
+import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Diagnostics, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
+import { loadConfig, voltranVersion } from './config.ts';
 import { commandRunner } from './git.ts';
 import { buildDaemon, type Daemon } from './main.ts';
 import { contentSecurityPolicy } from './server.ts';
@@ -222,6 +222,17 @@ describe('access control', () => {
         socket.close();
         await until(async () => (await api<{ open: number }>('GET', '/api/windows')).body.open === before.open);
     });
+
+    it('reports its version and diagnostics to signed-in callers only, without the token', async () => {
+        const version = voltranVersion();
+        expect((await api<{ version: string }>('GET', '/api/health')).body.version).toBe(version);
+        expect((await fetch(`${base}/api/diagnostics`)).status).toBe(401);
+        const response = await api<Diagnostics>('GET', '/api/diagnostics');
+        expect(response.status).toBe(200);
+        expect(response.body.version).toBe(version);
+        expect(response.body.checks.find((check) => check.name === 'Daemon')?.status).toBe('ok');
+        expect(JSON.stringify(response.body)).not.toContain(daemon.token);
+    }, 20_000);
 
     it('signs a browser in with a one-time code, giving it a credential of its own and never a cookie', async () => {
         const page = await fetch(`${base}/auth?code=whatever`);

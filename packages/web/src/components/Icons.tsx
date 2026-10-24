@@ -35,6 +35,7 @@ export const ChevronUpIcon = (props: IconProps) => <Icon {...props}><path d="m4 
 export const ChevronDownIcon = (props: IconProps) => <Icon {...props}><path d="m4 6 4 4 4-4" /></Icon>;
 export const BellIcon = (props: IconProps) => <Icon {...props}><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1H3z" /><path d="M6.5 14h3" /></Icon>;
 export const KeyboardIcon = (props: IconProps) => <Icon {...props}><rect x="1.5" y="4" width="13" height="8" rx="1.5" /><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 9.5h6" /></Icon>;
+export const FeedbackIcon = (props: IconProps) => <Icon {...props}><path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z" /><path d="M8 5.5V8M8 9.5h.01" /></Icon>;
 export const FolderIcon = (props: IconProps) => <Icon {...props}><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" /></Icon>;
 export const BranchIcon = (props: IconProps) => <Icon {...props}><circle cx="5" cy="3.5" r="1.5" /><circle cx="5" cy="12.5" r="1.5" /><circle cx="11" cy="5.5" r="1.5" /><path d="M5 5v6M11 7c0 2.5-6 1.5-6 4" /></Icon>;
 export const NotesIcon = (props: IconProps) => <Icon {...props}><path d="M4 2.5h5.5L12 5v8.5H4z" /><path d="M6 7.5h4M6 10h4" /></Icon>;

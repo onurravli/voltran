@@ -24,6 +24,12 @@ export interface Config {
     allowedOrigins: Set<string>;
 }
 
+export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+
+export function voltranVersion(): string {
+    return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).version;
+}
+
 const DEFAULT_PORT = 4747;
 // Not Vite's default, which other projects' dev servers take: a page there would share the dev UI's
 // origin and storage.

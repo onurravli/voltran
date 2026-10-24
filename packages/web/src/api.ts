@@ -3,6 +3,7 @@ import type {
     CreateProjectBody,
     CreateSessionBody,
     CreateWorkspaceBody,
+    Diagnostics,
     EditSettingsBody,
     MovePaneBody,
     NotesLockBody,
@@ -151,6 +152,7 @@ export const api = {
     updateSettings: (patch: SettingsPatch) => request<SettingsState>('PATCH', '/api/settings', patch),
     openSettings: () => request<{ path: string }>('POST', '/api/settings/open'),
     editSettings: (body: EditSettingsBody) => request<Pane>('POST', '/api/settings/edit', body),
+    diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };

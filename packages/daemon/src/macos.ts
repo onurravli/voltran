@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
+export const CHROME = '/Applications/Google Chrome.app';
 export const CHROME_APPS_DIR = join(homedir(), 'Applications', 'Chrome Apps.localized');
 export const CHROME_USER_DATA_DIR = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
 export const LAUNCH_AGENT_LABEL = 'dev.voltran.daemon';

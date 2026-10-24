@@ -2617,13 +2617,14 @@ kbd {
     padding: 5px 5px 5px 14px;
     border-radius: 10px;
     background: var(--raised);
-    box-shadow: var(--elevation), inset 3px 0 0 var(--signal);
+    box-shadow: var(--elevation);
     font-size: calc(12px * var(--ui-scale));
     transform: translateX(-50%);
 }
 
-.update--reload {
-    box-shadow: var(--elevation);
+.update__lamp {
+    margin-right: -2px;
+    background: var(--signal);
 }
 
 .toast {
