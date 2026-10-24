@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
-import { basename, isAbsolute, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import {
+    DEFAULT_SETTINGS,
     MAX_WORKSPACE_PANES,
     PROJECT_COLORS,
     insertPane,
@@ -36,6 +37,9 @@ import {
     type Usage,
     type Workspace,
     type ProjectGit,
+    type PushPairingView,
+    type PushState,
+    type Settings,
     type WorktreeChoice,
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
@@ -43,7 +47,9 @@ import { ChangesError, SessionChangesReader } from './changes.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
+import { Pairing, type PairingOptions } from './pairing.ts';
 import { PaneManager } from './panes.ts';
+import { PushDevices, PushNotifier, type PushNotifierOptions } from './push.ts';
 import { mergeUsage } from './statusline.ts';
 import type { Store } from './store.ts';
 import { WorktreeError, Worktrees, worktreeRunner, type WorktreeRunner } from './worktrees.ts';
@@ -71,6 +77,12 @@ export interface HubOptions {
     pullRequests?: () => boolean;
     worktreesDir: string;
     worktreeRunner?: WorktreeRunner;
+    pushDir: string;
+    pushSettings?: () => Settings['push'];
+    pushIcon?: string;
+    pushSender?: PushNotifierOptions['send'];
+    pairingNetwork?: PairingOptions['network'];
+    revealPairing?: PairingOptions['reveal'];
 }
 
 type Listener = (event: ServerEvent) => void;
@@ -145,6 +157,9 @@ export class Hub {
     private readonly changes: SessionChangesReader;
     private readonly notes: NotesStore;
     private readonly worktrees: Worktrees;
+    private readonly pushDevices: PushDevices;
+    private readonly push: PushNotifier;
+    private readonly pairing: Pairing;
     private readonly store: Store;
     private readonly adapters: AdapterInfo[];
     private listeners = new Set<Listener>();
@@ -158,6 +173,26 @@ export class Hub {
         this.store = options.store;
         this.adapters = options.adapters;
         this.worktrees = new Worktrees(options.worktreesDir, options.worktreeRunner ?? worktreeRunner({ ...options.baseEnv, PATH: options.path }));
+        this.pushDevices = new PushDevices(options.pushDir);
+        this.push = new PushNotifier({
+            devices: this.pushDevices,
+            settings: options.pushSettings ?? (() => DEFAULT_SETTINGS.push),
+            pending: (paneId, status) => this.panes.views().some((view) => view.id === paneId && view.status === status),
+            onChange: () => this.scheduleBroadcast(),
+            send: options.pushSender,
+        });
+        this.pairing = new Pairing({
+            devices: this.pushDevices,
+            folder: join(options.pushDir, 'pairing'),
+            iconFile: options.pushIcon,
+            onChange: () => this.scheduleBroadcast(),
+            onPaired: (device) => {
+                this.scheduleBroadcast();
+                void this.push.test(device.id, 'Paired. This is how Voltran tells you an agent needs you.');
+            },
+            network: options.pairingNetwork,
+            reveal: options.revealPairing,
+        });
         this.notes = new NotesStore({
             dir: options.notesDir,
             onChange: (change) => this.emit({ type: 'notes', ...change }),
@@ -174,6 +209,7 @@ export class Hub {
             onPaneRecord: (pane) => this.store.updatePane(pane.id, pane),
             onAttention: (pane, status, body) => this.attention(pane, status, body),
             onExit: (pane, exitCode) => this.exited(pane, exitCode),
+            onUserInput: () => this.push.userInput(),
             notes: { guide: this.notes.guide, file: (pane) => (pane.adapter === 'subagent' ? null : this.notes.file(pane.id)) },
         });
         for (const pane of this.store.listPanes()) {
@@ -201,7 +237,45 @@ export class Hub {
             git: this.git.snapshot(),
             adapters: this.adapters,
             usage: this.usage,
+            push: this.pushState(),
         };
+    }
+
+    private pushState(): PushState {
+        return { devices: this.pushDevices.views(), pairing: this.pairing.view(), canPair: process.platform === 'darwin' };
+    }
+
+    async startPairing(): Promise<PushPairingView> {
+        if (process.platform !== 'darwin') {
+            throw new HttpError(501, 'Pairing a phone needs macOS for now: the pairing profile goes to the phone by AirDrop.');
+        }
+        try {
+            return await this.pairing.start();
+        } catch (error) {
+            throw new HttpError(503, error instanceof Error ? error.message : String(error));
+        }
+    }
+
+    stopPairing(): void {
+        this.pairing.stop();
+    }
+
+    removePushDevice(id: string): void {
+        if (!this.pushDevices.remove(id)) {
+            throw new HttpError(404, 'no such phone');
+        }
+        this.scheduleBroadcast();
+    }
+
+    async testPush(id?: string): Promise<PushState> {
+        if (id !== undefined && !this.pushDevices.list().some((device) => device.id === id)) {
+            throw new HttpError(404, 'no such phone');
+        }
+        if (this.pushDevices.list().length === 0) {
+            throw new HttpError(409, 'No phone is paired. Pair one from the command palette: "Pair a phone for notifications".');
+        }
+        await this.push.test(id);
+        return this.pushState();
     }
 
     openWindows(): number {
@@ -225,6 +299,8 @@ export class Hub {
 
     shutdown(): Promise<void> {
         this.notes.close();
+        this.push.close();
+        this.pairing.stop();
         this.namingTimers.forEach(clearTimeout);
         this.namingTimers.clear();
         if (this.broadcastTimer) {
@@ -796,14 +872,9 @@ export class Hub {
         if (!session) {
             return;
         }
-        this.emit({
-            type: 'attention',
-            paneId: pane.id,
-            sessionId: session.id,
-            status,
-            title: session.title,
-            body: body ? `${pane.title}: ${body}` : pane.title,
-        });
+        const text = body ? `${pane.title}: ${body}` : pane.title;
+        this.emit({ type: 'attention', paneId: pane.id, sessionId: session.id, status, title: session.title, body: text });
+        this.push.attention({ paneId: pane.id, status, sessionTitle: session.title, body: text });
     }
 
     async sessionChanges(id: string): Promise<SessionChanges> {

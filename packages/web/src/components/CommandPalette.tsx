@@ -202,6 +202,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'sidebar-side', label: `Move the sidebar to the ${otherSide}`, keywords: 'sidebar position left right', run: () => saveSettings({ sidebar: { position: otherSide } }) },
             { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
             { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
+            { id: 'phones', label: 'Phone notifications…', keywords: 'pair iphone mobile push notify away alerts', run: () => useUi.getState().openDialog({ kind: 'phones' }) },
             { id: 'report-problem', label: 'Report a problem…', keywords: 'bug issue feedback doctor diagnostics github', run: reportProblem },
             { id: 'about', label: 'About Voltran', keywords: 'version author license github', run: () => useUi.getState().openDialog({ kind: 'about' }) },
             ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),

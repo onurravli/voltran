@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, wr
 import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bugReportUrl, formatDiagnostics, type AppState, type CreateSessionBody, type PaneSpec, type Project } from '@voltran/shared';
+import { bugReportUrl, formatDiagnostics, type AppState, type CreateSessionBody, type PaneSpec, type Project, type PushPairingView, type PushState } from '@voltran/shared';
 import { resolveShellPath } from './adapters.ts';
 import { DEV_WEB_PORT, REPO_ROOT, ensureHome, loadConfig, privateFile, readOrCreateToken, voltranVersion, writeNewToken, type Config } from './config.ts';
 import { diagnose, type DaemonInfo } from './doctor.ts';
@@ -35,6 +35,7 @@ Usage:
   voltran restart                      restart the daemon to load new code; takes up's options
   voltran autostart [on|off]           start the daemon when you log in
   voltran signout                      sign out every window and replace the token
+  voltran notify [pair|test]           list paired phones, pair one (macOS) or send them a test notification
   voltran doctor [--report]            check the installation; --report opens a bug report with the result
   voltran version                      print the installed version
 
@@ -493,6 +494,45 @@ async function signout(): Promise<void> {
     console.log('Signed out every window. `voltran up` signs this computer in again.');
 }
 
+async function notify(args: string[]): Promise<void> {
+    const api = client();
+    if (!(await isRunning(api))) {
+        console.error('voltran notify: the daemon is not running. Start it with `voltran up`.');
+        process.exit(1);
+    }
+    try {
+        if (args[0] === 'pair') {
+            const pairing = await api.request<PushPairingView>('POST', '/api/push/pairing');
+            console.log(`Pairing is open until ${new Date(pairing.expiresAt).toLocaleTimeString()} on this network only.`);
+            console.log('A Finder window shows two files. AirDrop them to your iPhone, in order:');
+            console.log('  1. the profile: Settings → Profile Downloaded → Install, then');
+            console.log('     General → About → Certificate Trust Settings → turn on "Voltran pairing"');
+            console.log('  2. the link: Share → Add to Home Screen, open Voltran from there, Enable notifications');
+            console.log(`The profile's SHA-256 fingerprint is ${pairing.fingerprint}`);
+            console.log('Once paired, delete the profile (General → VPN & Device Management); notifications keep working.');
+            return;
+        }
+        if (args[0] === 'test') {
+            const state = await api.request<PushState>('POST', '/api/push/test');
+            for (const device of state.devices) {
+                console.log(`${device.name}: ${device.lastError ?? 'sent'}`);
+            }
+            return;
+        }
+        const { push } = await api.request<AppState>('GET', '/api/state');
+        if (push.devices.length === 0) {
+            console.log('No phone is paired. `voltran notify pair` pairs one.');
+        }
+        for (const device of push.devices) {
+            const sent = device.lastSentAt ? `last sent ${new Date(device.lastSentAt).toLocaleString()}` : 'nothing sent yet';
+            console.log(`${device.name}, paired ${new Date(device.pairedAt).toLocaleDateString()}: ${device.lastError ?? sent}`);
+        }
+    } catch (error) {
+        console.error(`voltran notify: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(1);
+    }
+}
+
 // Reads the token without creating it, so a check on a broken install changes nothing.
 async function daemonInfo(config: Config): Promise<DaemonInfo | null> {
     try {
@@ -543,6 +583,8 @@ export async function runCli(argv: string[]): Promise<void> {
             return autostart(args);
         case 'signout':
             return signout();
+        case 'notify':
+            return notify(args);
         case 'doctor':
             return doctor(args);
         case 'version':

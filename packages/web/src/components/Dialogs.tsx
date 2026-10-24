@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { branchFromTitle, commandPane, type AdapterId, type AdapterInfo, type PaneSpec, type ProjectGit } from '@voltran/shared';
+import { DEFAULT_SETTINGS, branchFromTitle, commandPane, type AdapterId, type AdapterInfo, type PaneSpec, type ProjectGit, type PushContent, type PushDeviceView } from '@voltran/shared';
 import { api } from '../api.ts';
 import { FIND_KEYS, SHORTCUTS, reportProblem } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
@@ -345,6 +345,121 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
     );
 }
 
+const PUSH_CONTENT_LABELS: Record<PushContent, string> = {
+    minimal: 'Only that something needs you',
+    titles: 'Session titles',
+    full: 'Session titles and what the agent asks',
+};
+
+function deviceStatus(device: PushDeviceView): string {
+    if (device.lastError) {
+        return device.lastError;
+    }
+    const paired = `Paired ${new Date(device.pairedAt).toLocaleDateString()}`;
+    return device.lastSentAt ? `${paired} · last notified ${new Date(device.lastSentAt).toLocaleString()}` : paired;
+}
+
+function PhonesDialog({ onClose }: { onClose: () => void }) {
+    const push = useUi((state) => state.app?.push ?? null);
+    const settings = useUi((state) => state.settingsFile?.settings.push ?? DEFAULT_SETTINGS.push);
+    const saveSettings = useUi((state) => state.saveSettings);
+    const [busy, setBusy] = useState(false);
+    const [now, setNow] = useState(() => Date.now());
+    const pairing = push?.pairing ?? null;
+
+    useEffect(() => {
+        if (!pairing) {
+            return;
+        }
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, [pairing]);
+
+    const run = async (action: () => Promise<unknown>): Promise<void> => {
+        setBusy(true);
+        try {
+            await action();
+        } catch (failure) {
+            reportError(failure);
+        } finally {
+            setBusy(false);
+        }
+    };
+    const left = pairing ? Math.max(0, Math.ceil((pairing.expiresAt - now) / 60_000)) : 0;
+
+    return (
+        <Modal title="Phone notifications" onClose={onClose} className="modal--phones">
+            <div className="form">
+                <p className="modal__body">
+                    When an agent needs you and you are away from this computer, Voltran tells your phone. The message goes
+                    encrypted for your phone alone, through Apple's push service and nothing else.
+                </p>
+                {push?.devices.length ? (
+                    <ul className="phones">
+                        {push.devices.map((device) => (
+                            <li key={device.id} className="phones__row">
+                                <span className="phones__name">{device.name}</span>
+                                <span className={`phones__status${device.lastError ? ' phones__status--error' : ''}`}>{deviceStatus(device)}</span>
+                                <span className="phones__actions">
+                                    <button type="button" className="button button--small button--ghost" disabled={busy} onClick={() => run(() => api.testPush(device.id))}>Send a test</button>
+                                    <button type="button" className="button button--small button--ghost" disabled={busy} onClick={() => run(() => api.removePushDevice(device.id))}>Remove</button>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                ) : null}
+                {pairing ? (
+                    <div className="phones__pairing">
+                        <p>A Finder window shows two files. AirDrop them to your iPhone, in order:</p>
+                        <ol>
+                            <li><b>Voltran pairing.mobileconfig</b>: in Settings tap Profile Downloaded → Install, then turn it on under General → About → Certificate Trust Settings.</li>
+                            <li><b>Open Voltran pairing</b>: in Safari tap Share → Add to Home Screen, open Voltran from your home screen and tap Enable notifications.</li>
+                        </ol>
+                        <p className="form__aside">
+                            Pairing works on this Wi-Fi only and closes in {left} {left === 1 ? 'minute' : 'minutes'}. Once paired, delete the profile under
+                            General → VPN &amp; Device Management; notifications keep working without it.
+                        </p>
+                        <p className="form__aside phones__fingerprint">Profile fingerprint (SHA-256): {pairing.fingerprint}</p>
+                    </div>
+                ) : null}
+                {push && !push.canPair && !pairing ? <p className="form__aside">Pairing a phone needs macOS for now.</p> : null}
+                <label className="check">
+                    <input type="checkbox" checked={settings.enabled} onChange={(event) => saveSettings({ push: { enabled: event.target.checked } })} />
+                    <span>
+                        Notify my phone
+                        <span className="check__note">After {settings.delaySeconds} seconds away, and not while you are typing here.</span>
+                    </span>
+                </label>
+                <label className="check">
+                    <input
+                        type="checkbox"
+                        checked={settings.events.includes('done')}
+                        onChange={(event) => saveSettings({ push: { events: event.target.checked ? [...settings.events, 'done'] : settings.events.filter((status) => status !== 'done') } })}
+                    />
+                    <span>Also when an agent finishes</span>
+                </label>
+                <label className="field">
+                    <span className="field__label">What the notification shows</span>
+                    <select className="field__input" value={settings.content} onChange={(event) => saveSettings({ push: { content: event.target.value as PushContent } })}>
+                        {(Object.keys(PUSH_CONTENT_LABELS) as PushContent[]).map((content) => <option key={content} value={content}>{PUSH_CONTENT_LABELS[content]}</option>)}
+                    </select>
+                    <span className="field__hint">Lock screens show it to anyone nearby. More detail can include commands the agent wants to run.</span>
+                </label>
+                <div className="form__actions">
+                    {pairing ? (
+                        <button type="button" className="button button--ghost" disabled={busy} onClick={() => run(() => api.stopPairing())}>Stop pairing</button>
+                    ) : push?.canPair ? (
+                        <button type="button" className="button" disabled={busy} onClick={() => run(() => api.startPairing())}>
+                            {push.devices.length ? 'Pair another iPhone' : 'Pair an iPhone'}
+                        </button>
+                    ) : null}
+                    <button type="button" className="button button--primary" data-autofocus onClick={onClose}>Done</button>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
 export function Dialogs() {
     const dialog = useUi((state) => state.dialog);
     const openDialog = useUi((state) => state.openDialog);
@@ -366,6 +481,8 @@ export function Dialogs() {
             return <CommandPalette onClose={close} />;
         case 'about':
             return <AboutDialog onClose={close} />;
+        case 'phones':
+            return <PhonesDialog onClose={close} />;
     }
 }
 

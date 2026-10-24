@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'jsonc-parser';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, parseSettings, type SettingsState } from '@voltran/shared';
+import { DEFAULT_SETTINGS, parseSettings, type Settings, type SettingsState } from '@voltran/shared';
 import { HttpError } from './hub.ts';
 import { SettingsFile, editorCommand, settingsFileText } from './settings.ts';
 
@@ -100,7 +100,8 @@ describe('SettingsFile', () => {
     });
 
     it('writes a template that reads back as the same settings', () => {
-        const settings = { ...DEFAULT_SETTINGS, ui: { fontFamily: 'Inter', fontSize: 15 }, editor: { command: 'nvim' }, git: { pullRequests: false } };
+        const settings: Settings = { ...DEFAULT_SETTINGS, ui: { fontFamily: 'Inter', fontSize: 15 }, editor: { command: 'nvim' }, git: { pullRequests: false },
+            push: { enabled: false, events: ['needs-input', 'done'], content: 'titles', delaySeconds: 90 } };
         expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({ settings, problems: [] });
     });
 

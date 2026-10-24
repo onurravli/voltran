@@ -16,6 +16,7 @@ export interface Config {
     notesDir: string;
     worktreesDir: string;
     hooksDir: string;
+    pushDir: string;
     settingsFile: string;
     windowsFile: string;
     webDist: string;
@@ -61,6 +62,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         notesDir: join(home, 'notes'),
         worktreesDir: join(home, 'worktrees'),
         hooksDir: join(home, 'hooks'),
+        pushDir: join(home, 'push'),
         settingsFile: join(home, 'settings.json'),
         windowsFile: join(home, 'windows'),
         webDist: resolve(here, '../../web/dist'),

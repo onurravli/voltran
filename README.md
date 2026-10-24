@@ -210,6 +210,31 @@ Panes that need you collect in the **Needs you** tray at the bottom of the sideb
 and as desktop notifications once you turn alerts on. While any agent in a project is working, a
 light sweeps along the line in the project's colour under the session's title bar.
 
+### Phone notifications
+
+Voltran can tell your iPhone when an agent needs you while you are away from the computer. ⌘K →
+**Phone notifications…** → **Pair an iPhone** (or `voltran notify pair`) opens a Finder window with two
+files to AirDrop to the phone, which must be on the same Wi-Fi:
+
+1. **Voltran pairing.mobileconfig**: install it in Settings → Profile Downloaded, then turn it on
+   under General → About → Certificate Trust Settings.
+2. **Open Voltran pairing**: in Safari, Share → Add to Home Screen; open Voltran from the home
+   screen and tap Enable notifications.
+
+A test notification arrives, and you can delete the profile right away (General → VPN & Device
+Management): notifications keep working without it.
+
+A notification goes out when a pane still needs you `push.delaySeconds` (30) seconds later and you
+have not typed in any pane meanwhile; panes that need you together go out as one message, at most
+one a minute. By default it says only that something needs you; the dialog can add session titles,
+or titles and what the agent asks, which may include a command. `voltran notify test` sends a test to
+every paired phone. Pairing needs macOS; sending works everywhere.
+
+There is no Voltran server and no account. The daemon encrypts each message for your phone alone
+and hands it to Apple's push service, which delivers it without being able to read it. Behind a
+company proxy that inspects TLS, sending may fail, and the proxy sees that a notification went out
+but not what it says.
+
 ### Usage limits
 
 With a Claude Pro or Max login, the bottom of the sidebar shows how much of your five-hour and weekly
@@ -304,7 +329,13 @@ instead. The file takes comments and trailing commas, like VS Code's:
     "ui": { "fontFamily": "", "fontSize": 13 }, // "" is the system font
     "sidebar": { "position": "left" }, // "left" or "right"
     "editor": { "command": "" },       // such as "nvim"
-    "git": { "pullRequests": true }    // look up each branch's pull request with gh
+    "git": { "pullRequests": true },   // look up each branch's pull request with gh
+    "push": {
+        "enabled": true,               // notify paired phones
+        "events": ["needs-input"],     // also "done" and "exited"
+        "content": "minimal",          // "minimal", "titles" or "full"
+        "delaySeconds": 30             // how long a pane waits before your phone hears of it
+    }
 }
 ```
 
@@ -415,7 +446,17 @@ A local server that can start processes is reachable from every web page you ope
   planted, and gives Claude the notes through the daemon rather than by reading the agent's folder;
 - keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns;
 - drops control characters from session titles and status lines taken from what agents report, so
-  `voltran status` never writes an agent's escape sequence to your terminal.
+  `voltran status` never writes an agent's escape sequence to your terminal;
+- pairs a phone through a listener on your Wi-Fi or Ethernet address that is open for at most ten
+  minutes, answers only behind a single-use code, closes after ten wrong ones and once a phone has
+  paired, and serves nothing but the pairing page. Its certificate authority is new for each pairing,
+  valid for a day, limited by name constraints to that one address, and its key is deleted once it
+  has signed the listener's certificate, so the profile on the phone can never vouch for anything
+  else;
+- posts notifications only to the push services browsers subscribe with (Apple, Google, Mozilla,
+  Microsoft), so a forged subscription cannot point the daemon at your network, encrypts each one
+  for the phone (RFC 8291), and keeps the push endpoints and its signing key in `~/.voltran/push`,
+  out of the API, the windows and `voltran doctor`.
 
 Child processes do not inherit the environment of a Claude session that launched the daemon
 (`CLAUDECODE`, messaging sockets and tokens) or the identity variables of the terminal that launched

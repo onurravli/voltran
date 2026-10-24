@@ -24,6 +24,7 @@ function open(dir: string): { store: Store; hub: Hub } {
         notesDir: join(dir, 'notes'),
         hooksDir: join(dir, 'hooks'),
         worktreesDir: join(dir, 'worktrees'),
+        pushDir: join(dir, 'push'),
         url: 'http://127.0.0.1:1',
         shell: '/bin/sh',
         path: '/usr/bin:/bin',
@@ -286,6 +287,28 @@ describe('Hub', () => {
             expect(status(() => hub.updateProject(web.id, { name: 'renamed', moveBefore: 'gone' }))).toBe(400);
             expect(projectNames(hub)).toEqual(['web', 'api']);
         });
+    });
+
+    it('reports paired phones without their endpoints and refuses a test push with none paired', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'voltran-hub-'));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        mkdirSync(join(dir, 'push'), { mode: 0o700 });
+        writeFileSync(join(dir, 'push', 'devices.json'), JSON.stringify([{
+            id: 'phone',
+            name: 'iPhone',
+            pairedAt: 1,
+            subscription: { endpoint: 'https://web.push.apple.com/secret', keys: { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' } },
+        }]));
+        const { store, hub } = open(dir);
+        cleanups.push(async () => {
+            await hub.shutdown();
+            store.close();
+        });
+        expect(hub.state().push.devices).toEqual([{ id: 'phone', name: 'iPhone', pairedAt: 1, lastSentAt: null, lastError: null }]);
+        expect(JSON.stringify(hub.state())).not.toContain('secret');
+        await expect(hub.testPush('missing')).rejects.toMatchObject({ status: 404 });
+        hub.removePushDevice('phone');
+        await expect(hub.testPush()).rejects.toMatchObject({ status: 409 });
     });
 
     it('numbers the sessions of a database from before ordering in the order they were made', async () => {

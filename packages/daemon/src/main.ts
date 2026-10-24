@@ -67,6 +67,9 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         baseEnv: options.baseEnv,
         gitRunner: options.gitRunner,
         pullRequests: () => settings.state().settings.git.pullRequests,
+        pushDir: config.pushDir,
+        pushSettings: () => settings.state().settings.push,
+        pushIcon: join(config.webDist, 'icon-192.png'),
     });
     const guard = new Guard(config, token);
     const settings = new SettingsFile(config.settingsFile, (state) => hub.publish({ type: 'settings', ...state }));

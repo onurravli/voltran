@@ -15,6 +15,7 @@ export type Dialog =
     | { kind: 'shortcuts' }
     | { kind: 'palette' }
     | { kind: 'about' }
+    | { kind: 'phones' }
     | {
         kind: 'confirm';
         title: string;
@@ -198,6 +199,7 @@ function shownSettings(state: UiState): Settings {
         sidebar: { position: state.sidebarPosition },
         editor: state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor,
         git: state.settingsFile?.settings.git ?? DEFAULT_SETTINGS.git,
+        push: state.settingsFile?.settings.push ?? DEFAULT_SETTINGS.push,
     };
 }
 

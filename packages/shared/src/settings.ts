@@ -1,5 +1,8 @@
+import type { AttentionStatus } from './types.ts';
+
 export type Appearance = 'system' | 'dark' | 'light';
 export type SidebarPosition = 'left' | 'right';
+export type PushContent = 'minimal' | 'titles' | 'full';
 
 export interface Settings {
     appearance: Appearance;
@@ -9,6 +12,7 @@ export interface Settings {
     sidebar: { position: SidebarPosition };
     editor: { command: string };
     git: { pullRequests: boolean };
+    push: { enabled: boolean; events: AttentionStatus[]; content: PushContent; delaySeconds: number };
 }
 
 export interface SettingsPatch {
@@ -19,6 +23,7 @@ export interface SettingsPatch {
     sidebar?: Partial<Settings['sidebar']>;
     editor?: Partial<Settings['editor']>;
     git?: Partial<Settings['git']>;
+    push?: Partial<Settings['push']>;
 }
 
 export interface SettingsState {
@@ -30,6 +35,9 @@ export interface SettingsState {
 
 export const APPEARANCES: readonly Appearance[] = ['system', 'dark', 'light'];
 export const SIDEBAR_POSITIONS: readonly SidebarPosition[] = ['left', 'right'];
+export const PUSH_CONTENTS: readonly PushContent[] = ['minimal', 'titles', 'full'];
+export const PUSH_EVENTS: readonly AttentionStatus[] = ['needs-input', 'done', 'exited'];
+export const MAX_PUSH_DELAY_SECONDS = 3600;
 export const DARK_THEME_IDS: readonly string[] = ['voltran', 'tokyo-night', 'catppuccin-mocha', 'dracula', 'nord', 'gruvbox-dark', 'one-dark', 'rose-pine', 'solarized-dark'];
 export const LIGHT_THEME_IDS: readonly string[] = ['voltran-light', 'catppuccin-latte', 'solarized-light', 'github-light'];
 export const MIN_FONT_SIZE = 9;
@@ -47,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
     sidebar: { position: 'left' },
     editor: { command: '' },
     git: { pullRequests: true },
+    push: { enabled: true, events: ['needs-input'], content: 'minimal', delaySeconds: 30 },
 };
 
 type Check = (value: unknown) => string | null;
@@ -81,6 +90,16 @@ const editorCommand: Check = (value) =>
 
 const flag: Check = (value) => (typeof value === 'boolean' ? null : 'must be true or false');
 
+const someOf = (options: readonly string[]): Check => (value) =>
+    Array.isArray(value) && value.every((item) => typeof item === 'string' && options.includes(item)) && new Set(value).size === value.length
+        ? null
+        : `must be a list of ${quoted(options)}, each at most once`;
+
+const seconds = (max: number): Check => (value) =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max
+        ? null
+        : `must be a whole number of seconds from 0 to ${max}`;
+
 type Path = [string] | [string, string];
 
 const LEAVES: { path: Path; check: Check }[] = [
@@ -94,6 +113,10 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['sidebar', 'position'], check: oneOf(SIDEBAR_POSITIONS) },
     { path: ['editor', 'command'], check: editorCommand },
     { path: ['git', 'pullRequests'], check: flag },
+    { path: ['push', 'enabled'], check: flag },
+    { path: ['push', 'events'], check: someOf(PUSH_EVENTS) },
+    { path: ['push', 'content'], check: oneOf(PUSH_CONTENTS) },
+    { path: ['push', 'delaySeconds'], check: seconds(MAX_PUSH_DELAY_SECONDS) },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -156,6 +179,7 @@ export function applySettingsPatch(settings: Settings, patch: SettingsPatch): Se
         sidebar: { ...settings.sidebar, ...patch.sidebar },
         editor: { ...settings.editor, ...patch.editor },
         git: { ...settings.git, ...patch.git },
+        push: { ...settings.push, ...patch.push },
     };
 }
 

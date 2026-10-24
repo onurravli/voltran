@@ -18,6 +18,7 @@ const app = {
     git: {},
     adapters: [],
     usage: null,
+    push: { devices: [], pairing: null, canPair: false },
 } as AppState;
 
 describe('dropOnWorkspace', () => {

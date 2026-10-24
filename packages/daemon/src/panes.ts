@@ -58,6 +58,7 @@ export interface PaneManagerOptions {
     onPaneRecord: (pane: Pane) => void;
     onAttention: (pane: Pane, status: AttentionStatus, body: string) => void;
     onExit?: (pane: Pane, exitCode: number) => void;
+    onUserInput?: () => void;
     notes?: { guide: string; file: (pane: Pane) => string | null };
     heuristicQuietMs?: number;
     hooksSilenceMs?: number;
@@ -172,6 +173,7 @@ export class PaneManager {
         if (!isUserInput(data)) {
             return;
         }
+        this.options.onUserInput?.();
         runtime.tracker?.input();
         if (runtime.state.status === 'done') {
             this.setStatus(runtime, { status: 'idle', detail: runtime.state.detail });

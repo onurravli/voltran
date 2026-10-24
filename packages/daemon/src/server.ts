@@ -208,6 +208,18 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, 201, pane);
     });
 
+    route('POST', '/api/push/pairing', async (_req, res) => sendJson(res, 201, await hub.startPairing()));
+    route('DELETE', '/api/push/pairing', (_req, res) => {
+        hub.stopPairing();
+        sendJson(res, 200, { ok: true });
+    });
+    route('POST', '/api/push/test', async (_req, res) => sendJson(res, 200, await hub.testPush()));
+    route('POST', '/api/push/devices/:id/test', async (_req, res, [id]) => sendJson(res, 200, await hub.testPush(id)));
+    route('DELETE', '/api/push/devices/:id', (_req, res, [id]) => {
+        hub.removePushDevice(id);
+        sendJson(res, 200, { ok: true });
+    });
+
     route('POST', '/api/projects', async (req, res) => sendJson(res, 201, hub.createProject(await readJson(req))));
     route('PATCH', '/api/projects/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateProject(id, await readJson(req))));
     route('GET', '/api/projects/:id/git', async (_req, res, [id]) => sendJson(res, 200, await hub.projectGit(id)));

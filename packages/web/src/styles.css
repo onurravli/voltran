@@ -2442,6 +2442,72 @@ button.git-count:hover {
     cursor: pointer;
 }
 
+.modal--phones {
+    width: min(560px, calc(100vw - 32px));
+}
+
+.phones {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.phones__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 9px 12px;
+    border-radius: var(--radius-s);
+    background: color-mix(in srgb, var(--text) 4%, var(--hull));
+}
+
+.phones__name {
+    color: var(--text-strong);
+    font-weight: 500;
+}
+
+.phones__status {
+    grid-column: 1;
+    color: var(--text-faint);
+    font-size: calc(12px * var(--ui-scale));
+}
+
+.phones__status--error {
+    color: var(--error-text);
+}
+
+.phones__actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    gap: 6px;
+}
+
+.phones__pairing {
+    padding: 12px 14px;
+    border-radius: var(--radius-s);
+    box-shadow: inset 0 0 0 1px var(--line);
+    line-height: 1.55;
+}
+
+.phones__pairing p,
+.phones__pairing ol {
+    margin: 0 0 8px;
+}
+
+.phones__pairing ol {
+    padding-left: 20px;
+}
+
+.phones__fingerprint {
+    font-family: var(--font-mono);
+    word-break: break-all;
+}
+
 .modal__title {
     margin: 0 0 18px;
     color: var(--text-strong);

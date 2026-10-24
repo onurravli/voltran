@@ -11,6 +11,7 @@ describe('parseSettings', () => {
             sidebar: { position: 'right' },
             editor: { command: 'nvim -p' },
             git: { pullRequests: false },
+            push: { enabled: false, events: ['needs-input', 'exited'], content: 'titles', delaySeconds: 0 },
         };
         expect(parseSettings(raw)).toEqual({ settings: raw, problems: [] });
     });
@@ -62,6 +63,18 @@ describe('parseSettings', () => {
             expect(parseSettings({ ui: { fontSize } }).settings.ui.fontSize).toBe(DEFAULT_SETTINGS.ui.fontSize);
         }
         expect(parseSettings({ ui: { fontSize: MAX_UI_FONT_SIZE } }).settings.ui.fontSize).toBe(MAX_UI_FONT_SIZE);
+    });
+
+    it('takes push events as a list of attention statuses, each once, and a delay in whole seconds', () => {
+        const { settings, problems } = parseSettings({ push: { events: ['needs-input', 'needs-input'], content: 'everything', delaySeconds: 1.5 } });
+        expect(settings.push).toEqual(DEFAULT_SETTINGS.push);
+        expect(problems).toEqual([
+            '"push.events" must be a list of "needs-input", "done" or "exited", each at most once',
+            '"push.content" must be "minimal", "titles" or "full"',
+            '"push.delaySeconds" must be a whole number of seconds from 0 to 3600',
+        ]);
+        expect(parseSettings({ push: { events: [] } }).settings.push.events).toEqual([]);
+        expect(DEFAULT_SETTINGS.push).toEqual({ enabled: true, events: ['needs-input'], content: 'minimal', delaySeconds: 30 });
     });
 
     it('names unknown settings and sections that are not objects', () => {

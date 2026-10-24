@@ -212,6 +212,27 @@ export interface AppState {
     git: Record<string, GitStatus>;
     adapters: AdapterInfo[];
     usage: Usage | null;
+    push: PushState;
+}
+
+// What a window may know about paired phones: never the push endpoint or its keys.
+export interface PushDeviceView {
+    id: string;
+    name: string;
+    pairedAt: number;
+    lastSentAt: number | null;
+    lastError: string | null;
+}
+
+export interface PushPairingView {
+    expiresAt: number;
+    fingerprint: string;
+}
+
+export interface PushState {
+    devices: PushDeviceView[];
+    pairing: PushPairingView | null;
+    canPair: boolean;
 }
 
 export interface PaneSpec {

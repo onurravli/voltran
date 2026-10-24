@@ -142,6 +142,21 @@ hard-linked or non-regular notes file reads as empty and never has its mode chan
 one copy of what agents are told. A daemon start restores permissions and deletes the notes of panes
 that no longer exist.
 
+**Phone notifications.** `daemon/src/push.ts` (`PushNotifier`) gets every `hub.attention()` and
+sends one Web Push message per batch to each paired phone after `push.delaySeconds`, but only for
+panes whose status has not changed and only if no pane got user input since (`onUserInput` from
+`PaneManager.input`), at most one a minute. `pushMessage` decides what leaves the computer from
+`push.content`; `minimal` must name no session, pane or command. `webpush.ts` is RFC 8291
+encryption and RFC 8292 VAPID with no dependency (the RFC's example is a test vector);
+`validSubscription` allows only the browsers' push hosts, because the daemon posts to whatever URL a
+subscription names. `PushDevices` keeps endpoints and the VAPID key in `~/.voltran/push` (0600);
+windows only get `PushDeviceView`. A 404 or 410 from the push service drops the phone.
+`pairing.ts` (`Pairing`, macOS only) makes a CA for one pairing with `openssl`, name-constrained to
+the LAN address (`lanNetwork` skips VPN tunnels), deletes its key after it signs the listener's
+certificate, and writes a `.mobileconfig` and a `.webloc` to `~/.voltran/push/pairing` for AirDrop.
+The HTTPS listener on that address takes one subscription behind a single-use code and closes; the
+phone's home-screen app never talks to the daemon again, so the profile can be deleted right after.
+
 **Diagnostics.** `daemon/src/doctor.ts` (`diagnose`) runs the checks behind `voltran doctor` and
 `GET /api/diagnostics`; `shared/src/diagnostics.ts` formats them and builds the pre-filled bug report
 URL, whose query keys are the field ids in `.github/ISSUE_TEMPLATE/bug_report.yml`. The CLI runs

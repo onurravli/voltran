@@ -163,6 +163,21 @@ function browserCheck(config: Config): DiagnosticCheck {
     return chrome ? check('Window', 'ok', `opens an app window with ${basename(chrome)}`) : check('Window', 'off', 'Chrome not found; opens in the default browser');
 }
 
+// Only a count: the endpoints are secrets, and the pairing address would put the LAN in a public issue.
+async function phonesCheck(config: Config, path: string): Promise<DiagnosticCheck> {
+    let count = 0;
+    try {
+        const devices = JSON.parse(readFileSync(join(config.pushDir, 'devices.json'), 'utf8')) as unknown;
+        count = Array.isArray(devices) ? devices.length : 0;
+    } catch {
+        count = 0;
+    }
+    const openssl = process.platform === 'darwin' ? await run('openssl', ['version'], path) : null;
+    const pairing = process.platform !== 'darwin' ? 'pairing needs macOS' : openssl ? 'pairing ready' : 'openssl not found, so a phone cannot pair';
+    const paired = count === 0 ? 'none paired' : count === 1 ? '1 paired' : `${count} paired`;
+    return check('Phone notifications', process.platform === 'darwin' && !openssl ? 'warn' : count > 0 ? 'ok' : 'off', `${paired}; ${pairing}`);
+}
+
 function autostartCheck(): DiagnosticCheck {
     const file = process.platform === 'darwin' ? LAUNCH_AGENT_FILE : process.platform === 'linux' ? SYSTEMD_UNIT_FILE : null;
     return file && existsSync(file) ? check('Autostart', 'ok', 'on') : check('Autostart', 'off', 'off');
@@ -190,6 +205,7 @@ export async function diagnose(options: DiagnoseOptions): Promise<Diagnostics> {
         toolCheck('GitHub CLI', 'gh', 'not found; sessions show no pull requests', path),
         browserCheck(config),
         autostartCheck(),
+        phonesCheck(config, path),
     ]);
     return { version, platform, node, checks: checks.map((entry) => ({ ...entry, detail: redactHome(entry.detail) })) };
 }
