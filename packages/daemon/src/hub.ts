@@ -16,6 +16,7 @@ import {
     type CreateProjectBody,
     type CreateSessionBody,
     type CreateWorkspaceBody,
+    type FileDiff,
     type Layout,
     type MovePaneBody,
     type NotesLockBody,
@@ -27,6 +28,7 @@ import {
     type SaveNotesBody,
     type ServerEvent,
     type Session,
+    type SessionChanges,
     type UpdatePaneBody,
     type UpdateProjectBody,
     type UpdateSessionBody,
@@ -37,6 +39,7 @@ import {
     type WorktreeChoice,
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
+import { ChangesError, SessionChangesReader } from './changes.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
@@ -139,6 +142,7 @@ function refusedAsHttp<T>(action: () => T): T {
 export class Hub {
     readonly panes: PaneManager;
     private readonly git: GitWatcher;
+    private readonly changes: SessionChangesReader;
     private readonly notes: NotesStore;
     private readonly worktrees: Worktrees;
     private readonly store: Store;
@@ -178,12 +182,14 @@ export class Hub {
         this.notes.load(this.store.listPanes().map((pane) => pane.id));
         this.notes.watch();
         this.pruneWorkspaces();
+        const gitRunner = options.gitRunner ?? commandRunner({ ...options.baseEnv, PATH: options.path });
         this.git = new GitWatcher({
             folders: () => [...new Set(this.store.listSessions().filter((session) => !session.archived).map((session) => session.cwd))],
             onChange: () => this.scheduleBroadcast(),
             pullRequests: options.pullRequests ?? (() => false),
-            run: options.gitRunner ?? commandRunner({ ...options.baseEnv, PATH: options.path }),
+            run: gitRunner,
         });
+        this.changes = new SessionChangesReader(gitRunner);
     }
 
     state(): AppState {
@@ -798,6 +804,27 @@ export class Hub {
             title: session.title,
             body: body ? `${pane.title}: ${body}` : pane.title,
         });
+    }
+
+    async sessionChanges(id: string): Promise<SessionChanges> {
+        const session = this.mustGetSession(id);
+        return this.readChanges(() => this.changes.list(session.cwd));
+    }
+
+    async sessionDiff(id: string, path: string): Promise<FileDiff> {
+        const session = this.mustGetSession(id);
+        return this.readChanges(() => this.changes.diff(session.cwd, requireString(path, 'path', 4096)));
+    }
+
+    private async readChanges<T>(read: () => Promise<T>): Promise<T> {
+        try {
+            return await read();
+        } catch (error) {
+            if (error instanceof ChangesError) {
+                throw new HttpError(409, error.message);
+            }
+            throw error;
+        }
     }
 
     // The state goes out first, so a window that is told to open a session it has just been created

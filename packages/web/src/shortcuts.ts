@@ -198,6 +198,22 @@ function closeFocused(): void {
     }
 }
 
+function toggleChanges(): void {
+    const state = useUi.getState();
+    if (state.changesSessionId) {
+        state.openChanges(null);
+        return;
+    }
+    const paneId = visibleFocusedPane();
+    const sessionId = state.app?.panes.find((pane) => pane.id === paneId)?.sessionId ?? state.selectedSessionId;
+    const session = state.app?.sessions.find((entry) => entry.id === sessionId);
+    if (!session || !state.app?.git[session.cwd]) {
+        state.showToast('This session is not in a git repository');
+        return;
+    }
+    state.openChanges(session.id);
+}
+
 function toggleFocusedNotes(): void {
     const state = useUi.getState();
     const paneId = visibleFocusedPane();
@@ -234,6 +250,7 @@ export const SHORTCUTS: Shortcut[] = [
     },
     { code: 'KeyW', keys: keys('⌃⌥W'), label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
     { code: 'KeyE', keys: keys('⌃⌥E'), label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
+    { code: 'KeyG', keys: keys('⌃⌥G'), label: 'Show or hide the git changes of the focused session', run: toggleChanges },
     { code: 'Slash', keys: keys('⌃⌥/'), label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
 ];
 

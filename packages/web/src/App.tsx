@@ -5,6 +5,7 @@ import { installShortcuts } from './shortcuts.ts';
 import { selectedWorkspace, useUi } from './store.ts';
 import { disposeNotesExcept, flushNotesOnExit } from './notes.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
+import { ChangesView } from './components/ChangesView.tsx';
 import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
 import { FolderIcon, VoltranMark } from './components/Icons.tsx';
 import { SessionView } from './components/SessionView.tsx';
@@ -58,6 +59,7 @@ export function App() {
     const sidebarWidth = useUi((state) => state.sidebarWidth);
     const sidebarRight = useUi((state) => state.sidebarPosition === 'right');
     const zen = useUi((state) => state.zen);
+    const changesSessionId = useUi((state) => state.changesSessionId);
     const workspace = useUi(selectedWorkspace);
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
     const showing = Boolean(workspace || session);
@@ -104,6 +106,7 @@ export function App() {
                 ) : (
                     <Welcome />
                 )}
+                {changesSessionId ? <ChangesView key={changesSessionId} sessionId={changesSessionId} /> : null}
             </main>
             <Dialogs />
             <PaneMenu />

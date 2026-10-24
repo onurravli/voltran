@@ -169,6 +169,13 @@ without looking inside submodules, so it neither runs a command a repository or 
 configures nor holds `index.lock` while an agent commits. A submodule counts as changed when it
 points at another commit, not when its own files change.
 
+Click the number of changed files, or press ⌃⌥G, to see the changes in Voltran: every changed file
+of the repository on the left, and the selected file's diff against the last commit on the right,
+with untracked files shown whole. ↑ and ↓ (or j and k) move between files and Esc closes it. The
+view reads the changes again as agents work. It runs `git diff` with the same protections as the
+status, and with external diff commands and textconv drivers off; binary files and diffs of more
+than 5,000 lines are not shown.
+
 ### Worktrees
 
 In a git repository, **Work in its own worktree** in the new session dialog gives the session a
@@ -256,6 +263,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 | ⌃⌥↩ | Maximize or restore the focused pane |
 | ⌃⌥W | Close the focused pane; in a workspace, take it out of the workspace |
 | ⌃⌥E | Show or hide the notes of the focused pane |
+| ⌃⌥G | Show or hide the git changes of the focused session |
 | ⌃⌥/ | Show all shortcuts |
 
 In terminals, Option types the characters of your keyboard layout (such as @ and { on Turkish Q), as

@@ -79,6 +79,43 @@ export interface GitStatus {
     pullRequest: PullRequest | null;
 }
 
+export type ChangeState = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
+
+export interface ChangedFile {
+    path: string;
+    oldPath: string | null;
+    state: ChangeState;
+    staged: boolean;
+    unstaged: boolean;
+}
+
+export interface SessionChanges {
+    root: string;
+    files: ChangedFile[];
+    truncated: boolean;
+}
+
+export interface DiffLine {
+    kind: 'add' | 'del' | 'context' | 'note';
+    text: string;
+    old: number | null;
+    new: number | null;
+}
+
+export interface DiffHunk {
+    header: string;
+    lines: DiffLine[];
+}
+
+export interface FileDiff {
+    path: string;
+    added: number;
+    removed: number;
+    binary: boolean;
+    tooLarge: boolean;
+    hunks: DiffHunk[];
+}
+
 export interface Workspace {
     id: string;
     title: string;

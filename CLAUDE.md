@@ -175,7 +175,10 @@ keeps git from running a status inside each submodule under that submodule's own
 `repositoryFilterOverrides` blanks those the repository's own config defines before every poll and
 before `Worktrees.changes`. Pull requests come from `gh pr view`,
 cached per branch for two minutes and skipped when `git.pullRequests` is off or `gh` is missing.
-Tests inject a `GitRunner` instead of the real `gh`.
+Tests inject a `GitRunner` instead of the real `gh`. The changes view reads on request only
+(`daemon/src/changes.ts`, `GET /api/sessions/:id/changes` and `/diff?path=`): it diffs only a path
+the status lists at that moment, with the same guards plus `--no-ext-diff --no-textconv`, and reads
+an untracked file itself with `O_NOFOLLOW`.
 
 **Worktrees.** A session created with `worktree: { branch, base? }` gets a `git worktree` under
 `~/.voltran/worktrees/<project>/<branch>` (`daemon/src/worktrees.ts`); `Session.worktree` is its

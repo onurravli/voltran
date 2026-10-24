@@ -431,7 +431,7 @@ export function LayoutNode({ node, path, host, panes, onSizes }: {
     );
 }
 
-function GitChips({ status }: { status: GitStatus }) {
+function GitChips({ status, sessionId }: { status: GitStatus; sessionId: string }) {
     const labels = gitLabels(status);
     const pr = status.pullRequest;
     const prLabel = pr ? pullRequestLabel(pr) : null;
@@ -441,7 +441,16 @@ function GitChips({ status }: { status: GitStatus }) {
                 <BranchIcon size={13} />
                 <span className="git-chip__branch">{labels.branch}</span>
                 {labels.sync ? <span className="git-chip__sync">{labels.sync}</span> : null}
-                {labels.changes ? <span className={`git-count${status.conflicted > 0 ? ' git-count--conflict' : ''}`}>{labels.changes}</span> : null}
+                {labels.changes ? (
+                    <button
+                        type="button"
+                        className={`git-count${status.conflicted > 0 ? ' git-count--conflict' : ''}`}
+                        title={`Show the changes (${keys('⌃⌥G')})`}
+                        onClick={() => useUi.getState().openChanges(sessionId)}
+                    >
+                        {labels.changes}
+                    </button>
+                ) : null}
             </span>
             {pr && prLabel ? (
                 <a className={`git-pr git-pr--${pr.state}`} href={pr.url} target="_blank" rel="noreferrer noopener" title={prLabel.title}>
@@ -522,7 +531,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
             <button type="button" className="session-header__path" title={`${session.cwd}\nClick to copy`} onClick={copyPath}>
                 {shortPath(session.cwd)}
             </button>
-            {git ? <GitChips status={git} /> : null}
+            {git ? <GitChips status={git} sessionId={session.id} /> : null}
             {editingLink ? (
                 <input
                     className="session-header__link-input"

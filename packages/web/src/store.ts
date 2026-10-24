@@ -51,6 +51,7 @@ export interface UiState {
     focusedPaneId: string | null;
     focusToken: number;
     pendingReveal: string | null;
+    changesSessionId: string | null;
     maximizedPaneId: string | null;
     draggingPaneId: string | null;
     draggingSessionId: string | null;
@@ -87,6 +88,7 @@ export interface UiState {
     selectWorkspace: (id: string) => void;
     focusPane: (id: string | null, enter?: boolean) => void;
     revealSession: (id: string) => void;
+    openChanges: (sessionId: string | null) => void;
     toggleMaximize: (id: string) => void;
     setDraggingPane: (id: string | null) => void;
     setDraggingSession: (id: string | null) => void;
@@ -213,6 +215,7 @@ export const useUi = create<UiState>((set, get) => ({
     focusedPaneId: null,
     focusToken: 0,
     pendingReveal: null,
+    changesSessionId: null,
     maximizedPaneId: null,
     draggingPaneId: null,
     draggingSessionId: null,
@@ -258,11 +261,11 @@ export const useUi = create<UiState>((set, get) => ({
     setVersion: (version) => set({ version }),
     setConnection: (connection) => set({ connection }),
     selectSession: (id) => {
-        const next = { selectedSessionId: id, selectedWorkspaceId: null, maximizedPaneId: null, findPaneId: null };
+        const next = { selectedSessionId: id, selectedWorkspaceId: null, maximizedPaneId: null, findPaneId: null, changesSessionId: null };
         set({ ...next, ...enterView({ ...get(), ...next }) });
     },
     selectWorkspace: (id) => {
-        const next = { selectedWorkspaceId: id, selectedSessionId: null, maximizedPaneId: null, findPaneId: null };
+        const next = { selectedWorkspaceId: id, selectedSessionId: null, maximizedPaneId: null, findPaneId: null, changesSessionId: null };
         set({ ...next, ...enterView({ ...get(), ...next }) });
     },
     revealSession: (id) => {
@@ -272,6 +275,7 @@ export const useUi = create<UiState>((set, get) => ({
             set({ pendingReveal: id });
         }
     },
+    openChanges: (changesSessionId) => set(changesSessionId ? { changesSessionId } : { changesSessionId, focusToken: get().focusToken + 1 }),
     focusPane: (id, enter = true) => {
         const state = get();
         const view = state.selectedWorkspaceId ?? state.selectedSessionId;

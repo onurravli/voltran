@@ -5,6 +5,7 @@ import type {
     CreateWorkspaceBody,
     Diagnostics,
     EditSettingsBody,
+    FileDiff,
     MovePaneBody,
     NotesLockBody,
     NotesMeta,
@@ -14,6 +15,7 @@ import type {
     ProjectGit,
     SaveNotesBody,
     Session,
+    SessionChanges,
     SettingsPatch,
     SettingsState,
     UpdatePaneBody,
@@ -156,6 +158,8 @@ export const api = {
     openSettings: () => request<{ path: string }>('POST', '/api/settings/open'),
     editSettings: (body: EditSettingsBody) => request<Pane>('POST', '/api/settings/edit', body),
     diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
+    changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
+    diff: (sessionId: string, path: string) => request<FileDiff>('GET', `/api/sessions/${sessionId}/diff?path=${encodeURIComponent(path)}`),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };
