@@ -13,6 +13,8 @@ full.
   fullscreen mode.
 - Switching to a session, workspace or pane puts the keyboard in its terminal, on the pane you
   used there last; closing the focused pane moves to the one next to it.
+- After a daemon restart, a pane shows all of its earlier output again: the `restored` line no longer
+  lands near the top of the screen and overwrites what was below it.
 
 ## 1.0.1 (2026-10-24)
 

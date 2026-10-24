@@ -73,7 +73,10 @@ const VIEWER_SIGNAL_DELAY_MS = 750;
 const SHUTDOWN_FLUSH_MS = 1000;
 const ECHO_WINDOW_MS = 400;
 
-const RESET_MODES = '\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[0m';
+// Leaving the alternate screen restores the saved cursor, and with nothing saved that is the top of
+// the screen, where the notice that follows would overwrite the output. xterm saves a cursor per
+// buffer, so saving it first changes nothing for a program that did switch screens.
+const RESET_MODES = '\x1b7\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[0m';
 
 const notice = (text: string, tone: 'dim' | 'error' = 'dim'): string =>
     `\r\n${tone === 'error' ? '\x1b[31m' : '\x1b[2m'}── ${text} ──\x1b[0m\r\n`;

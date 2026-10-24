@@ -11,8 +11,9 @@ behaviour.
 ```bash
 npm install                      # postinstall makes node-pty's spawn-helper executable (else "posix_spawnp failed")
 npm test                         # vitest, all packages
+npm run test:e2e                 # builds the UI, then the browser tests in e2e/ (headless Chrome)
 npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # one file / one test
-npm run typecheck                # tsc for daemon and web (each includes shared)
+npm run typecheck                # tsc for daemon, web and e2e (each includes shared)
 npm run build                    # builds packages/web/dist, which the daemon serves
 npm run package                  # the npm package in build/npm (compiled JS, built UI)
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
@@ -217,7 +218,14 @@ Ubuntu and macOS (`.github/workflows/test.yml`).
   in DOM-free modules (`fonts.ts`, `palette.ts`, `keymap.ts`, `themes.ts`, `drag.ts`).
 - Daemon tests spawn real PTYs; `server.test.ts` builds a whole daemon on a free port with a fake
   `claude` binary that runs the real hook command.
-- There are no UI tests. Check UI changes in headless Chrome with `playwright-core` (a devDependency,
+- Browser tests live in `e2e/*.e2e.ts` (`vitest.e2e.config.ts`, not part of `npm test`). Each file's
+  `Voltran` (`e2e/harness.ts`) starts a daemon in its own process on a free port and a temporary home,
+  with a `test-shell` whose prompt is `e2e$ `; stopping it closes every socket the way a real
+  restart does, which an in-process `buildDaemon` does not. Chrome runs with WebGL off, so xterm
+  draws with its DOM renderer and `screenText` reads `.xterm-rows`. Input sent while a pane's socket
+  is reconnecting is dropped, so after a restart or an archive wait for the new prompt before
+  typing. Seed state through the API and drive only the workflow under test through the UI.
+- Check other UI changes in headless Chrome with `playwright-core` (a devDependency,
   launched with `executablePath` set to the installed Chrome) against a throwaway daemon:
   `VOLTRAN_HOME=/tmp/… VOLTRAN_PORT=49xx node bin/voltran.mjs up --no-open`, then
   `POST /api/login-code` with the token from `$VOLTRAN_HOME/token` and open `/auth?code=…`. Stop it

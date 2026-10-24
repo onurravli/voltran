@@ -431,6 +431,7 @@ vulnerability.
 npm run dev:daemon   # daemon with --watch, allows the Vite origin
 npm run dev:web      # Vite on http://localhost:4774, proxies /api and /ws to the daemon
 npm test             # vitest: shared layout, daemon (PTYs, hooks, subagents, server) and web helpers
+npm run test:e2e     # builds the UI, then drives it in headless Chrome against a throwaway daemon
 npm run typecheck
 npm run build        # rebuilds the UI the daemon serves
 npm run package      # the npm package in build/npm; publish it with `npm publish ./build/npm`

@@ -33,7 +33,8 @@
     "dev:daemon": "VOLTRAN_DEV=1 node --watch packages/daemon/src/main.ts",
     "dev:web": "npm run dev -w @voltran/web",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/daemon && tsc -p packages/web"
+    "test:e2e": "npm run build && vitest run -c vitest.e2e.config.ts",
+    "typecheck": "tsc -p packages/daemon && tsc -p packages/web && tsc -p e2e"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
