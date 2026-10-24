@@ -1,13 +1,13 @@
 {
   "name": "@voltran/daemon",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/main.ts"
   },
   "dependencies": {
-    "@voltran/shared": "0.1.0",
+    "@voltran/shared": "1.0.0",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
     "jsonc-parser": "^3.3.1",

@@ -1,6 +1,6 @@
 {
   "name": "@voltran/web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
-    "@voltran/shared": "0.1.0",
+    "@voltran/shared": "1.0.0",
     "@xterm/addon-fit": "0.12.0-beta.311",
     "@xterm/addon-search": "0.17.0-beta.310",
     "@xterm/addon-unicode11": "0.10.0-beta.310",

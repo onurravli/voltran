@@ -1,6 +1,6 @@
 {
   "name": "voltran",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Local multi-agent session and terminal orchestrator",
   "type": "module",
