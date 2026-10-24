@@ -122,13 +122,13 @@ the first keystroke, renews it while typing, saves with `PUT …/notes` and give
 seconds after the last keystroke; while it is held the folder is 0500 and the file 0400. The store
 watches the folder and reports every write it did not make as the agent's, and Claude's
 `PreToolUse`/`PostToolUse` on the notes file hold an agent lock that refuses the drawer's. Every
-pane but subagent viewers gets `VOLTRAN_NOTES`. Claude's settings add `notes-hook.sh` (the notes into
-context on `SessionStart`, again on `UserPromptSubmit` after a drawer save marks `<pane>.changed`, and
+pane but subagent viewers gets `VOLTRAN_NOTES`. Claude's settings add `notes-hook.sh` (the notes, which it fetches from
+`GET /api/hooks/:pane/notes` rather than reading the agent's folder, into context on `SessionStart`, again on `UserPromptSubmit` after a drawer save marks `<pane>.changed`, and
 a `PreToolUse` deny while the folder is read-only) and Read/Edit permission for that pane's folder
 only, which Claude's sandbox also takes as write access; OpenCode gets `GUIDE.md` and the notes as
 `instructions`. Agents can write in these folders, so every write goes through `replaceFile` (a fresh
-name opened with O_EXCL, then a rename), modes change only on real files and folders, and a linked or
-non-regular notes file reads as empty, in the daemon and in `notes-hook.sh`. `NOTES_GUIDE` is the
+name opened with O_EXCL, then a rename), modes change only on real files and folders, and a linked,
+hard-linked or non-regular notes file reads as empty and never has its mode changed (`openNote`). `NOTES_GUIDE` is the
 one copy of what agents are told. A daemon start restores permissions and deletes the notes of panes
 that no longer exist.
 
@@ -152,9 +152,10 @@ take a `PaneHost` (session or workspace); a pane's own session still decides whe
 **Git status.** `daemon/src/git.ts` (`GitWatcher`) runs `git status --porcelain=v2` for every
 folder an open session works in, one command at a time with a timeout, every 10 s while a window is
 open and a second after a Claude pane's `PostToolUse`/`Stop` or an OpenCode pane's
-`ToolEnd`/`TurnEnd`; `AppState.git` is keyed by folder. Keep `core.fsmonitor=false` and
-`--no-optional-locks` in `STATUS_ARGS`: the first stops a repository from running a command through
-`git status`, the second keeps polling off `index.lock`. `git status` also runs clean filters, so
+`ToolEnd`/`TurnEnd`; `AppState.git` is keyed by folder. Keep `core.fsmonitor=false`,
+`--no-optional-locks` and `--ignore-submodules=dirty` in `STATUS_ARGS`: the first stops a repository
+from running a command through `git status`, the second keeps polling off `index.lock`, the third
+keeps git from running a status inside each submodule under that submodule's own config and filters. `git status` also runs clean filters, so
 `repositoryFilterOverrides` blanks those the repository's own config defines before every poll and
 before `Worktrees.changes`. Pull requests come from `gh pr view`,
 cached per branch for two minutes and skipped when `git.pullRequests` is off or `gh` is missing.

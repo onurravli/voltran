@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -171,6 +171,46 @@ describe('NotesStore', () => {
         expect(lstatSync(join(dir, linked)).isDirectory()).toBe(true);
         expect(existsSync(join(outside, 'notes.md'))).toBe(false);
         expect(statSync(outside).mode & 0o777).toBe(0o700);
+    });
+
+    it('treats a hard link planted as the notes like any other file that is not its own', () => {
+        const { store } = setup();
+        const outside = mkdtempSync(join(tmpdir(), 'voltran-outside-'));
+        cleanups.push(() => rmSync(outside, { recursive: true, force: true }));
+        const precious = join(outside, 'precious');
+        writeFileSync(precious, 'precious\n', { mode: 0o644 });
+        const paneId = randomUUID();
+        store.load([paneId]);
+        linkSync(precious, store.file(paneId));
+
+        expect(store.current(paneId)).toBe('');
+        store.lock(paneId, HOLDER, store.read(paneId).version);
+        expect(statSync(precious).mode & 0o777).toBe(0o644);
+        store.unlock(paneId, HOLDER);
+        expect(statSync(precious).mode & 0o777).toBe(0o644);
+        expect(readFileSync(precious, 'utf8')).toBe('precious\n');
+    });
+
+    it('reads no more of an agent\'s notes than it would ever show', () => {
+        const { store } = setup();
+        const paneId = randomUUID();
+        store.read(paneId);
+        writeFileSync(store.file(paneId), 'a'.repeat(2 * 1024 * 1024));
+        expect(store.current(paneId).length).toBe(1024 * 1024);
+    });
+
+    // An error the watcher's reload threw would end the daemon, and every pane with it.
+    it.skipIf(process.getuid?.() === 0)('reads notes an agent made unreadable as empty instead of failing', async () => {
+        const { store } = setup();
+        const paneId = randomUUID();
+        const file = store.file(paneId);
+        writeFileSync(file, 'readable\n');
+        expect(store.read(paneId).content).toBe('readable\n');
+        store.watch();
+        chmodSync(file, 0o200);
+        appendFileSync(file, 'more\n');
+        await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+        expect(store.current(paneId)).toBe('');
     });
 
     it('refuses the lock to a stale window, another window and a running agent edit', () => {

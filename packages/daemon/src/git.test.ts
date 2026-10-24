@@ -175,6 +175,29 @@ describe('GitWatcher', () => {
         expect(existsSync(marker)).toBe(true);
     });
 
+    it('never runs a filter a submodule configured for itself', async () => {
+        const inner = repository();
+        writeFileSync(join(inner, '.gitattributes'), '*.txt filter=sub\n');
+        writeFileSync(join(inner, 'a.txt'), 'hello\n');
+        gitIn(inner, 'add', '-A');
+        gitIn(inner, '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-m', 'files');
+        const dir = repository();
+        gitIn(dir, '-c', 'protocol.file.allow=always', 'submodule', 'add', inner, 'sub');
+        gitIn(dir, '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-m', 'submodule');
+        const marker = join(dir, '..', `${dir.split('/').at(-1)}-submodule-filter-ran`);
+        cleanups.push(() => rmSync(marker, { force: true }));
+        gitIn(join(dir, 'sub'), 'config', 'filter.sub.clean', `touch '${marker}'; cat`);
+        utimesSync(join(dir, 'sub', 'a.txt'), new Date(), new Date(Date.now() + 60_000));
+
+        const { watcher: git } = watcher([dir], commandRunner(process.env), false);
+        await git.refresh(dir);
+        expect(git.snapshot()[dir]).toMatchObject({ branch: 'main', changed: 0 });
+        expect(existsSync(marker)).toBe(false);
+
+        execFileSync('git', ['status', '--porcelain'], { cwd: dir, stdio: 'ignore' });
+        expect(existsSync(marker)).toBe(true);
+    });
+
     it('stops asking gh once it turns out not to be installed', async () => {
         let ghCalls = 0;
         const { watcher: git } = watcher(['/a', '/b'], async (command) => {

@@ -3,12 +3,13 @@ import {
     chmodSync,
     closeSync,
     constants,
+    fchmodSync,
     fstatSync,
     lstatSync,
     mkdirSync,
     openSync,
     readdirSync,
-    readFileSync,
+    readSync,
     renameSync,
     rmSync,
     watch,
@@ -24,6 +25,7 @@ const CHANGED = '.changed';
 const LEASE_MS = 10_000;
 const AGENT_EDIT_MS = 10_000;
 const RELOAD_DELAY_MS = 100;
+const READ_LIMIT = 1024 * 1024;
 const PANE_ID = /^[A-Za-z0-9-]{1,64}$/;
 
 export class NotesRefused extends Error {
@@ -105,10 +107,53 @@ function replaceFile(dir: string, name: string, content: string, mode: number): 
     }
 }
 
-function chmodIf(path: string, kind: 'file' | 'directory', mode: number): void {
-    if (kindOf(path) === kind) {
+function chmodFolder(path: string, mode: number): void {
+    if (kindOf(path) === 'directory') {
         chmodSync(path, mode);
     }
+}
+
+// The note is only ever the plain file the daemon itself put there. Opening it without following a
+// link and checking what the descriptor is leaves no gap to swap in a link, a pipe or a hard link to
+// another file between the check and the use.
+function openNote(path: string): number | null {
+    let fd: number;
+    try {
+        fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    } catch {
+        return null;
+    }
+    const stat = fstatSync(fd);
+    if (stat.isFile() && stat.nlink === 1) {
+        return fd;
+    }
+    closeSync(fd);
+    return null;
+}
+
+function chmodNote(path: string, mode: number): void {
+    const fd = openNote(path);
+    if (fd === null) {
+        return;
+    }
+    try {
+        fchmodSync(fd, mode);
+    } finally {
+        closeSync(fd);
+    }
+}
+
+function readNote(fd: number, size: number): string {
+    const buffer = Buffer.alloc(Math.min(size, READ_LIMIT));
+    let length = 0;
+    while (length < buffer.length) {
+        const read = readSync(fd, buffer, length, buffer.length - length, length);
+        if (read === 0) {
+            break;
+        }
+        length += read;
+    }
+    return buffer.subarray(0, length).toString('utf8');
 }
 
 // Each pane's note lives in a folder of its own, so a lock can make the folder read-only too: a
@@ -155,7 +200,11 @@ export class NotesStore {
             }
             note.reloadTimer = setTimeout(() => {
                 note.reloadTimer = null;
-                this.reload(paneId, note);
+                try {
+                    this.reload(paneId, note);
+                } catch (error) {
+                    console.error(`[voltran] could not read the notes of pane ${paneId}:`, error);
+                }
             }, RELOAD_DELAY_MS);
         });
         this.watcher.on('error', () => {
@@ -198,6 +247,13 @@ export class NotesStore {
     read(paneId: string): PaneNotes {
         const note = this.note(paneId);
         return { content: note.content, version: note.version };
+    }
+
+    // What the notes hook shows Claude: read again now, since the watcher may not have caught up.
+    current(paneId: string): string {
+        const note = this.note(paneId);
+        this.reload(paneId, note);
+        return note.content;
     }
 
     // The folder is made read-only before the note is read again, so nothing can change it between
@@ -333,26 +389,21 @@ export class NotesStore {
         }
     }
 
-    // A link, a pipe or anything else that is not a plain file reads as empty notes.
+    // A link, a pipe or anything else that is not a plain file reads as empty notes, and an agent
+    // that writes more than the daemon will read gets the start of it.
     private readFile(paneId: string): { content: string; updatedAt: number | null } {
         const empty = { content: '', updatedAt: null };
         const dir = this.dirOf(paneId);
         if (kindOf(dir) !== 'directory') {
             return empty;
         }
-        let fd: number;
-        try {
-            fd = openSync(join(dir, FILE), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-        } catch (error) {
-            const code = (error as NodeJS.ErrnoException).code;
-            if (code === 'ENOENT' || code === 'ELOOP') {
-                return empty;
-            }
-            throw error;
+        const fd = openNote(join(dir, FILE));
+        if (fd === null) {
+            return empty;
         }
         try {
             const stat = fstatSync(fd);
-            return stat.isFile() ? { content: readFileSync(fd, 'utf8'), updatedAt: stat.mtimeMs } : empty;
+            return { content: readNote(fd, stat.size), updatedAt: stat.mtimeMs };
         } finally {
             closeSync(fd);
         }
@@ -372,17 +423,17 @@ export class NotesStore {
         const dir = writable ? this.dirOf(paneId) : this.folder(paneId);
         const file = join(dir, FILE);
         if (writable) {
-            chmodIf(dir, 'directory', 0o700);
-            chmodIf(file, 'file', 0o600);
+            chmodNote(file, 0o600);
+            chmodFolder(dir, 0o700);
         } else {
-            chmodIf(file, 'file', 0o400);
+            chmodNote(file, 0o400);
             chmodSync(dir, 0o500);
         }
     }
 
     private removeFiles(paneId: string): void {
         const dir = this.dirOf(paneId);
-        chmodIf(dir, 'directory', 0o700);
+        chmodFolder(dir, 0o700);
         rmSync(dir, { recursive: true, force: true });
         rmSync(join(this.dir, `${paneId}${CHANGED}`), { force: true });
     }

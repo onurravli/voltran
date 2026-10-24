@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { branchFromTitle, type ProjectGit } from '@voltran/shared';
-import { FILTER_CONFIG_ARGS, repositoryFilterOverrides } from './git.ts';
+import { FILTER_CONFIG_ARGS, SUBMODULE_ARGS, repositoryFilterOverrides } from './git.ts';
 
 export type WorktreeRunner = (args: string[], cwd: string) => Promise<{ ok: boolean; stdout: string; stderr: string }>;
 
@@ -79,8 +79,9 @@ export class Worktrees {
         return { root, cwd: resolve(root, prefix.stdout.trim()) };
     }
 
-    // Counts what removing the worktree would lose: uncommitted and untracked files. A worktree whose
-    // folder is gone has nothing left to lose.
+    // Counts what removing the worktree would lose: uncommitted and untracked files, and each
+    // checked-out submodule, whose own changes git status is not let near. A worktree whose folder is
+    // gone has nothing left to lose.
     async changes(root: string): Promise<number> {
         if (!existsSync(root)) {
             return 0;
@@ -89,11 +90,15 @@ export class Worktrees {
         if (!filters) {
             throw new WorktreeError(`the repository of ${root} names a filter Voltran cannot switch off, so it did not read the status`);
         }
-        const status = await this.run([...filters, '--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '-z'], root);
-        if (!status.ok) {
-            throw new WorktreeError(gitMessage(status.stderr, `git could not read the status of ${root}`));
+        const status = await this.run([...filters, '--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '-z', ...SUBMODULE_ARGS], root);
+        const index = await this.run(['ls-files', '--stage', '-z'], root);
+        if (!status.ok || !index.ok) {
+            throw new WorktreeError(gitMessage(status.ok ? index.stderr : status.stderr, `git could not read the status of ${root}`));
         }
-        return status.stdout.split('\0').filter((entry) => /^[ MADRCUT?!]{2} /.test(entry)).length;
+        const submodules = index.stdout.split('\0')
+            .filter((entry) => entry.startsWith('160000 '))
+            .filter((entry) => existsSync(join(root, entry.slice(entry.indexOf('\t') + 1), '.git')));
+        return status.stdout.split('\0').filter((entry) => /^[ MADRCUT?!]{2} /.test(entry)).length + submodules.length;
     }
 
     async remove(folder: string, root: string): Promise<void> {

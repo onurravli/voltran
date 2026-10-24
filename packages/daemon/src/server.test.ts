@@ -648,6 +648,9 @@ describe('agent panes', () => {
         expect((await api<PaneNotes>('GET', `/api/panes/${paneId}/notes`)).body.content).toBe('agent progress\n');
         await until(() => output.replace(/\s+/g, ' ').includes(`Notes file: ${notesFile}`));
         expect(output).toContain('# Voltran pane notes');
+        expect(output).not.toContain('Voltran did not answer');
+        expect((await fetch(`${base}/api/hooks/${paneId}/notes`)).status).toBe(401);
+        expect((await fetch(`${base}/api/hooks/${paneId}/notes`, { headers: { Authorization: `Bearer ${daemon.token}` } })).status).toBe(403);
 
         socket.close();
         await api('DELETE', `/api/sessions/${session.id}`);

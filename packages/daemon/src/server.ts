@@ -220,6 +220,7 @@ export function createVoltranServer(options: ServerOptions): Server {
     });
 
     const hookPattern = /^\/api\/hooks\/([^/]+)\/([A-Za-z]+)$/;
+    const hookNotesPattern = /^\/api\/hooks\/([^/]+)\/notes$/;
 
     const handleHook = async (req: IncomingMessage, res: ServerResponse, paneId: string, event: string): Promise<void> => {
         const secret = bearerToken(req);
@@ -230,6 +231,16 @@ export function createVoltranServer(options: ServerOptions): Server {
         const payload = await readJson<unknown>(req, HOOK_LIMIT);
         const accepted = hub.hook(decodeURIComponent(paneId), event, secret, payload);
         sendJson(res, accepted ? 200 : 403, accepted ? { ok: true } : { error: 'hook refused' });
+    };
+
+    const handleHookNotes = (req: IncomingMessage, res: ServerResponse, paneId: string): void => {
+        const secret = bearerToken(req);
+        const notes = secret ? hub.hookNotes(decodeURIComponent(paneId), secret) : null;
+        if (notes === null) {
+            sendJson(res, secret ? 403 : 401, { error: secret ? 'hook refused' : 'missing hook secret' });
+            return;
+        }
+        sendText(res, 200, notes);
     };
 
     const serveStatic = (req: IncomingMessage, res: ServerResponse, pathname: string): void => {
@@ -255,13 +266,18 @@ export function createVoltranServer(options: ServerOptions): Server {
         try {
             const { pathname } = requestUrl(req);
             const hookMatch = req.method === 'POST' ? pathname.match(hookPattern) : null;
-            if (hookMatch) {
+            const hookNotesMatch = req.method === 'GET' ? pathname.match(hookNotesPattern) : null;
+            if (hookMatch || hookNotesMatch) {
                 const verdict = guard.checkRequest(req, { allowAnonymous: true });
                 if (!verdict.ok) {
                     sendJson(res, verdict.status, { error: verdict.reason });
                     return;
                 }
-                await handleHook(req, res, hookMatch[1], hookMatch[2]);
+                if (hookMatch) {
+                    await handleHook(req, res, hookMatch[1], hookMatch[2]);
+                } else {
+                    handleHookNotes(req, res, hookNotesMatch![1]);
+                }
                 return;
             }
 
