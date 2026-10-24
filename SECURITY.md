@@ -3,8 +3,10 @@
 ## Reporting a vulnerability
 
 Voltran runs a local server that starts processes, so please do not report a vulnerability in a
-public issue. Email onur@onurravli.com with the steps to reproduce it and what an attacker gains.
-Fixes go to the latest `main`; there are no maintained older releases.
+public issue. [Report it privately on GitHub](https://github.com/onurravli/voltran/security/advisories/new)
+(**Report a vulnerability** on the Security tab), or email onur@onurravli.com, with
+the steps to reproduce it and what an attacker gains. Fixes go to the latest release; there are no
+maintained older releases.
 
 ## What Voltran protects against
 
