@@ -50,6 +50,7 @@ export interface UiState {
     selectedWorkspaceId: string | null;
     focusedPaneId: string | null;
     focusToken: number;
+    pendingReveal: string | null;
     maximizedPaneId: string | null;
     draggingPaneId: string | null;
     draggingSessionId: string | null;
@@ -85,6 +86,7 @@ export interface UiState {
     selectSession: (id: string | null) => void;
     selectWorkspace: (id: string) => void;
     focusPane: (id: string | null, enter?: boolean) => void;
+    revealSession: (id: string) => void;
     toggleMaximize: (id: string) => void;
     setDraggingPane: (id: string | null) => void;
     setDraggingSession: (id: string | null) => void;
@@ -210,6 +212,7 @@ export const useUi = create<UiState>((set, get) => ({
     settingsFile: null,
     focusedPaneId: null,
     focusToken: 0,
+    pendingReveal: null,
     maximizedPaneId: null,
     draggingPaneId: null,
     draggingSessionId: null,
@@ -239,6 +242,12 @@ export const useUi = create<UiState>((set, get) => ({
             focusedPaneId: focusedPaneId && paneIds.has(focusedPaneId) ? focusedPaneId : null,
             maximizedPaneId: maximizedPaneId && paneIds.has(maximizedPaneId) ? maximizedPaneId : null,
         };
+        const { pendingReveal } = get();
+        if (pendingReveal && app.sessions.some((session) => session.id === pendingReveal)) {
+            set({ ...next, pendingReveal: null });
+            get().selectSession(pendingReveal);
+            return;
+        }
         if (get().app === null) {
             set({ ...next, ...enterView({ ...get(), ...next }) });
             return;
@@ -255,6 +264,13 @@ export const useUi = create<UiState>((set, get) => ({
     selectWorkspace: (id) => {
         const next = { selectedWorkspaceId: id, selectedSessionId: null, maximizedPaneId: null, findPaneId: null };
         set({ ...next, ...enterView({ ...get(), ...next }) });
+    },
+    revealSession: (id) => {
+        if (get().app?.sessions.some((session) => session.id === id)) {
+            get().selectSession(id);
+        } else {
+            set({ pendingReveal: id });
+        }
     },
     focusPane: (id, enter = true) => {
         const state = get();

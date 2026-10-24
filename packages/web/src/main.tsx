@@ -47,7 +47,10 @@ useUi.subscribe((state, previous) => {
 
 watchInstallOffer();
 
-void signInFromUrl().then(() => {
+void signInFromUrl().then((sessionId) => {
+    if (sessionId) {
+        useUi.getState().revealSession(sessionId);
+    }
     keepSessionFresh();
     createRoot(document.getElementById('root')!).render(
         <StrictMode>

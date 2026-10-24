@@ -226,6 +226,10 @@ export function createVoltranServer(options: ServerOptions): Server {
         await hub.deleteSession(id, worktree);
         sendJson(res, 200, { ok: true });
     });
+    route('POST', '/api/sessions/:id/reveal', (_req, res, [id]) => {
+        hub.revealSession(id);
+        sendJson(res, 200, { ok: true });
+    });
     route('POST', '/api/sessions/:id/panes', async (req, res, [id]) => sendJson(res, 201, hub.createPane(id, await readJson(req))));
 
     route('POST', '/api/workspaces', async (req, res) => sendJson(res, 201, hub.createWorkspace(await readJson(req))));

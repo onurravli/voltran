@@ -55,6 +55,23 @@ describe('Hub', () => {
         expect(second.hub.state().workspaces).toEqual([expect.objectContaining({ id: workspace.id, layout: { type: 'pane', paneId: kept } })]);
     });
 
+    it('sends the new state before it tells windows to open a session', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'voltran-hub-'));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        const { store, hub } = open(dir);
+        cleanups.push(async () => {
+            await hub.shutdown();
+            store.close();
+        });
+        const project = hub.createProject({ path: dir });
+        const session = await hub.createSession({ projectId: project.id, title: 'new', panes: [{ adapter: 'shell' }] });
+        const events: string[] = [];
+        hub.subscribe((event) => events.push(event.type === 'state' ? `state:${event.state.sessions.some((entry) => entry.id === session.id)}` : event.type));
+        hub.revealSession(session.id);
+        expect(events.slice(-2)).toEqual(['state:true', 'reveal']);
+        expect(() => hub.revealSession('missing')).toThrow(HttpError);
+    });
+
     describe('worktrees', () => {
         const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 

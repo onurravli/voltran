@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { autostartProgram } from './cli.ts';
+import { autostartProgram, parseNewArgs } from './cli.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -40,5 +40,35 @@ describe('autostartProgram', () => {
         const node = join(prefix, 'Cellar/node/26.1.0/bin/node');
         const cli = join(prefix, 'Cellar/voltran/1.0.0/libexec/bin/voltran.mjs');
         expect(autostartProgram(node, node, cli)).toEqual([node, cli, 'up', '--no-open']);
+    });
+});
+
+describe('parseNewArgs', () => {
+    it('starts one Claude Code pane in the current folder by default', () => {
+        expect(parseNewArgs([], '/work/app')).toEqual({ path: '/work/app', panes: [{ adapter: 'claude' }], windowArgs: [] });
+    });
+
+    it('keeps panes in order with their arguments as typed', () => {
+        const parsed = parseNewArgs(['../api', '--pane', 'claude --model opus', '--pane=shell', '--pane', 'command npm run dev -- --port 3000', '--title', 'Refactor auth', '--no-open'], '/work/app');
+        expect(parsed).toEqual({
+            path: '/work/api',
+            title: 'Refactor auth',
+            panes: [{ adapter: 'claude', command: '--model opus' }, { adapter: 'shell' }, { adapter: 'command', command: 'npm run dev -- --port 3000' }],
+            windowArgs: ['--no-open'],
+        });
+    });
+
+    it('reads a worktree branch and an optional base', () => {
+        expect(parseNewArgs(['--worktree', 'feat/pipeline'], '/w').worktree).toEqual({ branch: 'feat/pipeline' });
+        expect(parseNewArgs(['--worktree=feat/pipeline:main'], '/w').worktree).toEqual({ branch: 'feat/pipeline', base: 'main' });
+    });
+
+    it('rejects what it cannot run', () => {
+        expect(() => parseNewArgs(['--pane', 'vim'])).toThrow('unknown pane "vim"');
+        expect(() => parseNewArgs(['--pane', 'command'])).toThrow('needs the command');
+        expect(() => parseNewArgs(['--pane', 'shell ls'])).toThrow('takes no arguments');
+        expect(() => parseNewArgs(['--title'])).toThrow('--title needs a value');
+        expect(() => parseNewArgs(['--claude'])).toThrow('unknown option --claude');
+        expect(() => parseNewArgs(['a', 'b'])).toThrow('one folder at most');
     });
 });

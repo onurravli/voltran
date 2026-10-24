@@ -59,6 +59,7 @@ is already open, `voltran up` does not open another one.
 |---|---|
 | `voltran up [--browser] [--no-open] [--new]` | Start the daemon if needed and open the UI, unless a Voltran window is already open (`--new` opens another anyway) |
 | `voltran add [path] [--name <name>]` | Register a folder as a project (defaults to the current folder) |
+| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, or `command` followed by a command to run. Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |

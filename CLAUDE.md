@@ -17,7 +17,7 @@ npm run build                    # builds packages/web/dist, which the daemon se
 npm run package                  # the npm package in build/npm (compiled JS, built UI)
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
 npm run dev:web                  # Vite on :4774, proxies /api and /ws to the daemon
-node bin/voltran.mjs up|down|status|add|autostart   # the CLI, same as `voltran` after npm link
+node bin/voltran.mjs up|down|status|add|new|autostart   # the CLI, same as `voltran` after npm link
 ```
 
 There is no linter or formatter; match the surrounding code (4-space indent, single quotes, no

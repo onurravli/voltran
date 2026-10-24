@@ -59,17 +59,20 @@ export function socketProtocols(): string[] {
 
 // `voltran up` opens /auth?code=…: the one-time code is traded for this window's credential and
 // dropped from the address bar before anything else runs.
-export async function signInFromUrl(): Promise<void> {
+// Resolves to the session `voltran new` asked the window to open, if any.
+export async function signInFromUrl(): Promise<string | null> {
     if (window.location.pathname !== '/auth') {
-        return;
+        return null;
     }
-    const code = new URLSearchParams(window.location.search).get('code');
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
     window.history.replaceState(null, '', '/');
     if (!code) {
-        return;
+        return null;
     }
     // On failure the window stays signed out and says how to sign in.
     await storeSession(fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) }));
+    return params.get('session');
 }
 
 async function storeSession(response: Promise<Response>): Promise<void> {

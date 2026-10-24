@@ -79,6 +79,8 @@ export function connectEvents(): () => void {
                 useUi.getState().setApp(event.state);
             } else if (event.type === 'version') {
                 useUi.getState().setVersion({ ui: event.ui, behind: event.behind });
+            } else if (event.type === 'reveal') {
+                useUi.getState().revealSession(event.sessionId);
             } else if (event.type === 'attention') {
                 notifyAttention(event);
             } else if (event.type === 'notes') {

@@ -5,6 +5,8 @@ full.
 
 ## Unreleased
 
+- `voltran new` opens a session from the terminal, with the panes, title and worktree you give it,
+  and shows it in the window: `voltran new . --pane "claude --model opus" --pane shell`.
 - Option-drag selects text in a pane whose program takes the mouse, such as Claude Code in
   fullscreen mode.
 - Switching to a session, workspace or pane puts the keyboard in its terminal, on the pane you

@@ -800,6 +800,18 @@ export class Hub {
         });
     }
 
+    // The state goes out first, so a window that is told to open a session it has just been created
+    // already knows it.
+    revealSession(id: string): void {
+        this.mustGetSession(id);
+        if (this.broadcastTimer) {
+            clearTimeout(this.broadcastTimer);
+            this.broadcastTimer = null;
+        }
+        this.emit({ type: 'state', state: this.state() });
+        this.emit({ type: 'reveal', sessionId: id });
+    }
+
     private scheduleBroadcast(): void {
         if (this.broadcastTimer) {
             return;

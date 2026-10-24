@@ -270,6 +270,7 @@ export type ServerEvent =
     | ({ type: 'settings' } & SettingsState)
     | ({ type: 'version' } & VersionInfo)
     | ({ type: 'notes'; paneId: string; by: NotesAuthor; holder: string | null } & PaneNotes)
+    | { type: 'reveal'; sessionId: string }
     | {
         type: 'attention';
         paneId: string;

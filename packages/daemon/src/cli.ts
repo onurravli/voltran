@@ -1,8 +1,9 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bugReportUrl, formatDiagnostics, type AppState } from '@voltran/shared';
+import { bugReportUrl, formatDiagnostics, type AppState, type CreateSessionBody, type PaneSpec, type Project } from '@voltran/shared';
 import { resolveShellPath } from './adapters.ts';
 import { DEV_WEB_PORT, REPO_ROOT, ensureHome, loadConfig, privateFile, readOrCreateToken, voltranVersion, writeNewToken, type Config } from './config.ts';
 import { diagnose, type DaemonInfo } from './doctor.ts';
@@ -27,6 +28,8 @@ Local multi-agent session and terminal orchestrator
 Usage:
   voltran up [--browser] [--no-open] [--new]   start the daemon if needed and open the UI
   voltran add [path] [--name <name>]   register a folder as a project (default: current dir)
+  voltran new [path] [--pane <agent> [args]]… [--title <title>] [--worktree <branch>[:<base>]]
+                                       open a session in a folder, registering it as a project if needed
   voltran status                       show daemon and attention summary
   voltran down                         stop the daemon (agents resume on next open)
   voltran restart                      restart the daemon to load new code; takes up's options
@@ -41,6 +44,14 @@ Options:
   --browser   open in the default browser instead of a Chrome app window
   --no-open   do not open any window
   --new       open a window even if Voltran is already open in one
+
+new:
+  --pane      a pane, in order: claude, codex, opencode, antigravity or shell, followed by
+              arguments for it, or command and a command to run. Repeat it for more panes;
+              without it the session starts with one Claude Code pane.
+              voltran new . --pane "claude --model opus" --pane "command npm run dev"
+  --title     the session's title; agents name an untitled session from its first prompt
+  --worktree  work in a new git worktree on this branch, from <base> or the current HEAD
 
 Environment:
   VOLTRAN_PORT  (default 4747)   VOLTRAN_HOME  (default ~/.voltran)`;
@@ -170,26 +181,29 @@ async function waitForWindows(api: Client, timeoutMs: number): Promise<number> {
     return 0;
 }
 
-async function up(args: string[]): Promise<void> {
-    const api = client();
+async function startIfNeeded(api: Client): Promise<boolean> {
     ensureUiBuilt(api.config);
-
-    let started = false;
     if (await isRunning(api)) {
         console.log(`Voltran is running on ${api.config.url}`);
-    } else {
-        startDaemonProcess(api.config);
-        if (!(await waitUntilRunning(api, 15_000))) {
-            console.error(`Voltran did not start. See ${api.config.logFile}`);
-            process.exit(1);
-        }
-        started = true;
-        console.log(`Voltran started on ${api.config.url}`);
+        return false;
     }
+    startDaemonProcess(api.config);
+    if (!(await waitUntilRunning(api, 15_000))) {
+        console.error(`Voltran did not start. See ${api.config.logFile}`);
+        process.exit(1);
+    }
+    console.log(`Voltran started on ${api.config.url}`);
+    return true;
+}
+
+async function up(args: string[]): Promise<void> {
+    const api = client();
+    const started = await startIfNeeded(api);
     await openUi(api, args, started);
 }
 
-async function openUi(api: Client, args: string[], started: boolean): Promise<void> {
+// With a session, a window that is already open switches to it; a new window opens on it.
+async function openUi(api: Client, args: string[], started: boolean, sessionId?: string): Promise<void> {
     if (args.includes('--no-open')) {
         return;
     }
@@ -199,6 +213,10 @@ async function openUi(api: Client, args: string[], started: boolean): Promise<vo
             console.log(`Waiting for the open Voltran ${previous === 1 ? 'window' : 'windows'} to reconnect…`);
             open = await waitForWindows(api, 8000);
         }
+        if (open > 0 && sessionId) {
+            await api.request('POST', `/api/sessions/${sessionId}/reveal`);
+            return;
+        }
         if (open > 0) {
             console.log(`Voltran is already open in ${open === 1 ? 'a window' : `${open} windows`}. Use \`voltran up --new\` to open another.`);
             return;
@@ -206,7 +224,7 @@ async function openUi(api: Client, args: string[], started: boolean): Promise<vo
     }
     const { code } = await api.request<{ code: string }>('POST', '/api/login-code');
     const base = api.config.dev ? `http://localhost:${DEV_WEB_PORT}` : api.config.url;
-    openWindow(base, `/auth?code=${code}`, args.includes('--browser'));
+    openWindow(base, `/auth?code=${code}${sessionId ? `&session=${sessionId}` : ''}`, args.includes('--browser'));
 }
 
 async function down(): Promise<void> {
@@ -372,6 +390,98 @@ async function add(args: string[]): Promise<void> {
     console.log(`Added project ${project.name} → ${project.path}`);
 }
 
+export interface NewSessionArgs {
+    path: string;
+    title?: string;
+    panes: PaneSpec[];
+    worktree?: { branch: string; base?: string };
+    windowArgs: string[];
+}
+
+const PANE_ADAPTERS = new Set(['claude', 'codex', 'opencode', 'antigravity', 'shell', 'command']);
+
+// A pane is its adapter's name and the rest of the words as they were typed: arguments for an agent,
+// or the command line of a `command` pane.
+export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArgs {
+    const result: NewSessionArgs = { path: cwd, panes: [], windowArgs: [] };
+    const positional: string[] = [];
+    for (let index = 0; index < args.length; index++) {
+        const arg = args[index];
+        const [flag, inline] = arg.startsWith('--') && arg.includes('=') ? [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)] : [arg, undefined];
+        const value = (): string => {
+            const next = inline ?? args[++index];
+            if (next === undefined || next === '') {
+                throw new Error(`${flag} needs a value`);
+            }
+            return next;
+        };
+        if (flag === '--pane') {
+            const spec = value().trim();
+            const [adapter] = spec.split(/\s+/, 1);
+            const rest = spec.slice(adapter.length).trim();
+            if (!PANE_ADAPTERS.has(adapter)) {
+                throw new Error(`unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell or command`);
+            }
+            if (adapter === 'command' && !rest) {
+                throw new Error('a command pane needs the command to run, such as --pane "command npm run dev"');
+            }
+            if (adapter === 'shell' && rest) {
+                throw new Error('a shell pane takes no arguments; use --pane "command …" to run a command');
+            }
+            result.panes.push(rest ? { adapter, command: rest } as PaneSpec : { adapter } as PaneSpec);
+        } else if (flag === '--title') {
+            result.title = value();
+        } else if (flag === '--worktree') {
+            const [branch, base] = value().split(':', 2);
+            result.worktree = base ? { branch, base } : { branch };
+        } else if (flag === '--no-open' || flag === '--browser' || flag === '--new') {
+            result.windowArgs.push(flag);
+        } else if (arg.startsWith('-')) {
+            throw new Error(`unknown option ${arg}`);
+        } else {
+            positional.push(arg);
+        }
+    }
+    if (positional.length > 1) {
+        throw new Error(`one folder at most, got ${positional.join(' ')}`);
+    }
+    if (positional[0]) {
+        result.path = resolve(cwd, positional[0].replace(/^~(?=$|\/)/, homedir()));
+    }
+    if (result.panes.length === 0) {
+        result.panes.push({ adapter: 'claude' });
+    }
+    return result;
+}
+
+async function newSession(args: string[]): Promise<void> {
+    let parsed: NewSessionArgs;
+    try {
+        parsed = parseNewArgs(args);
+    } catch (error) {
+        console.error(`voltran new: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(1);
+    }
+    const api = client();
+    const started = await startIfNeeded(api);
+    try {
+        const state = await api.request<AppState>('GET', '/api/state');
+        let project = state.projects.find((entry) => entry.path === parsed.path);
+        if (!project) {
+            project = await api.request<Project>('POST', '/api/projects', { path: parsed.path });
+            console.log(`Added project ${project.name} → ${project.path}`);
+        }
+        const body: CreateSessionBody = { projectId: project.id, title: parsed.title, panes: parsed.panes, worktree: parsed.worktree };
+        const session = await api.request<{ id: string; title: string; cwd: string }>('POST', '/api/sessions', body);
+        console.log(`Opened ${parsed.title ? `"${withoutControls(session.title)}"` : 'a session'} in ${session.cwd}`);
+        console.log(session.id);
+        await openUi(api, parsed.windowArgs, started, session.id);
+    } catch (error) {
+        console.error(`voltran new: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(1);
+    }
+}
+
 // A new token signs out every window and every copy of a browser credential, wherever it went.
 async function signout(): Promise<void> {
     const api = client();
@@ -427,6 +537,8 @@ export async function runCli(argv: string[]): Promise<void> {
             return status();
         case 'add':
             return add(args);
+        case 'new':
+            return newSession(args);
         case 'autostart':
             return autostart(args);
         case 'signout':
