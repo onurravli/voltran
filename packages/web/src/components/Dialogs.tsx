@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { branchFromTitle, commandPane, type AdapterId, type AdapterInfo, type PaneSpec, type ProjectGit } from '@voltran/shared';
 import { api } from '../api.ts';
-import { FIND_KEYS, SHORTCUTS } from '../shortcuts.ts';
+import { FIND_KEYS, SHORTCUTS, reportProblem } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
 import { CommandPalette } from './CommandPalette.tsx';
+import { VoltranMark } from './Icons.tsx';
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Modal({ title, onClose, children, className, hideTitle = false }: { title: string; onClose: () => void; children: ReactNode; className?: string; hideTitle?: boolean }) {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -17,7 +18,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
             }
         };
         window.addEventListener('keydown', onKeyDown);
-        const first = ref.current?.querySelector<HTMLElement>('input, select, button');
+        const first = ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('input, select, button');
         first?.focus();
         return () => {
             window.removeEventListener('keydown', onKeyDown);
@@ -27,8 +28,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
     return (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-            <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
-                <h2 className="modal__title">{title}</h2>
+            <div className={`modal${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}>
+                {hideTitle ? null : <h2 className="modal__title">{title}</h2>}
                 {children}
             </div>
         </div>
@@ -311,6 +312,39 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     );
 }
 
+const REPOSITORY = 'https://github.com/onurravli/voltran';
+
+function AboutDialog({ onClose }: { onClose: () => void }) {
+    const [version, setVersion] = useState<string | null>(null);
+
+    useEffect(() => {
+        api.health().then((health) => setVersion(health.version)).catch(() => undefined);
+    }, []);
+
+    return (
+        <Modal title="About Voltran" onClose={onClose} className="modal--about" hideTitle>
+            <div className="about">
+                <VoltranMark size={44} form />
+                <h2 className="about__name">Voltran</h2>
+                <p className="about__version">{version ? `Version ${version}` : '\u00a0'}</p>
+                <p className="about__tagline">Local multi-agent session and terminal orchestrator</p>
+                <p className="about__author">
+                    Made by <a href="https://github.com/onurravli" target="_blank" rel="noreferrer noopener">Onur Ravli</a>
+                </p>
+                <nav className="about__links" aria-label="Voltran links">
+                    <a href={REPOSITORY} target="_blank" rel="noreferrer noopener">GitHub</a>
+                    <a href={`${REPOSITORY}/blob/main/CHANGELOG.md`} target="_blank" rel="noreferrer noopener">Changelog</a>
+                    <a href={`${REPOSITORY}/blob/main/LICENSE.md`} target="_blank" rel="noreferrer noopener">Apache-2.0</a>
+                    <button type="button" className="about__link-button" onClick={() => { onClose(); reportProblem(); }}>Report a problem</button>
+                </nav>
+            </div>
+            <div className="form__actions">
+                <button type="button" className="button button--primary" data-autofocus onClick={onClose}>Close</button>
+            </div>
+        </Modal>
+    );
+}
+
 export function Dialogs() {
     const dialog = useUi((state) => state.dialog);
     const openDialog = useUi((state) => state.openDialog);
@@ -330,6 +364,8 @@ export function Dialogs() {
             return <ShortcutsDialog onClose={close} />;
         case 'palette':
             return <CommandPalette onClose={close} />;
+        case 'about':
+            return <AboutDialog onClose={close} />;
     }
 }
 

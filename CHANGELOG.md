@@ -5,6 +5,8 @@ full.
 
 ## Unreleased
 
+- Click the Voltran logo, or ⌘K → **About Voltran**, for the version, the author and links to the
+  repository, the changelog and the license.
 - Click the number of changed files in a session's header, or press ⌃⌥G, to see the diff of every
   changed file without leaving Voltran.
 - `voltran new` opens a session from the terminal, with the panes, title and worktree you give it,

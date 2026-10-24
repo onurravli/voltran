@@ -157,6 +157,7 @@ export const api = {
     updateSettings: (patch: SettingsPatch) => request<SettingsState>('PATCH', '/api/settings', patch),
     openSettings: () => request<{ path: string }>('POST', '/api/settings/open'),
     editSettings: (body: EditSettingsBody) => request<Pane>('POST', '/api/settings/edit', body),
+    health: () => request<{ version: string }>('GET', '/api/health'),
     diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
     diff: (sessionId: string, path: string) => request<FileDiff>('GET', `/api/sessions/${sessionId}/diff?path=${encodeURIComponent(path)}`),

@@ -14,6 +14,7 @@ export type Dialog =
     | { kind: 'session'; projectId?: string; worktree?: boolean }
     | { kind: 'shortcuts' }
     | { kind: 'palette' }
+    | { kind: 'about' }
     | {
         kind: 'confirm';
         title: string;

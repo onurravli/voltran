@@ -659,10 +659,10 @@ export function Sidebar() {
     return (
         <aside className="sidebar">
             <header className="sidebar__header">
-                <div className="wordmark">
+                <button type="button" className="wordmark" title="About Voltran" onClick={() => openDialog({ kind: 'about' })}>
                     <VoltranMark size={18} form />
                     <span>Voltran</span>
-                </div>
+                </button>
                 <button
                     type="button"
                     className="icon-button icon-button--bar"

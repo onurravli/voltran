@@ -203,6 +203,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
             { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
             { id: 'report-problem', label: 'Report a problem…', keywords: 'bug issue feedback doctor diagnostics github', run: reportProblem },
+            { id: 'about', label: 'About Voltran', keywords: 'version author license github', run: () => useUi.getState().openDialog({ kind: 'about' }) },
             ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),
             ...SHORTCUTS
                 .filter((shortcut) => shortcut.run !== togglePalette)
