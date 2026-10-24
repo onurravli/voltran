@@ -38,6 +38,7 @@ interface Runtime {
     attachments: Set<Attachment>;
     tracker: ActivityTracker | null;
     hooked: boolean;
+    asking: boolean;
     opencode: OpencodeStatus | null;
     subagents: SubagentTracker;
     cols: number;
@@ -174,16 +175,13 @@ export class PaneManager {
             return;
         }
         runtime.pty.write(data);
-        if (!isUserInput(data)) {
+        if (!isTyped(data)) {
             return;
         }
-        if (isTyped(data)) {
-            this.options.onUserInput?.();
-            // Claude sends no hook when the user cancels a question, plan or permission prompt with Esc, so a
-            // keystroke ends the wait and the silence check returns a cancelled prompt to idle.
-            if (runtime.pane.adapter === 'claude' && runtime.state.status === 'needs-input') {
-                this.setStatus(runtime, { status: 'working', detail: null });
-            }
+        this.options.onUserInput?.();
+        // Claude sends no hook when the user cancels a question, plan or permission prompt with Esc or ⌃C.
+        if (runtime.pane.adapter === 'claude' && runtime.state.status === 'needs-input' && (data === '\x1b' || data === '\x03')) {
+            this.setStatus(runtime, { status: 'idle', detail: 'Interrupted' });
         }
         runtime.tracker?.input();
         if (runtime.state.status === 'done') {
@@ -320,9 +318,12 @@ export class PaneManager {
             runtime.state.subagents = runtime.subagents.list();
             this.notifyViewers(runtime, before);
         }
-        const change = claudeTransition(event, payload);
+        // A background subagent's tool calls go on while the main session waits for the user's answer.
+        const fromSubagent = typeof payload.agent_id === 'string' && (event === 'PreToolUse' || event === 'PostToolUse');
+        const change = runtime.asking && fromSubagent ? null : claudeTransition(event, payload);
         if (change) {
             this.setStatus(runtime, change);
+            runtime.asking ||= event === 'PreToolUse' && change.status === 'needs-input';
         }
         if (!change || subagentsChanged) {
             this.options.onChange();
@@ -423,6 +424,7 @@ export class PaneManager {
             attachments: new Set(),
             tracker: null,
             hooked: false,
+            asking: false,
             opencode: pane.adapter === 'opencode' ? new OpencodeStatus() : null,
             subagents: new SubagentTracker(locateSubagent),
             cols: 120,
@@ -654,6 +656,9 @@ export class PaneManager {
         }
         runtime.state.status = change.status;
         runtime.state.detail = change.detail;
+        if (change.status !== 'needs-input') {
+            runtime.asking = false;
+        }
         if (previous !== change.status) {
             runtime.state.statusAt = Date.now();
         }
@@ -723,11 +728,6 @@ export class PaneManager {
 
 // Terminals emit focus reports (ESC [ I / ESC [ O) on their own when a pane gains or loses
 // focus; they say nothing about the user having read the pane.
-const FOCUS_REPORT = /\x1b\[[IO]/g;
-
-function isUserInput(data: string): boolean {
-    return data.replace(FOCUS_REPORT, '').length > 0;
-}
 
 // xterm.js answers a program's device, cursor, mode, window and colour queries through the same input
 // channel as keystrokes, while nobody is at the keyboard.

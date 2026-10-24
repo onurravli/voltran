@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } 
 import { request } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Pairing, deviceName, makeCertificates } from './pairing.ts';
 import { PushDevices, type PushDevice } from './push.ts';
@@ -128,6 +129,27 @@ describe('Pairing', () => {
         expect((await fetchPairing(port, ca, `/p/${code}`)).status).toBe(404);
         await new Promise((resolveWait) => setTimeout(resolveWait, 2200));
         expect(pairing.view()).toBeNull();
+    });
+
+    it('installs the phone\'s service worker without an icon to cache', async () => {
+        const { port, ca } = await startPairing();
+        const worker = await fetchPairing(port, ca, '/sw.js');
+        expect(worker.status).toBe(200);
+        const listeners = new Map<string, (event: unknown) => void>();
+        let installed: Promise<unknown> | null = null;
+        const add = async (path: string): Promise<void> => {
+            const { status } = await fetchPairing(port, ca, path);
+            if (status !== 200) {
+                throw new TypeError(`${path} answered ${status}`);
+            }
+        };
+        const cache = { add, addAll: (paths: string[]) => Promise.all(paths.map(add)) };
+        runInNewContext(worker.body, {
+            self: { addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener), skipWaiting: () => undefined },
+            caches: { open: async () => cache },
+        });
+        listeners.get('install')!({ waitUntil: (promise: Promise<unknown>) => { installed = promise; } });
+        await expect(installed).resolves.toBeDefined();
     });
 
     it('opens one listener when asked twice at once', async () => {

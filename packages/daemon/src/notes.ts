@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
     chmodSync,
     closeSync,
@@ -10,14 +10,13 @@ import {
     openSync,
     readdirSync,
     readSync,
-    renameSync,
     rmSync,
     watch,
-    writeFileSync,
     type FSWatcher,
 } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { MAX_NOTES_BYTES, type NotesAuthor, type NotesMeta, type PaneNotes } from '@voltran/shared';
+import { replaceFile } from './files.ts';
 
 const FILE = 'notes.md';
 const GUIDE = 'GUIDE.md';
@@ -97,16 +96,6 @@ const kindOf = (path: string): 'file' | 'directory' | 'other' | null => {
 // Agents can write in the notes folders, so anything there may be a link they planted. Files are
 // replaced through a fresh temporary name that open refuses to follow, and only real files and
 // folders get their modes changed.
-function replaceFile(dir: string, name: string, content: string, mode: number): void {
-    const temporary = join(dir, `.${name}.${randomBytes(8).toString('hex')}.tmp`);
-    try {
-        writeFileSync(temporary, content, { mode, flag: 'wx' });
-        renameSync(temporary, join(dir, name));
-    } finally {
-        rmSync(temporary, { force: true });
-    }
-}
-
 function chmodFolder(path: string, mode: number): void {
     if (kindOf(path) === 'directory') {
         chmodSync(path, mode);

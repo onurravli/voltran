@@ -374,11 +374,11 @@ describe('PaneManager', () => {
         runtime.pty = null;
     });
 
-    it('lets a Claude question the user cancelled at the keyboard fall back to idle', () => {
-        const { manager } = setup(undefined, { hooksSilenceMs: 100 });
+    it('ends a Claude question the user cancels with Esc, and only then', () => {
+        const { manager } = setup();
         const pane = makePane({ adapter: 'claude', command: null });
         manager.add(pane);
-        const internals = manager as unknown as { maintain(): void; runtimes: Map<string, { hookSecret: string | null; pty: unknown; lastOutputAt: number }> };
+        const internals = manager as unknown as { runtimes: Map<string, { hookSecret: string | null; pty: unknown }> };
         const runtime = internals.runtimes.get(pane.id)!;
         runtime.hookSecret = 'per-spawn-secret';
         runtime.pty = { process: 'claude', write: () => undefined };
@@ -388,10 +388,46 @@ describe('PaneManager', () => {
         manager.input(pane.id, '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07');
         expect(view(manager, pane.id).status).toBe('needs-input');
 
+        manager.input(pane.id, '\x1b[B');
+        manager.input(pane.id, '2');
+        expect(view(manager, pane.id).status).toBe('needs-input');
+
         manager.input(pane.id, '\x1b');
+        expect(view(manager, pane.id)).toMatchObject({ status: 'idle', detail: 'Interrupted' });
+        runtime.pty = null;
+    });
+
+    it('keeps a Claude question open while a background subagent calls tools', () => {
+        const { manager } = setup();
+        const pane = makePane({ adapter: 'claude', command: null });
+        manager.add(pane);
+        const internals = manager as unknown as Internals;
+        internals.runtimes.get(pane.id)!.hookSecret = 'per-spawn-secret';
+
+        manager.hook(pane.id, 'per-spawn-secret', 'PreToolUse', { tool_name: 'ExitPlanMode' });
+        manager.hook(pane.id, 'per-spawn-secret', 'PreToolUse', { tool_name: 'Bash', agent_id: 'a1' });
+        manager.hook(pane.id, 'per-spawn-secret', 'PostToolUse', { tool_name: 'Bash', agent_id: 'a1' });
+        expect(view(manager, pane.id)).toMatchObject({ status: 'needs-input', detail: 'Plan ready for review' });
+
+        manager.hook(pane.id, 'per-spawn-secret', 'PostToolUse', { tool_name: 'ExitPlanMode' });
         expect(view(manager, pane.id).status).toBe('working');
-        runtime.lastOutputAt = Date.now() - 1000;
-        internals.maintain();
+        manager.hook(pane.id, 'per-spawn-secret', 'Notification', { notification_type: 'permission_prompt', message: 'Allow Bash?' });
+        manager.hook(pane.id, 'per-spawn-secret', 'PostToolUse', { tool_name: 'Bash', agent_id: 'a1' });
+        expect(view(manager, pane.id).status).toBe('working');
+    });
+
+    it('keeps a finished pane done when the terminal answers a query on its own', () => {
+        const { manager } = setup();
+        const pane = makePane({ adapter: 'claude', command: null });
+        manager.add(pane);
+        const internals = manager as unknown as { runtimes: Map<string, { hookSecret: string | null; pty: unknown }> };
+        const runtime = internals.runtimes.get(pane.id)!;
+        runtime.hookSecret = 'per-spawn-secret';
+        runtime.pty = { process: 'claude', write: () => undefined };
+        manager.hook(pane.id, 'per-spawn-secret', 'Stop', { last_assistant_message: 'Fixed.' });
+        manager.input(pane.id, '\x1b[12;5R');
+        expect(view(manager, pane.id).status).toBe('done');
+        manager.input(pane.id, 'a');
         expect(view(manager, pane.id).status).toBe('idle');
         runtime.pty = null;
     });

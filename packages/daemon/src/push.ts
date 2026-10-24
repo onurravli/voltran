@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STATUS_LABEL, type AttentionStatus, type PushDeviceView, type Settings } from '@voltran/shared';
+import { replaceFile } from './files.ts';
 import { withoutControls } from './status.ts';
 import { generateVapidKeys, sendPush, validSubscription, type PushSender, type PushSubscription, type VapidKeys } from './webpush.ts';
 
@@ -28,12 +29,6 @@ const MIN_GAP_MS = 60_000;
 const MAX_LINES = 4;
 const MAX_LINE = 140;
 const MAX_ERROR = 120;
-
-function writePrivate(file: string, data: string): void {
-    const temp = `${file}.${randomUUID()}.tmp`;
-    writeFileSync(temp, data, { mode: 0o600 });
-    renameSync(temp, file);
-}
 
 export class PushDevices {
     private readonly dir: string;
@@ -73,7 +68,7 @@ export class PushDevices {
     }
 
     private save(): void {
-        writePrivate(this.devicesFile, `${JSON.stringify(this.devices, null, 4)}\n`);
+        replaceFile(this.dir, 'devices.json', `${JSON.stringify(this.devices, null, 4)}\n`, 0o600);
     }
 
     vapid(): VapidKeys {
@@ -94,7 +89,7 @@ export class PushDevices {
             }
         }
         this.keys = generateVapidKeys();
-        writePrivate(file, JSON.stringify(this.keys));
+        replaceFile(this.dir, 'vapid.json', JSON.stringify(this.keys), 0o600);
         return this.keys;
     }
 
@@ -179,6 +174,7 @@ export class PushNotifier {
     private readonly now: () => number;
     private waiting = new Map<string, Waiting>();
     private timer: ReturnType<typeof setTimeout> | null = null;
+    private timerAt = 0;
     private lastInputAt = 0;
     private lastPushAt = -Infinity;
 
@@ -202,12 +198,18 @@ export class PushNotifier {
     }
 
     private schedule(delayMs: number): void {
-        if (!this.timer) {
-            this.timer = setTimeout(() => {
-                this.timer = null;
-                this.flush().catch((error: unknown) => console.error('[voltran] could not send a push notification:', error));
-            }, Math.max(0, delayMs));
+        const at = this.now() + Math.max(0, delayMs);
+        if (this.timer && this.timerAt <= at) {
+            return;
         }
+        if (this.timer) {
+            clearTimeout(this.timer);
+        }
+        this.timerAt = at;
+        this.timer = setTimeout(() => {
+            this.timer = null;
+            this.flush().catch((error: unknown) => console.error('[voltran] could not send a push notification:', error));
+        }, at - this.now());
     }
 
     async flush(): Promise<void> {

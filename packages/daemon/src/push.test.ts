@@ -181,6 +181,19 @@ describe('PushNotifier', () => {
         expect(sent).toHaveLength(2);
     });
 
+    it('does not hold a pane behind an older, longer wait', async () => {
+        const settings: Partial<Settings['push']> = { delaySeconds: 3600 };
+        const { notifier, sent } = setup(settings);
+        notifier.attention(item('a'));
+        settings.delaySeconds = 30;
+        await vi.advanceTimersByTimeAsync(10_000);
+        notifier.attention(item('b'));
+        await vi.advanceTimersByTimeAsync(29_000);
+        expect(sent).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(sent.map((entry) => (entry.payload as { body: string }).body)).toEqual(['2 panes need your input']);
+    });
+
     it('drops what is waiting when notifications are turned off before the delay ends', async () => {
         const settings: Partial<Settings['push']> = { events: ['needs-input', 'done'] };
         const { notifier, sent } = setup(settings, (paneId) => (paneId === 'a' ? 'needs-input' : 'done'));

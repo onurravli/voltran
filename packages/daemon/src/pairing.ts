@@ -204,7 +204,7 @@ const DONE_PAGE = page('<h1>Voltran</h1><p>Go back to your computer: an agent is
 
 const SERVICE_WORKER = `
 self.addEventListener('install', (event) => {
-    event.waitUntil(caches.open('voltran').then((cache) => cache.addAll(['/done', '/icon.png'])));
+    event.waitUntil(caches.open('voltran').then((cache) => Promise.all([cache.add('/done'), cache.add('/icon.png').catch(() => undefined)])));
     self.skipWaiting();
 });
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
