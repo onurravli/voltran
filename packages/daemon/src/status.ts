@@ -21,6 +21,20 @@ const oneLine = (value: unknown, max: number): string | null => {
     return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 };
 
+// Claude sends no Notification while it asks a question or shows a plan for approval; the tool call
+// itself is the only sign that it waits for the user.
+function claudeToolWaits(payload: Record<string, unknown>): StatusChange | null {
+    const input = payload.tool_input && typeof payload.tool_input === 'object' ? payload.tool_input as Record<string, unknown> : {};
+    if (payload.tool_name === 'AskUserQuestion') {
+        const first = Array.isArray(input.questions) ? input.questions[0] as Record<string, unknown> | undefined : undefined;
+        return { status: 'needs-input', detail: oneLine(first?.question, 200) ?? 'Claude is asking you a question' };
+    }
+    if (payload.tool_name === 'ExitPlanMode') {
+        return { status: 'needs-input', detail: 'Plan ready for review' };
+    }
+    return null;
+}
+
 export function claudeTransition(event: ClaudeHookEvent, payload: Record<string, unknown>): StatusChange | null {
     switch (event) {
         case 'SessionStart':
@@ -28,6 +42,7 @@ export function claudeTransition(event: ClaudeHookEvent, payload: Record<string,
         case 'UserPromptSubmit':
             return { status: 'working', detail: oneLine(payload.prompt, 160) };
         case 'PreToolUse':
+            return claudeToolWaits(payload) ?? { status: 'working', detail: oneLine(payload.tool_name, 80) };
         case 'PostToolUse':
             return { status: 'working', detail: oneLine(payload.tool_name, 80) };
         case 'Notification': {

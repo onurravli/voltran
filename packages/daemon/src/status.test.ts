@@ -30,6 +30,14 @@ describe('claudeTransition', () => {
         expect(claudeTransition('Notification', {})).toEqual({ status: 'needs-input', detail: 'Waiting for your input' });
     });
 
+    it('treats a question or a plan waiting for approval as needing input until the tool returns', () => {
+        expect(claudeTransition('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which   database?\nPick one', options: [] }] } }))
+            .toEqual({ status: 'needs-input', detail: 'Which database? Pick one' });
+        expect(claudeTransition('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: {} })).toEqual({ status: 'needs-input', detail: 'Claude is asking you a question' });
+        expect(claudeTransition('PreToolUse', { tool_name: 'ExitPlanMode', tool_input: { plan: '...' } })).toEqual({ status: 'needs-input', detail: 'Plan ready for review' });
+        expect(claudeTransition('PostToolUse', { tool_name: 'AskUserQuestion' })).toEqual({ status: 'working', detail: 'AskUserQuestion' });
+    });
+
     it('ignores idle reminders and auth notices', () => {
         expect(claudeTransition('Notification', { notification_type: 'idle_prompt', message: 'Claude is waiting' })).toBeNull();
         expect(claudeTransition('Notification', { notification_type: 'auth_success' })).toBeNull();
