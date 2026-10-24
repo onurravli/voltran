@@ -1,0 +1,63 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Check that the tag matches package.json
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - name: Install an npm that supports trusted publishing
+        run: npm install -g npm@11.12.1
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+      # Trusted publishing: npm accepts this workflow's OIDC token, so there is no npm token to keep.
+      - run: npm publish ./build/npm
+
+  homebrew:
+    needs: npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Point the formula at the new release
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          url="https://registry.npmjs.org/voltran/-/voltran-$version.tgz"
+          curl -fsSL --retry 10 --retry-delay 15 --retry-all-errors -o voltran.tgz "$url"
+          sha256=$(sha256sum voltran.tgz | cut -d' ' -f1)
+
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/homebrew-tap
+          chmod 600 ~/.ssh/homebrew-tap
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/homebrew-tap -o IdentitiesOnly=yes'
+
+          git clone --depth 1 git@github.com:onurravli/homebrew-tap.git tap
+          sed -i -E "s|^  url \".*\"$|  url \"$url\"|; s|^  sha256 \".*\"$|  sha256 \"$sha256\"|" tap/Formula/voltran.rb
+          if git -C tap diff --quiet; then
+            echo "The formula already points at $version."
+            exit 0
+          fi
+          git -C tap -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -qam "voltran $version"
+          git -C tap push

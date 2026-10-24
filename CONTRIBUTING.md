@@ -77,6 +77,15 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   things work updates CLAUDE.md; both can go in a `docs:` commit of their own.
 - Say how you checked the change: the tests you added, and what you tried by hand.
 
+## Releasing
+
+Bump the version with `npm version <version> --no-git-tag-version`, move the changelog's
+**Unreleased** items under the new version, commit that as `release: <version>`, tag it
+`v<version>` and push both. Publishing a GitHub release for the tag runs
+`.github/workflows/release.yml`, which checks that the tag matches `package.json`, runs the checks,
+publishes the package to npm and points the formula in
+[onurravli/homebrew-tap](https://github.com/onurravli/homebrew-tap) at it.
+
 ## License
 
 Voltran is licensed under the [Apache License 2.0](LICENSE.md). As section 5 of the license says,
