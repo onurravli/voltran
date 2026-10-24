@@ -35,7 +35,6 @@ function writePrivate(file: string, data: string): void {
     renameSync(temp, file);
 }
 
-// Keys and endpoints stay in this folder: a window only ever sees PushDeviceView.
 export class PushDevices {
     private readonly dir: string;
     private devices: PushDevice[] = [];
@@ -58,10 +57,14 @@ export class PushDevices {
             if (!Array.isArray(raw)) {
                 return [];
             }
-            return raw.flatMap((entry: Partial<PushDevice>) => {
+            return raw.flatMap((value: unknown) => {
+                if (!value || typeof value !== 'object') {
+                    return [];
+                }
+                const entry = value as Partial<PushDevice>;
                 const subscription = validSubscription(entry.subscription);
                 return subscription && typeof entry.id === 'string' && typeof entry.name === 'string' && typeof entry.pairedAt === 'number'
-                    ? [{ id: entry.id, name: entry.name, pairedAt: entry.pairedAt, lastSentAt: entry.lastSentAt ?? null, lastError: entry.lastError ?? null, subscription }]
+                    ? [{ id: entry.id, name: entry.name, pairedAt: entry.pairedAt, lastSentAt: typeof entry.lastSentAt === 'number' ? entry.lastSentAt : null, lastError: typeof entry.lastError === 'string' ? entry.lastError : null, subscription }]
                     : [];
             });
         } catch {
@@ -103,7 +106,6 @@ export class PushDevices {
         return this.devices.map(({ subscription: _subscription, ...view }) => view);
     }
 
-    // The same phone pairing again replaces its old entry rather than receiving every push twice.
     add(subscription: PushSubscription, name: string, now = Date.now()): PushDevice {
         const device: PushDevice = { id: randomUUID(), name, pairedAt: now, lastSentAt: null, lastError: null, subscription };
         this.devices = [...this.devices.filter((existing) => existing.subscription.endpoint !== subscription.endpoint), device];
@@ -161,7 +163,6 @@ export function pushMessage(items: PushAttention[], content: PushSettings['conte
 export interface PushNotifierOptions {
     devices: PushDevices;
     settings: () => PushSettings;
-    // Whether the pane still shows this status, i.e. nobody has answered or seen it yet.
     pending: (paneId: string, status: AttentionStatus) => boolean;
     onChange: () => void;
     send?: PushSender;
@@ -196,7 +197,6 @@ export class PushNotifier {
         this.schedule(settings.delaySeconds * 1000);
     }
 
-    // Typing in any pane means the user is at the computer, where the window's own alerts reach them.
     userInput(): void {
         this.lastInputAt = this.now();
     }

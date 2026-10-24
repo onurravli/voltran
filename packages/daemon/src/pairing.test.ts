@@ -70,9 +70,9 @@ function fetchPairing(port: number, ca: string, path: string, options: { method?
 }
 
 describe('makeCertificates', () => {
-    it('makes a CA constrained to the one address, and leaves no key behind', () => {
+    it('makes a CA constrained to the one address, and leaves no key behind', async () => {
         const before = readdirSync(tmpdir()).filter((name) => name.startsWith('voltran-pairing-') && !name.startsWith('voltran-pairing-test-'));
-        const certificates = makeCertificates({ ip: '192.168.1.20', dnsName: 'studio.local' });
+        const certificates = await makeCertificates({ ip: '192.168.1.20', dnsName: 'studio.local' });
         const after = readdirSync(tmpdir()).filter((name) => name.startsWith('voltran-pairing-') && !name.startsWith('voltran-pairing-test-'));
         expect(after).toEqual(before);
 
@@ -140,6 +140,15 @@ describe('Pairing', () => {
         await expect(new Promise((resolveConnect, reject) => {
             request({ host: '127.0.0.1', port: Number(url.port), path: '/', rejectUnauthorized: false }, resolveConnect).on('error', reject).end();
         })).rejects.toThrow(/ECONNREFUSED/);
+    });
+
+    it('opens nothing when stopped while it is still starting', async () => {
+        const { pairing } = await startPairing();
+        pairing.stop();
+        const starting = pairing.start();
+        pairing.stop();
+        await expect(starting).rejects.toThrow('Pairing was stopped.');
+        expect(pairing.view()).toBeNull();
     });
 
     it('closes after ten wrong codes', async () => {

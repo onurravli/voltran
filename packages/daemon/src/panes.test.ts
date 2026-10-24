@@ -373,6 +373,28 @@ describe('PaneManager', () => {
         expect(view(manager, pane.id)).toMatchObject({ status: 'needs-input', detail: 'Waiting at a startup prompt' });
         runtime.pty = null;
     });
+
+    it('lets a Claude question the user cancelled at the keyboard fall back to idle', () => {
+        const { manager } = setup(undefined, { hooksSilenceMs: 100 });
+        const pane = makePane({ adapter: 'claude', command: null });
+        manager.add(pane);
+        const internals = manager as unknown as { maintain(): void; runtimes: Map<string, { hookSecret: string | null; pty: unknown; lastOutputAt: number }> };
+        const runtime = internals.runtimes.get(pane.id)!;
+        runtime.hookSecret = 'per-spawn-secret';
+        runtime.pty = { process: 'claude', write: () => undefined };
+
+        manager.hook(pane.id, 'per-spawn-secret', 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which branch?' }] } });
+        expect(view(manager, pane.id)).toMatchObject({ status: 'needs-input', detail: 'Which branch?' });
+        manager.input(pane.id, '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07');
+        expect(view(manager, pane.id).status).toBe('needs-input');
+
+        manager.input(pane.id, '\x1b');
+        expect(view(manager, pane.id).status).toBe('working');
+        runtime.lastOutputAt = Date.now() - 1000;
+        internals.maintain();
+        expect(view(manager, pane.id).status).toBe('idle');
+        runtime.pty = null;
+    });
 });
 
 describe('isTyped', () => {

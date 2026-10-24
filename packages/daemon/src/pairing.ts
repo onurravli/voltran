@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID, timingSafeEqual, X509Certificate } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -78,13 +78,13 @@ export function revealFolder(folder: string): void {
 // A CA for one pairing, name-constrained to this computer's LAN address, whose key is gone once it has
 // signed the one server certificate: the profile a phone installs can never vouch for anything else,
 // and nothing on disk can mint another certificate it trusts.
-export function makeCertificates(network: PairingNetwork): Certificates {
+export async function makeCertificates(network: PairingNetwork): Promise<Certificates> {
     const dir = mkdtempSync(join(tmpdir(), 'voltran-pairing-'));
     try {
         const file = (name: string): string => join(dir, name);
-        const openssl = (...args: string[]): void => {
-            execFileSync('openssl', args, { stdio: ['ignore', 'ignore', 'pipe'], timeout: 10_000 });
-        };
+        const openssl = (...args: string[]): Promise<void> => new Promise((resolveRun, reject) => {
+            execFile('openssl', args, { timeout: 10_000 }, (error) => (error ? reject(error) : resolveRun()));
+        });
         const names = [...(network.dnsName ? [`DNS:${network.dnsName}`] : []), `IP:${network.ip}`];
         writeFileSync(file('ca.cnf'), [
             '[req]', 'distinguished_name=dn', 'prompt=no',
@@ -96,11 +96,11 @@ export function makeCertificates(network: PairingNetwork): Certificates {
             'basicConstraints=critical,CA:FALSE', 'keyUsage=critical,digitalSignature', 'extendedKeyUsage=serverAuth',
             `subjectAltName=${names.join(',')}`, 'authorityKeyIdentifier=keyid',
         ].join('\n'), { mode: 0o600 });
-        openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('ca.key'));
-        openssl('req', '-x509', '-new', '-key', file('ca.key'), '-sha256', '-days', '1', '-config', file('ca.cnf'), '-extensions', 'ca', '-out', file('ca.crt'));
-        openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('leaf.key'));
-        openssl('req', '-new', '-key', file('leaf.key'), '-subj', '/CN=Voltran', '-out', file('leaf.csr'));
-        openssl('x509', '-req', '-in', file('leaf.csr'), '-CA', file('ca.crt'), '-CAkey', file('ca.key'), '-set_serial', `0x${randomBytes(16).toString('hex')}`,
+        await openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('ca.key'));
+        await openssl('req', '-x509', '-new', '-key', file('ca.key'), '-sha256', '-days', '1', '-config', file('ca.cnf'), '-extensions', 'ca', '-out', file('ca.crt'));
+        await openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('leaf.key'));
+        await openssl('req', '-new', '-key', file('leaf.key'), '-subj', '/CN=Voltran', '-out', file('leaf.csr'));
+        await openssl('x509', '-req', '-in', file('leaf.csr'), '-CA', file('ca.crt'), '-CAkey', file('ca.key'), '-set_serial', `0x${randomBytes(16).toString('hex')}`,
             '-days', '1', '-sha256', '-extfile', file('leaf.cnf'), '-out', file('leaf.crt'));
         const ca = new X509Certificate(readFileSync(file('ca.crt')));
         return { key: readFileSync(file('leaf.key')), cert: readFileSync(file('leaf.crt')), caDer: ca.raw, fingerprint: ca.fingerprint256 };
@@ -247,6 +247,7 @@ export class Pairing {
     private readonly options: PairingOptions;
     private active: Active | null = null;
     private starting: Promise<PushPairingView> | null = null;
+    private stops = 0;
 
     constructor(options: PairingOptions) {
         this.options = options;
@@ -272,13 +273,18 @@ export class Pairing {
         if (!network) {
             throw new Error('This computer has no Wi-Fi or Ethernet address on a private network. Connect it to the same network as your phone.');
         }
-        const certificates = makeCertificates(network);
+        const stops = this.stops;
+        const certificates = await makeCertificates(network);
         const code = randomBytes(18).toString('base64url');
         const server = createServer({ key: certificates.key, cert: certificates.cert });
         await new Promise<void>((resolveListen, reject) => {
             server.once('error', reject);
             server.listen(0, network.ip, () => resolveListen());
         });
+        if (stops !== this.stops) {
+            server.close();
+            throw new Error('Pairing was stopped.');
+        }
         const { port } = server.address() as { port: number };
         const expiresAt = Date.now() + (this.options.windowMs ?? WINDOW_MS);
         const url = `https://${network.ip}:${port}/p/${code}`;
@@ -307,6 +313,7 @@ export class Pairing {
     }
 
     stop(): void {
+        this.stops++;
         const active = this.active;
         if (!active) {
             return;

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -41,6 +41,14 @@ describe('PushDevices', () => {
         const again = new PushDevices(dir);
         expect(again.vapid()).toEqual(keys);
         expect(again.list().map((entry) => entry.id)).toEqual([device.id]);
+    });
+
+    it('keeps the phones it can read when devices.json has an entry it cannot', () => {
+        const dir = tempDir();
+        const device = new PushDevices(dir).add(subscription('a'), 'iPhone', 1000);
+        const file = join(dir, 'devices.json');
+        writeFileSync(file, JSON.stringify([null, 'x', { id: 'b' }, JSON.parse(readFileSync(file, 'utf8'))[0]]));
+        expect(new PushDevices(dir).list().map((entry) => entry.id)).toEqual([device.id]);
     });
 
     it('never shows a window the endpoint or keys', () => {

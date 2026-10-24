@@ -177,7 +177,7 @@ export class Hub {
         this.push = new PushNotifier({
             devices: this.pushDevices,
             settings: options.pushSettings ?? (() => DEFAULT_SETTINGS.push),
-            pending: (paneId, status) => this.panes.views().some((view) => view.id === paneId && view.status === status),
+            pending: (paneId, status) => this.panes.status(paneId) === status,
             onChange: () => this.scheduleBroadcast(),
             send: options.pushSender,
         });

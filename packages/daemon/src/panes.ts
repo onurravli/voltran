@@ -120,6 +120,10 @@ export class PaneManager {
         return [...this.runtimes.values()].map((runtime) => ({ ...runtime.pane, ...runtime.state }));
     }
 
+    status(id: string): PaneStatus | null {
+        return this.runtimes.get(id)?.state.status ?? null;
+    }
+
     pane(id: string): Pane | null {
         return this.runtimes.get(id)?.pane ?? null;
     }
@@ -175,6 +179,11 @@ export class PaneManager {
         }
         if (isTyped(data)) {
             this.options.onUserInput?.();
+            // Claude sends no hook when the user cancels a question, plan or permission prompt with Esc, so a
+            // keystroke ends the wait and the silence check returns a cancelled prompt to idle.
+            if (runtime.pane.adapter === 'claude' && runtime.state.status === 'needs-input') {
+                this.setStatus(runtime, { status: 'working', detail: null });
+            }
         }
         runtime.tracker?.input();
         if (runtime.state.status === 'done') {
