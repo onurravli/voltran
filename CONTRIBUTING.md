@@ -1,7 +1,8 @@
 # Contributing to Voltran
 
 Bug reports, fixes and new features are welcome. For anything bigger than a small fix, open an
-issue first so the approach is agreed on before you spend time on it.
+issue first so the approach is agreed on before you spend time on it. Questions, and ideas you would
+like to talk through, go to [Discussions](https://github.com/onurravli/voltran/discussions).
 
 ## Security issues
 

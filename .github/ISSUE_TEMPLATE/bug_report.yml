@@ -1,0 +1,76 @@
+name: Bug report
+description: Something in Voltran does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. For a security problem, do not open an issue:
+        [report it privately](https://github.com/onurravli/voltran/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected to happen instead. A screenshot helps for anything in the window.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a session with a Claude Code pane
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Voltran version
+      description: The output of `voltran version`, or the commit you run (`git rev-parse --short HEAD`).
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Linux
+        - Windows (WSL2)
+    validations:
+      required: true
+  - type: input
+    id: platform-version
+    attributes:
+      label: OS version and Node.js version
+      description: Such as `macOS 26.1, Node 22.18.0`, or the Linux distribution. `node -v` prints the Node version.
+    validations:
+      required: true
+  - type: dropdown
+    id: agents
+    attributes:
+      label: Panes involved
+      multiple: true
+      options:
+        - Claude Code
+        - Codex
+        - OpenCode
+        - Antigravity
+        - Another agent CLI
+        - Shell or command
+        - None, it is not about a pane
+  - type: input
+    id: agent-version
+    attributes:
+      label: Agent version
+      description: When the problem is about an agent's pane, its version, such as the output of `claude --version`.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Daemon log
+      description: |
+        The end of `~/.voltran/daemon.log`, such as the output of `tail -n 50 ~/.voltran/daemon.log`.
+        Check it before you post it: it can contain folder names and commands.
+      render: text

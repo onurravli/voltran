@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest something Voltran should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For an idea you would like to talk through first, start a
+        [discussion](https://github.com/onurravli/voltran/discussions/new?category=ideas) instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The situation and what gets in the way today, rather than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How you imagine it working, and anything you have tried instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Sessions, panes and layout
+        - Agent status and notifications
+        - A specific agent (Claude Code, Codex, OpenCode, …)
+        - Git and worktrees
+        - Notes
+        - Themes, fonts and settings
+        - CLI and installation
+        - Something else
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to work on this myself
