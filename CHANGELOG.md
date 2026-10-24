@@ -3,7 +3,7 @@
 Voltran follows [Semantic Versioning](https://semver.org/). The README describes each feature in
 full.
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-10-24)
 
 The first release.
 
