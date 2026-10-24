@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bugReportUrl, formatDiagnostics, type AppState } from '@voltran/shared';
@@ -257,6 +257,15 @@ function systemctl(args: string[]): boolean {
 
 // launchd and systemd start services with a bare environment, so the service names node by its full
 // path and passes on the shell and Voltran's own settings; the daemon builds its PATH from that shell.
+// Homebrew keeps Node and Voltran in versioned Cellar folders that an upgrade deletes, while its opt
+// links and the bin link the CLI was started through stay where they are.
+export function autostartProgram(execPath = process.execPath, invoked = process.argv[1], cliEntry = CLI_ENTRY): string[] {
+    const optNode = execPath.replace(/\/Cellar\/(node(?:@\d+)?)\/[^/]+\/bin\/node$/, '/opt/$1/bin/node');
+    const node = optNode !== execPath && existsSync(optNode) && realpathSync(optNode) === execPath ? optNode : execPath;
+    const cli = invoked && realpathSync(invoked) === realpathSync(cliEntry) ? invoked : cliEntry;
+    return [node, cli, 'up', '--no-open'];
+}
+
 function autostartEnv(): Record<string, string> {
     const env: Record<string, string> = { SHELL: process.env.SHELL || '/bin/zsh' };
     for (const name of ['VOLTRAN_HOME', 'VOLTRAN_PORT']) {
@@ -282,15 +291,16 @@ function autostart(args: string[]): void {
         const config = loadConfig();
         ensureHome(config);
         const env = autostartEnv();
+        const program = autostartProgram();
         mkdirSync(dirname(LAUNCH_AGENT_FILE), { recursive: true });
-        writeFileSync(LAUNCH_AGENT_FILE, launchAgentPlist({ program: [process.execPath, CLI_ENTRY, 'up', '--no-open'], env, log: config.logFile }));
+        writeFileSync(LAUNCH_AGENT_FILE, launchAgentPlist({ program, env, log: config.logFile }));
         launchctl(['bootout', `${domain}/${LAUNCH_AGENT_LABEL}`]);
         if (!launchctl(['bootstrap', domain, LAUNCH_AGENT_FILE])) {
             console.error(`launchctl could not load ${LAUNCH_AGENT_FILE}`);
             process.exit(1);
         }
         console.log(`Voltran now starts when you log in (${LAUNCH_AGENT_FILE}).`);
-        console.log(`It runs ${process.execPath}; run \`voltran autostart on\` again after switching Node versions.`);
+        console.log(`It runs ${program[0]}; run \`voltran autostart on\` again after switching Node versions.`);
     } else if (choice === 'off') {
         launchctl(['bootout', `${domain}/${LAUNCH_AGENT_LABEL}`]);
         rmSync(LAUNCH_AGENT_FILE, { force: true });
@@ -307,14 +317,15 @@ function autostartLinux(args: string[]): void {
     if (choice === 'on') {
         const config = loadConfig();
         ensureHome(config);
+        const program = autostartProgram();
         mkdirSync(dirname(SYSTEMD_UNIT_FILE), { recursive: true });
-        writeFileSync(SYSTEMD_UNIT_FILE, systemdUnit({ program: [process.execPath, CLI_ENTRY, 'up', '--no-open'], env: autostartEnv(), log: config.logFile }));
+        writeFileSync(SYSTEMD_UNIT_FILE, systemdUnit({ program, env: autostartEnv(), log: config.logFile }));
         if (!systemctl(['daemon-reload']) || !systemctl(['enable', '--now', SYSTEMD_UNIT_NAME])) {
             console.error(`systemctl --user could not enable ${SYSTEMD_UNIT_FILE}. Autostart needs a systemd user session.`);
             process.exit(1);
         }
         console.log(`Voltran now starts when you log in (${SYSTEMD_UNIT_FILE}).`);
-        console.log(`It runs ${process.execPath}; run \`voltran autostart on\` again after switching Node versions.`);
+        console.log(`It runs ${program[0]}; run \`voltran autostart on\` again after switching Node versions.`);
     } else if (choice === 'off') {
         systemctl(['disable', '--now', SYSTEMD_UNIT_NAME]);
         rmSync(SYSTEMD_UNIT_FILE, { force: true });
