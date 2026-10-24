@@ -3,8 +3,12 @@
 Voltran follows [Semantic Versioning](https://semver.org/). The README describes each feature in
 full.
 
-## Unreleased
+## 1.0.1 (2026-10-24)
 
+- Install with `npm install -g voltran` or `brew install onurravli/tap/voltran`. The npm package
+  carries the daemon compiled to JavaScript and the built UI.
+- `voltran autostart on` keeps working after `brew upgrade`: it runs Homebrew's Node and Voltran
+  through links that an upgrade leaves in place.
 - `voltran doctor` checks the installation, and `voltran doctor --report`, ⌘K → **Report a
   problem…** and a button in the sidebar open a bug report with its results filled in.
 - The daemon reports its real version to `voltran doctor` and the CLI instead of `0.1.0`.
