@@ -246,8 +246,8 @@ of the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the wo
 ⌘K → **Appearance…** follows the system's dark or light mode, or keeps one of them. Dark and light
 each have their own theme, which colours the whole app and every terminal: ⌘K → **Dark theme…** picks
 from Voltran (the default), Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, One Dark,
-Rosé Pine and Solarized Dark, and ⌘K → **Light theme…** from GitHub Light (the default), Catppuccin
-Latte and Solarized Light. ⌘K → **Terminal font family…** lists the common monospace fonts
+Rosé Pine and Solarized Dark, and ⌘K → **Light theme…** from Voltran Light (the default), Catppuccin
+Latte, Solarized Light and GitHub Light. ⌘K → **Terminal font family…** lists the common monospace fonts
 installed on your Mac or takes any installed font by name, and the terminal font size commands make
 terminal text bigger or smaller. ⌘K → **UI font family…** and the UI font size commands do the same
 for the rest of the window (sidebar, bars, dialogs), from 11 to 18 pixels; the UI uses the system font
@@ -268,7 +268,7 @@ instead. The file takes comments and trailing commas, like VS Code's:
 ```jsonc
 {
     "appearance": "system",          // "system", "dark" or "light"
-    "theme": { "dark": "voltran", "light": "github-light" },
+    "theme": { "dark": "voltran", "light": "voltran-light" },
     "terminal": { "fontFamily": "JetBrains Mono", "fontSize": 13 },
     "ui": { "fontFamily": "", "fontSize": 13 }, // "" is the system font
     "sidebar": { "position": "left" }, // "left" or "right"

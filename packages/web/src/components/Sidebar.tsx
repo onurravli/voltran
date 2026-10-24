@@ -16,13 +16,13 @@ import {
 } from '../sidebar.ts';
 import { gitLabels } from '../labels.ts';
 import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
-import { keys, orderedSessions } from '../shortcuts.ts';
+import { keys, orderedSessions, togglePalette } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
 import { ContextMenuArea, InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
-import { BellIcon, BranchIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, VoltranMark } from './Icons.tsx';
+import { BellIcon, BranchIcon, ChevronIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, SearchIcon, VoltranMark } from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
 export function relativeTime(timestamp: number, now: number): string {
@@ -331,21 +331,20 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
 function Workspaces() {
     const workspaces = useUi((state) => state.app?.workspaces);
 
+    if (!workspaces || workspaces.length === 0) {
+        return null;
+    }
     return (
         <section className="workspaces" aria-label="Workspaces">
-            <div className="project__header">
+            <div className="sidebar-section">
                 <span className="workspaces__heading">Workspaces</span>
-                <div className="project__actions">
-                    <button type="button" className="icon-button" title="New workspace: panes from any project, side by side" onClick={createWorkspace}>
-                        <PlusIcon size={14} />
-                    </button>
-                </div>
+                <button type="button" className="icon-button" title="New workspace: panes from any project, side by side" onClick={createWorkspace}>
+                    <PlusIcon size={13} />
+                </button>
             </div>
-            {workspaces && workspaces.length > 0 ? (
-                <ul className="project__sessions">
-                    {workspaces.map((workspace) => <WorkspaceRow key={workspace.id} workspace={workspace} />)}
-                </ul>
-            ) : null}
+            <ul className="project__sessions">
+                {workspaces.map((workspace) => <WorkspaceRow key={workspace.id} workspace={workspace} />)}
+            </ul>
         </section>
     );
 }
@@ -445,7 +444,7 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
             </ContextMenuArea>
             {collapsed ? null : sessions.length === 0 ? (
                 <button type="button" className="project__empty" onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
-                    Start a session here
+                    <PlusIcon size={12} /> New session
                 </button>
             ) : (
                 <ul className="project__sessions">
@@ -463,7 +462,7 @@ function Inbox() {
     const sessions = new Map(app?.sessions.map((session) => [session.id, session]) ?? []);
 
     if (queue.length === 0) {
-        return <div className="inbox inbox--quiet">Nothing needs you</div>;
+        return null;
     }
 
     return (
@@ -540,6 +539,7 @@ function Footer() {
     const setShowArchived = useUi((state) => state.setShowArchived);
     const openDialog = useUi((state) => state.openDialog);
     const archivedCount = useUi((state) => state.app?.sessions.filter((session) => session.archived).length ?? 0);
+    const quiet = useUi((state) => attentionPanes(state.app).length === 0);
     const [permission, setPermission] = useState(() => (notificationsSupported() ? Notification.permission : 'denied'));
 
     return (
@@ -547,6 +547,7 @@ function Footer() {
             <UsageMeters />
             {connection === 'offline' ? <span className="connection connection--offline">Reconnecting to the daemon…</span> : null}
             <div className="sidebar__footer-row">
+                {quiet && connection !== 'offline' ? <span className="sidebar__quiet">Nothing needs you</span> : null}
                 {permission === 'default' ? (
                     <button
                         type="button"
@@ -636,6 +637,16 @@ function SidebarResizer() {
     );
 }
 
+// A shortcut shown as separate keys, so ⌘K reads as two caps and Ctrl+Shift+K as three.
+export function Hotkey({ keys: label }: { keys: string }) {
+    const parts = label.includes('+') ? label.split('+').filter(Boolean) : [...label];
+    return (
+        <span className="hotkey" aria-hidden="true">
+            {parts.map((part, index) => <kbd key={index}>{part}</kbd>)}
+        </span>
+    );
+}
+
 export function Sidebar() {
     const app = useUi((state) => state.app);
     const showArchived = useUi((state) => state.showArchived);
@@ -646,21 +657,28 @@ export function Sidebar() {
         <aside className="sidebar">
             <header className="sidebar__header">
                 <div className="wordmark">
-                    <VoltranMark form />
+                    <VoltranMark size={18} mono form />
                     <span>Voltran</span>
                 </div>
                 <button
                     type="button"
-                    className="button button--bar"
+                    className="icon-button icon-button--bar"
                     onClick={() => openDialog({ kind: projects.length === 0 ? 'project' : 'session' })}
-                    title={`Start a new session (${keys('⌃⌥N')})`}
+                    title={`New session (${keys('⌃⌥N')})`}
+                    aria-label="New session"
                 >
-                    <PlusIcon size={13} /> Session
+                    <PlusIcon size={15} />
                 </button>
             </header>
+            <button type="button" className="sidebar__search" onClick={togglePalette} title="Jump to a session or run a command">
+                <SearchIcon size={13} />
+                <span>Search or run…</span>
+                <Hotkey keys={keys('⌘K')} />
+            </button>
 
             <ContextMenuArea label="Sidebar" items={sidebarMenu} render={<nav className="sidebar__projects" aria-label="Projects and sessions" />}>
                 <Workspaces />
+                {projects.length > 0 ? <div className="sidebar-section"><span>Projects</span></div> : null}
                 {projects.map((project) => (
                     <ProjectGroup
                         key={project.id}

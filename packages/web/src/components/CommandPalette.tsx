@@ -360,6 +360,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                         ))}
                     </ul>
                 )}
+                <div className="palette__footer" aria-hidden="true">
+                    <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+                    <span><kbd>↵</kbd> {mode === 'commands' ? 'run' : 'choose'}</span>
+                    <span><kbd>esc</kbd> {COPY[mode].title ? 'back' : 'close'}</span>
+                </div>
             </div>
         </div>
     );
