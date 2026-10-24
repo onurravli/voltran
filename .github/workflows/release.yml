@@ -13,6 +13,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,8 +32,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run package
+      - id: pack
+        run: |
+          file=$(npm pack ./build/npm --pack-destination build --json | node -p 'JSON.parse(require("fs").readFileSync(0))[0].filename')
+          echo "file=build/$file" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "build/$file" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       # Trusted publishing: npm accepts this workflow's OIDC token, so there is no npm token to keep.
-      - run: npm publish ./build/npm
+      - run: npm publish "$TARBALL"
+        env:
+          TARBALL: ${{ steps.pack.outputs.file }}
 
   homebrew:
     needs: npm
@@ -40,11 +49,21 @@ jobs:
       - name: Point the formula at the new release
         env:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          SHA256: ${{ needs.npm.outputs.sha256 }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           url="https://registry.npmjs.org/voltran/-/voltran-$version.tgz"
-          curl -fsSL --retry 10 --retry-delay 15 --retry-all-errors -o voltran.tgz "$url"
-          sha256=$(sha256sum voltran.tgz | cut -d' ' -f1)
+          sha256="$SHA256"
+
+          # The registry's CDN caches a 404 for five minutes, so polling the plain URL before the
+          # version is live would keep Homebrew from downloading it; a query string bypasses that cache.
+          for attempt in $(seq 60); do
+            if curl -fsSL -o voltran.tgz "$url?release=$GITHUB_RUN_ID-$attempt"; then
+              break
+            fi
+            sleep 10
+          done
+          echo "$sha256  voltran.tgz" | sha256sum -c -
 
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/homebrew-tap
