@@ -1,4 +1,4 @@
-import { PROJECT_COLORS, type PaneView, type Project, type Session, type Workspace } from '@voltran/shared';
+import { PROJECT_COLORS, type PaneSpec, type PaneView, type Project, type Session, type Workspace } from '@voltran/shared';
 import { api } from './api.ts';
 import { shortPath } from './labels.ts';
 import { revealPane } from './notify.ts';
@@ -41,17 +41,24 @@ function copy(text: string, what: string): void {
 }
 
 function addPaneItems(sessionId: string): MenuItem[] {
-    const adapters = (useUi.getState().app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
-    return adapters.map((adapter) => ({
-        label: adapter.label,
-        note: adapter.available ? (adapter.kind === 'agent' ? 'agent' : undefined) : 'not installed',
-        disabled: !adapter.available,
-        onSelect: () => {
-            api.createPane(sessionId, { adapter: adapter.id })
-                .then((pane) => revealPane(sessionId, pane.id))
-                .catch(reportError);
-        },
-    }));
+    const app = useUi.getState().app;
+    const session = app?.sessions.find((entry) => entry.id === sessionId);
+    const inGit = session ? Boolean(app?.git[session.cwd]) : false;
+    const create = (spec: PaneSpec): void => {
+        api.createPane(sessionId, spec)
+            .then((pane) => revealPane(sessionId, pane.id))
+            .catch(reportError);
+    };
+    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
+    return [
+        ...adapters.map((adapter) => ({
+            label: adapter.label,
+            note: adapter.available ? (adapter.kind === 'agent' ? 'agent' : undefined) : 'not installed',
+            disabled: !adapter.available,
+            onSelect: () => create({ adapter: adapter.id }),
+        })),
+        { label: 'Changes', note: inGit ? undefined : 'not in git', disabled: !inGit, onSelect: () => create({ adapter: 'changes' }) },
+    ];
 }
 
 function workspaceItems(dragged: Dragged): MenuItem[] {
@@ -220,7 +227,7 @@ export function paneMenu(pane: PaneView): MenuItem[] {
     return [
         { label: 'Show', onSelect: () => revealPane(session.id, pane.id) },
         { label: maximized ? 'Restore size' : 'Maximize', onSelect: () => maximize(pane, !maximized) },
-        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' ? [] : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
+        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes' ? [] : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
         {
             label: adapter?.resumable ? 'Restart and resume' : 'Restart',
             separated: true,

@@ -94,7 +94,8 @@ pass the same hook command per event as `-c hooks.<Event>=…` (`codexHookArgs`)
 once the user trusts it, and keeps that trust by the command's hash, so the command must stay the
 same for every pane. A Codex pane uses `ActivityTracker` until its first hook arrives and
 `codexTransition` after that. Other agents use `ActivityTracker` (output streaming / quiet / bell
-heuristics). Adapters (`claude`, `opencode`, `codex`, `antigravity`, `shell`, `command`, `subagent`)
+heuristics). Adapters (`claude`, `opencode`, `codex`, `antigravity`, `shell`, `command`, `subagent`,
+and the processless `preview` and `changes`)
 are defined in `adapters.ts`.
 
 **Session titles.** A session created without a title is `titleSource: 'pending'` and needs a pane
@@ -177,9 +178,12 @@ keeps git from running a status inside each submodule under that submodule's own
 before `Worktrees.changes`. Pull requests come from `gh pr view`,
 cached per branch for two minutes and skipped when `git.pullRequests` is off or `gh` is missing.
 Tests inject a `GitRunner` instead of the real `gh`. The changes view reads on request only
-(`daemon/src/changes.ts`, `GET /api/sessions/:id/changes` and `/diff?path=`): it diffs only a path
-the status lists at that moment, with the same guards plus `--no-ext-diff --no-textconv`, and reads
-an untracked file itself with `O_NOFOLLOW`.
+(`daemon/src/changes.ts`, `GET /api/sessions/:id/changes` and `/contents?path=`): it reads only a
+path the status lists at that moment, the last commit's side with `git cat-file blob` (which runs no
+filter or textconv) and the working tree's itself with `O_NOFOLLOW`, and the web app diffs the two
+in Monaco (`web/src/monaco.ts`, loaded on first use with only the editor worker and the basic
+languages, no language service). The same view is the ⌃⌥G overlay and a `changes` pane, which,
+like `preview`, is a `page` adapter that runs no process.
 
 **Worktrees.** A session created with `worktree: { branch, base? }` gets a `git worktree` under
 `~/.voltran/worktrees/<project>/<branch>` (`daemon/src/worktrees.ts`); `Session.worktree` is its

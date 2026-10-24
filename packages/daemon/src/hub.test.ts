@@ -94,6 +94,28 @@ describe('Hub', () => {
         expect(() => hub.updatePane(shell.id, { url: 'localhost:3000' })).toThrow(HttpError);
     });
 
+    it('opens a changes pane that runs nothing and reads both sides of a changed file', async () => {
+        const dir = realpathSync(mkdtempSync(join(tmpdir(), 'voltran-hub-')));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+        git('init', '-q', '-b', 'main');
+        writeFileSync(join(dir, 'app.ts'), 'const a = 1;\n');
+        git('add', '.');
+        git('-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'commit', '-q', '-m', 'first');
+        writeFileSync(join(dir, 'app.ts'), 'const a = 2;\n');
+        const { store, hub } = open(dir);
+        cleanups.push(async () => {
+            await hub.shutdown();
+            store.close();
+        });
+        const project = hub.createProject({ path: dir });
+        const session = await hub.createSession({ projectId: project.id, title: 'review', panes: [{ adapter: 'changes' }] });
+        const pane = hub.state().panes.find((entry) => entry.sessionId === session.id)!;
+        expect(pane).toMatchObject({ adapter: 'changes', title: 'Changes', command: null, status: 'idle', pid: null });
+        expect(await hub.sessionFileContents(session.id, 'app.ts')).toMatchObject({ original: 'const a = 1;\n', modified: 'const a = 2;\n' });
+        await expect(hub.sessionFileContents(session.id, 'missing.ts')).rejects.toMatchObject({ status: 409 });
+    });
+
     describe('worktrees', () => {
         const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 

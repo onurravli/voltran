@@ -17,7 +17,7 @@ import {
     type CreateProjectBody,
     type CreateSessionBody,
     type CreateWorkspaceBody,
-    type FileDiff,
+    type FileContents,
     type Layout,
     type MovePaneBody,
     type NotesLockBody,
@@ -833,9 +833,9 @@ export class Hub {
         return this.readChanges(() => this.changes.list(session.cwd));
     }
 
-    async sessionDiff(id: string, path: string): Promise<FileDiff> {
+    async sessionFileContents(id: string, path: string): Promise<FileContents> {
         const session = this.mustGetSession(id);
-        return this.readChanges(() => this.changes.diff(session.cwd, requireString(path, 'path', 4096)));
+        return this.readChanges(() => this.changes.contents(session.cwd, requireString(path, 'path', 4096)));
     }
 
     private async readChanges<T>(read: () => Promise<T>): Promise<T> {

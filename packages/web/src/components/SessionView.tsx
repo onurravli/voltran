@@ -28,6 +28,7 @@ import {
     SplitRightIcon,
     StopIcon,
 } from './Icons.tsx';
+import { ChangesView } from './ChangesView.tsx';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -46,6 +47,13 @@ function paneSummary(pane: PaneView, kind: PaneKind | undefined): string {
         return pane.foreground ? `Running ${pane.foreground}` : 'Ready';
     }
     return pane.detail ? `${STATUS_LABEL[pane.status]}: ${pane.detail}` : STATUS_LABEL[pane.status];
+}
+
+function changesSummary(git: GitStatus | undefined): string {
+    if (!git) {
+        return 'Not in a git repository';
+    }
+    return git.changed === 0 ? 'No changes' : `${git.changed} changed ${git.changed === 1 ? 'file' : 'files'}`;
 }
 
 function FindBar({ paneId }: { paneId: string }) {
@@ -179,7 +187,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const draggingSession = useUi((state) => state.draggingSessionId);
     const finding = useUi((state) => state.findPaneId === pane.id);
     const preview = pane.adapter === 'preview' ? pane.command : null;
-    const hasNotes = pane.adapter !== 'subagent' && preview === null;
+    const changes = pane.adapter === 'changes';
+    const git = useUi((state) => (changes && session ? state.app?.git[session.cwd] : undefined));
+    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes;
     const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
     const [link, setLink] = useState<LinkState>('connecting');
     const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
@@ -332,6 +342,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                         value={preview}
                         onSave={(url) => api.updatePane(pane.id, { url })}
                     />
+                ) : changes ? (
+                    <span className="pane__summary">{changesSummary(git)}</span>
                 ) : (
                     <span className="pane__summary" title={pane.detail ?? undefined}>{paneSummary(pane, adapter?.kind)}</span>
                 )}
@@ -361,14 +373,16 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                             <StopIcon size={14} />
                         </button>
                     ) : null}
-                    {preview !== null ? (
+                    {preview !== null || changes ? (
                         <>
                             <button type="button" className="icon-button" title="Reload" onClick={() => setLoads((count) => count + 1)}>
                                 <RestartIcon size={14} />
                             </button>
-                            <a className="icon-button" href={preview} target="_blank" rel="noreferrer noopener" title="Open in a browser tab">
-                                <OpenIcon size={14} />
-                            </a>
+                            {preview !== null ? (
+                                <a className="icon-button" href={preview} target="_blank" rel="noreferrer noopener" title="Open in a browser tab">
+                                    <OpenIcon size={14} />
+                                </a>
+                            ) : null}
                         </>
                     ) : (
                         <button
@@ -388,6 +402,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
             <div className={`pane__body${notesOpen ? ' pane__body--notes' : ''}`}>
                 {archived ? (
                     <div className="pane__placeholder">Archived. Restore the session to resume this pane.</div>
+                ) : changes ? (
+                    <ChangesView key={loads} sessionId={pane.sessionId} pane focusToken={focusToken} />
                 ) : preview !== null ? (
                     sameOrigin(preview) ? (
                         <div className="pane__placeholder">Voltran does not preview itself.</div>
