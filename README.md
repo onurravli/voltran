@@ -260,6 +260,8 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 In terminals, Option types the characters of your keyboard layout (such as @ and { on Turkish Q), as
 in iTerm's default. Line editing follows iTerm's Natural Text Editing: ⌘←/⌘→ jump to the start or end
 of the line, ⌥←/⌥→ move by word, ⌘⌫/⌥⌫ delete the line or the word, and ⇧↩ or ⌥↩ adds a new line.
+When a program takes the mouse, as Claude Code's fullscreen mode does, dragging goes to that
+program; Option-drag selects the terminal's text anyway.
 
 ### Themes and fonts
 

@@ -51,6 +51,7 @@ export class TerminalSession {
             fontFamily: fontStack(font.family),
             fontSize: font.size,
             lineHeight: 1.15,
+            macOptionClickForcesSelection: true,
             scrollback: 10_000,
             minimumContrastRatio: theme.minimumContrastRatio,
             theme: theme.terminal,

@@ -3,6 +3,11 @@
 Voltran follows [Semantic Versioning](https://semver.org/). The README describes each feature in
 full.
 
+## Unreleased
+
+- Option-drag selects text in a pane whose program takes the mouse, such as Claude Code in
+  fullscreen mode.
+
 ## 1.0.1 (2026-10-24)
 
 - Install with `npm install -g voltran` or `brew install onurravli/tap/voltran`. The npm package
