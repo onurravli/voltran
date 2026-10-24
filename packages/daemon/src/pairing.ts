@@ -39,6 +39,7 @@ interface Active {
     hosts: Set<string>;
     expiresAt: number;
     fingerprint: string;
+    publicKey: string;
     timer: ReturnType<typeof setTimeout>;
     failures: number;
     paired: boolean;
@@ -274,6 +275,7 @@ export class Pairing {
             throw new Error('This computer has no Wi-Fi or Ethernet address on a private network. Connect it to the same network as your phone.');
         }
         const stops = this.stops;
+        const publicKey = this.options.devices.vapid().publicKey;
         const certificates = await makeCertificates(network);
         const code = randomBytes(18).toString('base64url');
         const server = createServer({ key: certificates.key, cert: certificates.cert });
@@ -288,21 +290,35 @@ export class Pairing {
         const { port } = server.address() as { port: number };
         const expiresAt = Date.now() + (this.options.windowMs ?? WINDOW_MS);
         const url = `https://${network.ip}:${port}/p/${code}`;
-        this.active = {
+        try {
+            mkdirSync(this.options.folder, { recursive: true, mode: 0o700 });
+            writeFileSync(join(this.options.folder, '1 Voltran pairing.mobileconfig'), pairingProfile(certificates.caDer, expiresAt), { mode: 0o600 });
+            writeFileSync(join(this.options.folder, '2 Open Voltran pairing.webloc'), weblocFile(url), { mode: 0o600 });
+        } catch (error) {
+            server.close();
+            rmSync(this.options.folder, { recursive: true, force: true });
+            throw error;
+        }
+        const active: Active = {
             server,
             code,
             url,
             hosts: new Set([`${network.ip}:${port}`, ...(network.dnsName ? [`${network.dnsName}:${port}`] : [])]),
             expiresAt,
             fingerprint: certificates.fingerprint,
+            publicKey,
             timer: setTimeout(() => this.stop(), expiresAt - Date.now()),
             failures: 0,
             paired: false,
         };
+        this.active = active;
         server.on('request', (req, res) => this.handle(req, res));
-        mkdirSync(this.options.folder, { recursive: true, mode: 0o700 });
-        writeFileSync(join(this.options.folder, '1 Voltran pairing.mobileconfig'), pairingProfile(certificates.caDer, expiresAt), { mode: 0o600 });
-        writeFileSync(join(this.options.folder, '2 Open Voltran pairing.webloc'), weblocFile(url), { mode: 0o600 });
+        server.on('error', (error) => {
+            console.error('[voltran] the pairing listener failed:', error);
+            if (this.active === active) {
+                this.stop();
+            }
+        });
         (this.options.reveal ?? revealFolder)(this.options.folder);
         this.options.onChange();
         return this.view()!;
@@ -354,7 +370,7 @@ export class Pairing {
         const match = (pattern: RegExp): string | null => pattern.exec(path)?.[1] ?? null;
         let code: string | null;
         if (req.method === 'GET' && (code = match(/^\/p\/([\w-]+)$/)) !== null && this.accepts(active, code)) {
-            reply(200, 'text/html; charset=utf-8', pairPage(active.code, this.options.devices.vapid().publicKey));
+            reply(200, 'text/html; charset=utf-8', pairPage(active.code, active.publicKey));
         } else if (req.method === 'GET' && (code = match(/^\/manifest\/([\w-]+)\.webmanifest$/)) !== null && this.accepts(active, code)) {
             reply(200, 'application/manifest+json', JSON.stringify({
                 name: 'Voltran',
@@ -401,8 +417,15 @@ export class Pairing {
                 reply(400, 'This is not a subscription Voltran can use.');
                 return;
             }
+            let device: PushDevice;
+            try {
+                device = this.options.devices.add(subscription, deviceName(req.headers['user-agent']));
+            } catch (error) {
+                console.error('[voltran] could not save a paired phone:', error);
+                reply(500, 'Voltran could not save this phone. Check the disk and pair again.');
+                return;
+            }
             active.paired = true;
-            const device = this.options.devices.add(subscription, deviceName(req.headers['user-agent']));
             reply(200, 'ok');
             this.options.onPaired(device);
             setTimeout(() => {

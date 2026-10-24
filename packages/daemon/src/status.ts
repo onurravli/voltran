@@ -10,7 +10,7 @@ export interface StatusChange {
 // an escape sequence could hide or forge lines.
 export const withoutControls = (text: string): string => text.replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
 
-const oneLine = (value: unknown, max: number): string | null => {
+export const oneLine = (value: unknown, max: number): string | null => {
     if (typeof value !== 'string') {
         return null;
     }

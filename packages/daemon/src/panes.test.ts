@@ -436,7 +436,7 @@ describe('PaneManager', () => {
 describe('isTyped', () => {
     it('ignores what xterm.js answers to a program on its own', () => {
         for (const reply of ['\x1b[I', '\x1b[O', '\x1b[?1;2c', '\x1b[>0;276;0c', '\x1b[0n', '\x1b[24;80R', '\x1b[?2026;2$y', '\x1b[8;24;80t',
-            '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\', '\x1b]10;rgb:ffff/ffff/ffff\x07', '\x1bP>|xterm.js(5.5.0)\x1b\\', '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07']) {
+            '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\', '\x1b]10;rgb:ffff/ffff/ffff\x07', '\x1bP>|xterm.js(5.5.0)\x1b\\', '\x1b[?0u', '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07']) {
             expect(isTyped(reply), JSON.stringify(reply)).toBe(false);
         }
     });

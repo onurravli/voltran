@@ -51,6 +51,19 @@ describe('PushDevices', () => {
         expect(new PushDevices(dir).list().map((entry) => entry.id)).toEqual([device.id]);
     });
 
+    it('forgets the phones paired with a key it had to replace', () => {
+        const dir = tempDir();
+        const devices = new PushDevices(dir);
+        devices.vapid();
+        devices.add(subscription('a'), 'iPhone');
+        rmSync(join(dir, 'vapid.json'));
+        const again = new PushDevices(dir);
+        expect(again.list()).toHaveLength(1);
+        again.vapid();
+        expect(again.list()).toHaveLength(0);
+        expect(new PushDevices(dir).list()).toHaveLength(0);
+    });
+
     it('never shows a window the endpoint or keys', () => {
         const devices = new PushDevices(tempDir());
         devices.add(subscription('a'), 'iPhone', 1000);
@@ -98,6 +111,7 @@ describe('PushNotifier', () => {
     function setup(overrides: Partial<Settings['push']> = {}, status: (paneId: string) => AttentionStatus | 'idle' = () => 'needs-input') {
         vi.useFakeTimers();
         const devices = new PushDevices(tempDir());
+        devices.vapid();
         devices.add(subscription('a'), 'iPhone');
         const sent: { endpoint: string; payload: unknown }[] = [];
         let answer = 201;

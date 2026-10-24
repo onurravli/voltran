@@ -726,12 +726,9 @@ export class PaneManager {
     }
 }
 
-// Terminals emit focus reports (ESC [ I / ESC [ O) on their own when a pane gains or loses
-// focus; they say nothing about the user having read the pane.
-
-// xterm.js answers a program's device, cursor, mode, window and colour queries through the same input
-// channel as keystrokes, while nobody is at the keyboard.
-const TERMINAL_REPLY = /\x1b\[[IO]|\x1b\[[?>=]?[\d;]*(?:[cnRt]|\$y)|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP[^\x1b]*\x1b\\/g;
+// xterm.js sends focus reports and answers a program's device, cursor, mode, window, keyboard and
+// colour queries through the same input channel as keystrokes, while nobody is at the keyboard.
+const TERMINAL_REPLY = /\x1b\[[IO]|\x1b\[\?\d*u|\x1b\[[?>=]?[\d;]*(?:[cnRt]|\$y)|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP[^\x1b]*\x1b\\/g;
 
 export function isTyped(data: string): boolean {
     return data.replace(TERMINAL_REPLY, '').length > 0;

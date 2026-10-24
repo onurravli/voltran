@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STATUS_LABEL, type AttentionStatus, type PushDeviceView, type Settings } from '@voltran/shared';
 import { replaceFile } from './files.ts';
-import { withoutControls } from './status.ts';
+import { oneLine, withoutControls } from './status.ts';
 import { generateVapidKeys, sendPush, validSubscription, type PushSender, type PushSubscription, type VapidKeys } from './webpush.ts';
 
 export interface PushDevice extends PushDeviceView {
@@ -85,11 +85,16 @@ export class PushDevices {
                     return keys;
                 }
             } catch {
-                // a broken key file is replaced; phones paired with it pair again
+                // replaced below
             }
         }
         this.keys = generateVapidKeys();
         replaceFile(this.dir, 'vapid.json', JSON.stringify(this.keys), 0o600);
+        // A push service refuses every message signed with another key than the one a phone subscribed with.
+        if (this.devices.length > 0) {
+            this.devices = [];
+            this.save();
+        }
         return this.keys;
     }
 
@@ -127,11 +132,6 @@ export class PushDevices {
     }
 }
 
-const clip = (text: string): string => {
-    const line = withoutControls(text.replace(/\s+/g, ' ')).trim();
-    return line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line;
-};
-
 const counted = (count: number, one: string, many: string): string => (count === 1 ? one : many.replace('#', String(count)));
 
 // What leaves the computer depends on push.content: "minimal" names no session, pane or command.
@@ -147,7 +147,7 @@ export function pushMessage(items: PushAttention[], content: PushSettings['conte
     }
     const lines = items.slice(0, MAX_LINES).map((item) => {
         const head = `${STATUS_LABEL[item.status]}: ${item.sessionTitle}`;
-        return clip(content === 'full' && item.body ? `${head} — ${item.body}` : head);
+        return oneLine(content === 'full' && item.body ? `${head} — ${item.body}` : head, MAX_LINE) ?? '';
     });
     if (items.length > MAX_LINES) {
         lines.push(`and ${items.length - MAX_LINES} more`);
@@ -245,7 +245,8 @@ export class PushNotifier {
     private async deliver(devices: PushDevice[], message: PushMessage): Promise<void> {
         try {
             const vapid = this.options.devices.vapid();
-            await Promise.all(devices.map(async (device) => {
+            const listed = this.options.devices.list();
+            await Promise.all(devices.filter((device) => listed.includes(device)).map(async (device) => {
                 let status: number;
                 try {
                     ({ status } = await this.send(device.subscription, message, vapid));

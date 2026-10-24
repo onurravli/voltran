@@ -500,7 +500,16 @@ async function notify(args: string[]): Promise<void> {
         console.error('voltran notify: the daemon is not running. Start it with `voltran up`.');
         process.exit(1);
     }
+    if (args[0] !== undefined && args[0] !== 'pair' && args[0] !== 'test') {
+        console.error(`voltran notify: unknown command "${args[0]}". Use \`voltran notify\`, \`voltran notify pair\` or \`voltran notify test\`.`);
+        process.exit(1);
+    }
     try {
+        const { push } = await api.request<Partial<AppState>>('GET', '/api/state');
+        if (!push) {
+            console.error('voltran notify: the running daemon is older than this command. Run `voltran restart` first.');
+            process.exit(1);
+        }
         if (args[0] === 'pair') {
             const pairing = await api.request<PushPairingView>('POST', '/api/push/pairing');
             console.log(`Pairing is open until ${new Date(pairing.expiresAt).toLocaleTimeString()} on this network only.`);
@@ -519,7 +528,6 @@ async function notify(args: string[]): Promise<void> {
             }
             return;
         }
-        const { push } = await api.request<AppState>('GET', '/api/state');
         if (push.devices.length === 0) {
             console.log('No phone is paired. `voltran notify pair` pairs one.');
         }

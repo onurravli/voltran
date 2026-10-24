@@ -1,16 +1,17 @@
 import { execFileSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Pairing, deviceName, makeCertificates } from './pairing.ts';
 import { PushDevices, type PushDevice } from './push.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
+    vi.restoreAllMocks();
     while (cleanups.length > 0) {
         cleanups.pop()!();
     }
@@ -150,6 +151,40 @@ describe('Pairing', () => {
         });
         listeners.get('install')!({ waitUntil: (promise: Promise<unknown>) => { installed = promise; } });
         await expect(installed).resolves.toBeDefined();
+    });
+
+    it('opens nothing when it cannot get the push key or write the pairing files', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'voltran-pairing-test-'));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        const devices = new PushDevices(join(dir, 'push'));
+        const options = { devices, onChange: () => undefined, onPaired: () => undefined, network: () => ({ ip: '127.0.0.1', dnsName: null }), reveal: () => undefined };
+
+        const unwritable = new Pairing({ ...options, folder: join(dir, 'file', 'pairing') });
+        writeFileSync(join(dir, 'file'), '');
+        await expect(unwritable.start()).rejects.toThrow();
+        expect(unwritable.view()).toBeNull();
+
+        const noKey = new Pairing({ ...options, folder: join(dir, 'pairing') });
+        cleanups.unshift(() => noKey.stop());
+        vi.spyOn(devices, 'vapid').mockImplementation(() => {
+            throw new Error('ENOSPC');
+        });
+        await expect(noKey.start()).rejects.toThrow('ENOSPC');
+        expect(noKey.view()).toBeNull();
+        expect(existsSync(join(dir, 'pairing'))).toBe(false);
+    });
+
+    it('answers a subscription it cannot save with an error and keeps the code', async () => {
+        const { port, code, ca, devices, paired } = await startPairing();
+        const add = vi.spyOn(devices, 'add').mockImplementationOnce(() => {
+            throw new Error('ENOSPC');
+        });
+        const failed = await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION), userAgent: IPHONE });
+        expect(failed.status).toBe(500);
+        expect(paired).toHaveLength(0);
+        add.mockRestore();
+        expect((await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION), userAgent: IPHONE })).status).toBe(200);
+        expect(paired).toHaveLength(1);
     });
 
     it('opens one listener when asked twice at once', async () => {
