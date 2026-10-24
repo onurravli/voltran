@@ -15,10 +15,12 @@ Fixes go to the latest `main`; there are no maintained older releases.
 - **Other people on the machine, as far as files go.** `~/.voltran` is 0700 and its files 0600,
   and the secret each pane's hooks use is read from a file rather than passed on a command line.
 - **A repository you open.** Polling `git status` runs neither a file system monitor nor a filter
-  the repository's own config defines.
+  the repository's own config defines, and does not look inside submodules, whose own config could
+  define one.
 - **An agent kept in Claude Code's sandbox.** A Claude pane may edit its own notes and no other
-  pane's, notes are never written or read through a link, and what an agent reports through its
-  hooks cannot add flags to the next launch of that pane.
+  pane's, notes are never written or read through a link or a hard link, nothing an agent leaves in
+  its notes folder can stop the daemon, and what an agent reports through its hooks cannot add flags
+  to the next launch of that pane.
 
 ## What it does not protect against
 

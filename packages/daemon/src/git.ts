@@ -18,7 +18,11 @@ const MAX_OUTPUT = 16 * 1024 * 1024;
 
 // fsmonitor is off because a repository's own config could otherwise make `git status` run a
 // command; the optional locks are off so polling never holds index.lock while an agent commits.
-export const STATUS_ARGS = ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z'];
+// Submodules are not looked into: git runs a status inside each one, under that submodule's own
+// config and filters, which the overrides below never see. A submodule moved to another commit
+// still shows.
+export const SUBMODULE_ARGS = ['--ignore-submodules=dirty'];
+export const STATUS_ARGS = ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z', ...SUBMODULE_ARGS];
 export const PULL_REQUEST_ARGS = ['pr', 'view', '--json', 'number,url,state,isDraft,statusCheckRollup'];
 export const FILTER_CONFIG_ARGS = ['config', '--show-scope', '-z', '--get-regexp', '^filter\\.'];
 const FILTER_NAME = /^[A-Za-z0-9._-]+$/;

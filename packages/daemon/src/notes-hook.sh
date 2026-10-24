@@ -3,21 +3,25 @@
 mode=$1
 guide=$2
 notes=$VOLTRAN_NOTES
-[ -n "$notes" ] || exit 0
+[ -n "$notes" ] && [ -n "$VOLTRAN_PANE_ID" ] || exit 0
 folder=$(dirname "$notes")
 changed="$folder.changed"
 limit=8000
 
+# The notes folder is the agent's, and a shell cannot open a file there without following a link the
+# agent planted, so the daemon reads the notes and the hook asks it for them.
 show() {
     [ -r "$guide" ] && [ ! -L "$guide" ] && cat "$guide"
     printf '\nNotes file: %s\n\n' "$notes"
-    if [ -L "$notes" ] || [ -L "$folder" ]; then
-        printf '(not shown: the notes file or its folder is a link, which Voltran never makes)\n'
-    elif [ -f "$notes" ] && [ -s "$notes" ]; then
-        head -c "$limit" "$notes"
-        size=$(wc -c < "$notes" | tr -d ' ')
+    if ! body=$(curl -s -f -m 2 -H @"$VOLTRAN_HOOK_HEADER" "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/notes"); then
+        printf '(not shown: Voltran did not answer. Read the file instead.)\n'
+    elif [ -n "$body" ]; then
+        printf '%s' "$body" | head -c "$limit"
+        size=$(printf '%s' "$body" | wc -c | tr -d ' ')
         if [ "$size" -gt "$limit" ]; then
             printf '\n[Cut at %s of %s bytes. Read the file for the rest.]\n' "$limit" "$size"
+        else
+            printf '\n'
         fi
     else
         printf '(empty)\n'

@@ -160,6 +160,27 @@ describe('Hub', () => {
             expect(existsSync(marker)).toBe(false);
         });
 
+        it('asks before deleting a worktree with a checked-out submodule, without looking inside it', async () => {
+            const { dir, repo, hub } = repository();
+            const inner = join(dir, 'inner');
+            mkdirSync(inner);
+            writeFileSync(join(inner, '.gitattributes'), '*.ts filter=sub\n');
+            writeFileSync(join(inner, 'a.ts'), 'export {};\n');
+            git(inner, 'init', '-q', '-b', 'main');
+            git(inner, 'add', '-A');
+            git(inner, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'inner');
+            const project = hub.createProject({ path: repo });
+            const session = await hub.createSession({ projectId: project.id, title: 'Submodule', worktree: { branch: 'submodule' } });
+            git(session.worktree!, '-c', 'protocol.file.allow=always', 'submodule', '-q', 'add', inner, 'inner');
+            git(session.worktree!, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'submodule');
+            const marker = join(dir, 'submodule-filter-ran');
+            git(join(session.worktree!, 'inner'), 'config', 'filter.sub.clean', `touch '${marker}'; cat`);
+            utimesSync(join(session.worktree!, 'inner', 'a.ts'), new Date(), new Date(Date.now() + 60_000));
+
+            expect((await refused(hub.deleteSession(session.id))).message).toBe('its worktree has 1 uncommitted change');
+            expect(existsSync(marker)).toBe(false);
+        });
+
         it('keeps the worktrees with changes when the project is deleted', async () => {
             const { repo, hub } = repository();
             const project = hub.createProject({ path: repo });

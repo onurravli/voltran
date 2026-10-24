@@ -142,8 +142,10 @@ branch's pull request appears next to it with its state and checks, and opens on
 `git.pullRequests` to `false` to stop asking GitHub. The project's row in the sidebar shows the
 branch too. Voltran reads the status every 10 seconds while a window is open, and a second after a
 Claude Code or OpenCode pane uses a tool, so an agent's edits show up straight away. It runs
-`git status` with `core.fsmonitor` and the repository's own filters off and without optional locks,
-so it neither runs a command a repository configures nor holds `index.lock` while an agent commits.
+`git status` with `core.fsmonitor` and the repository's own filters off, without optional locks and
+without looking inside submodules, so it neither runs a command a repository or a submodule
+configures nor holds `index.lock` while an agent commits. A submodule counts as changed when it
+points at another commit, not when its own files change.
 
 ### Worktrees
 
@@ -158,8 +160,8 @@ branch under its name in the sidebar.
 
 Files that git does not track, such as `.env` or `node_modules`, are not copied into the worktree.
 
-Deleting the session removes its worktree when it has no uncommitted or untracked files; otherwise
-Voltran asks whether to keep the worktree or delete it with the changes. The branch stays either way.
+Deleting the session removes its worktree when it has no uncommitted or untracked files and no
+checked-out submodule, whose own changes Voltran does not look at; otherwise Voltran asks whether to keep the worktree or delete it with the changes. The branch stays either way.
 Removing a project removes the worktrees of its sessions that have nothing uncommitted and leaves
 the others.
 
@@ -362,7 +364,8 @@ A local server that can start processes is reachable from every web page you ope
 - reads a subagent transcript only at the path derived from Claude's own hook data, never from a
   path a client sends, refuses one reached through a symlink, and drops control characters from it
   before the viewer writes it to a terminal;
-- never writes, reads or changes the mode of a notes file through a link an agent planted;
+- never writes, reads or changes the mode of a notes file through a link or hard link an agent
+  planted, and gives Claude the notes through the daemon rather than by reading the agent's folder;
 - keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns.
 
 Child processes do not inherit the environment of a Claude session that launched the daemon

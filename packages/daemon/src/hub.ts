@@ -583,6 +583,12 @@ export class Hub {
         return handled;
     }
 
+    // The notes hook asks the daemon for the notes instead of reading the file itself: the folder is
+    // the agent's, and a shell cannot open a file without following a link planted there.
+    hookNotes(paneId: string, secret: string): string | null {
+        return this.panes.isClaudeReport(paneId, secret) ? this.notes.current(paneId) : null;
+    }
+
     private statusLine(paneId: string, secret: string, payload: Record<string, unknown>): boolean {
         if (!this.panes.isClaudeReport(paneId, secret)) {
             return false;
