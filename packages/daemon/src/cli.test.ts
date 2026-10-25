@@ -58,6 +58,10 @@ describe('parseNewArgs', () => {
         });
     });
 
+    it('opens a changes pane next to an agent', () => {
+        expect(parseNewArgs(['--pane', 'claude', '--pane', 'changes'], '/w').panes).toEqual([{ adapter: 'claude' }, { adapter: 'changes' }]);
+    });
+
     it('reads a worktree branch and an optional base', () => {
         expect(parseNewArgs(['--worktree', 'feat/pipeline'], '/w').worktree).toEqual({ branch: 'feat/pipeline' });
         expect(parseNewArgs(['--worktree=feat/pipeline:main'], '/w').worktree).toEqual({ branch: 'feat/pipeline', base: 'main' });
@@ -67,6 +71,7 @@ describe('parseNewArgs', () => {
         expect(() => parseNewArgs(['--pane', 'vim'])).toThrow('unknown pane "vim"');
         expect(() => parseNewArgs(['--pane', 'command'])).toThrow('needs the command');
         expect(() => parseNewArgs(['--pane', 'shell ls'])).toThrow('takes no arguments');
+        expect(() => parseNewArgs(['--pane', 'changes src'])).toThrow('takes no arguments');
         expect(() => parseNewArgs(['--title'])).toThrow('--title needs a value');
         expect(() => parseNewArgs(['--claude'])).toThrow('unknown option --claude');
         expect(() => parseNewArgs(['a', 'b'])).toThrow('one folder at most');

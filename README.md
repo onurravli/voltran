@@ -59,7 +59,7 @@ is already open, `voltran up` does not open another one.
 |---|---|
 | `voltran up [--browser] [--no-open] [--new]` | Start the daemon if needed and open the UI, unless a Voltran window is already open (`--new` opens another anyway) |
 | `voltran add [path] [--name <name>]` | Register a folder as a project (defaults to the current folder) |
-| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, `command` followed by a command to run, or `preview` followed by a page on this computer (`localhost:5173`). Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
+| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, `command` followed by a command to run, `preview` followed by a page on this computer (`localhost:5173`), or `changes` for the git changes of the folder. Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
@@ -170,11 +170,14 @@ configures nor holds `index.lock` while an agent commits. A submodule counts as 
 points at another commit, not when its own files change.
 
 Click the number of changed files, or press ⌃⌥G, to see the changes in Voltran: every changed file
-of the repository on the left, and the selected file's diff against the last commit on the right,
-with untracked files shown whole. ↑ and ↓ (or j and k) move between files and Esc closes it. The
-view reads the changes again as agents work. It runs `git diff` with the same protections as the
-status, and with external diff commands and textconv drivers off; binary files and diffs of more
-than 5,000 lines are not shown.
+of the repository on the left, and the selected file against the last commit on the right, in the
+editor VS Code uses (Monaco), side by side when there is room, with syntax highlighting, unchanged
+stretches folded away and ⌘F to search. ↑ and ↓ (or j and k) move between files and Esc closes it.
+The view reads the changes again as agents work. To keep it open next to an agent, use the split
+button in its bar, or add a **Changes** pane from a pane's split menu (or `--pane changes`); the
+pane shows the changes of its own session's folder. Voltran reads the last commit's side with
+`git cat-file`, which runs none of the repository's filters or textconv drivers, and the file on
+disk without following links; binary files and files over 512 KB are not shown.
 
 ### Worktrees
 

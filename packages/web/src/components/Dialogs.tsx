@@ -375,6 +375,10 @@ export function PaneMenu() {
     const target = useUi((state) => state.paneMenu);
     const adapters = useUi((state) => state.app?.adapters ?? NO_ADAPTERS);
     const openPaneMenu = useUi((state) => state.openPaneMenu);
+    const inGit = useUi((state) => {
+        const session = state.app?.sessions.find((entry) => entry.id === state.paneMenu?.sessionId);
+        return session ? Boolean(state.app?.git[session.cwd]) : false;
+    });
     const [command, setCommand] = useState('');
     const ref = useRef<HTMLDivElement>(null);
 
@@ -432,6 +436,10 @@ export function PaneMenu() {
                     <span className="menu__note">{adapter.available ? (adapter.kind === 'agent' ? 'agent' : '') : 'not installed'}</span>
                 </button>
             ))}
+            <button type="button" role="menuitem" className="menu__item" disabled={!inGit} onClick={() => create({ adapter: 'changes' })}>
+                <span>Changes</span>
+                <span className="menu__note">{inGit ? '' : 'not in git'}</span>
+            </button>
             <form
                 className="menu__command"
                 onSubmit={(event) => {
