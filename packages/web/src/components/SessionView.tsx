@@ -16,6 +16,7 @@ import {
     ChevronDownIcon,
     ChevronUpIcon,
     CloseIcon,
+    ConversationIcon,
     LinkIcon,
     MaximizeIcon,
     NotesIcon,
@@ -29,6 +30,7 @@ import {
     StopIcon,
 } from './Icons.tsx';
 import { ChangesView } from './ChangesView.tsx';
+import { ConversationView } from './ConversationView.tsx';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -191,12 +193,14 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const git = useUi((state) => (changes && session ? state.app?.git[session.cwd] : undefined));
     const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes;
     const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
+    const archived = session?.archived ?? false;
+    const hasConversation = pane.adapter === 'claude';
+    const conversation = useUi((state) => state.conversationOpen[pane.id] === true) && hasConversation && !archived;
     const [link, setLink] = useState<LinkState>('connecting');
     const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
     const [loads, setLoads] = useState(0);
     const frameRef = useRef<HTMLIFrameElement>(null);
     const pressedOn = useRef<Element | null>(null);
-    const archived = session?.archived ?? false;
     const inWorkspace = host.kind === 'workspace';
     const hosted = paneIds(host.layout);
     const joining = inWorkspace && (draggingSession !== null || (dragging !== null && !hosted.includes(dragging)));
@@ -249,14 +253,14 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     }, [pane.id, archived]);
 
     useEffect(() => {
-        if (!focused) {
+        if (!focused || conversation) {
             return;
         }
         const terminal = peekTerminal(pane.id);
         if (terminal && document.activeElement !== terminal.term.textarea && !typingElsewhere()) {
             terminal.focus();
         }
-    }, [focused, focusToken, pane.id]);
+    }, [focused, focusToken, pane.id, conversation]);
 
     const split = (event: ReactMouseEvent<HTMLButtonElement>, direction: 'horizontal' | 'vertical'): void => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -347,6 +351,17 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 ) : (
                     <span className="pane__summary" title={pane.detail ?? undefined}>{paneSummary(pane, adapter?.kind)}</span>
                 )}
+                {hasConversation ? (
+                    <button
+                        type="button"
+                        className="icon-button pane__view-toggle"
+                        aria-pressed={conversation}
+                        title={conversation ? `Show the terminal (${keys('⌃⌥C')})` : `Show the conversation (${keys('⌃⌥C')})`}
+                        onClick={() => useUi.getState().toggleConversation(pane.id)}
+                    >
+                        <ConversationIcon size={14} />
+                    </button>
+                ) : null}
                 {hasNotes ? (
                     <button
                         type="button"
@@ -421,8 +436,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 ) : (
                     <div className="pane__terminal" ref={containerRef} />
                 )}
+                {conversation ? <ConversationView pane={pane} focusToken={focusToken} /> : null}
                 {notesOpen ? <NotesDrawer pane={pane} agent={adapter?.kind === 'agent' ? adapter.label : null} hint={notesHint(adapter)} /> : null}
-                {finding && !archived ? <FindBar paneId={pane.id} /> : null}
+                {finding && !archived && !conversation ? <FindBar paneId={pane.id} /> : null}
                 {canDrop ? (
                     <div
                         className="pane__drop"

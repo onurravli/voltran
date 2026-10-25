@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type Diagnostics, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
+import { DEFAULT_SETTINGS, MAX_ATTACHMENT_BYTES, MAX_WORKSPACE_PANES, paneIds, type AppState, type ConversationChunk, type Diagnostics, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
 import { loadConfig, voltranVersion } from './config.ts';
 import { commandRunner } from './git.ts';
 import { buildDaemon, type Daemon } from './main.ts';
@@ -16,7 +16,8 @@ import { contentSecurityPolicy } from './server.ts';
 // Stands in for the real CLI: runs the exact hook commands Voltran handed it through --settings,
 // so the env plumbing and the per-pane secret are exercised end to end. With --notes-test it also
 // starts a session and writes the pane's notes the way Claude's Write tool would; with --title-test it
-// writes a transcript in which Claude has named the conversation and stops; with --usage-test it renders
+// writes a transcript in which Claude has named the conversation and stops; with --conversation-test it
+// writes a short conversation and stops; with --usage-test it renders
 // its status line with the account's usage limits.
 const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
@@ -34,6 +35,13 @@ case "$*" in *--notes-test*)
 case "$*" in *--title-test*)
     sid=11111111-2222-3333-4444-555555555555
     printf '{"type":"ai-title","aiTitle":"Fake conversation title","sessionId":"%s"}\\n' "$sid" > "$PWD/$sid.jsonl"
+    printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$PWD/$sid.jsonl" | sh -c "$(hook Stop 0)"
+;; esac
+case "$*" in *--conversation-test*)
+    sid=22222222-3333-4444-5555-666666666666
+    printf '%s\n' '{"type":"user","message":{"role":"user","content":"list the files"}}' \
+        '{"type":"assistant","message":{"model":"claude-test","role":"assistant","content":[{"type":"text","text":"Listing **now**."},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls","description":"List files"}}]}}' \
+        '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"a.txt"}]}}' > "$PWD/$sid.jsonl"
     printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$PWD/$sid.jsonl" | sh -c "$(hook Stop 0)"
 ;; esac
 case "$*" in *--usage-test*)
@@ -316,6 +324,34 @@ describe('validation', () => {
         expect((await api('POST', `/api/sessions/${session.id}/panes`, { adapter: 'subagent', command: '/etc/passwd' })).status).toBe(400);
         expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'subagent', command: '/etc/passwd' }] })).status).toBe(400);
         await api('DELETE', `/api/sessions/${session.id}`);
+    });
+});
+
+describe('attachments', () => {
+    it('keeps an image pasted into a pane as a file of that pane until the pane goes', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: state.projects[0].id, title: 'attachments', panes: [{ adapter: 'shell' }] });
+        const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+        const upload = (body: Buffer, pane = paneId) => fetch(`${base}/api/panes/${pane}/attachments`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'image/png' },
+            body: new Uint8Array(body),
+        });
+        const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('pixels')]);
+
+        const saved = await upload(png);
+        expect(saved.status).toBe(201);
+        const { path } = (await saved.json()) as { path: string };
+        expect(path).toMatch(new RegExp(`^${join(home, 'data', 'attachments', paneId)}/[0-9a-f]{16}\\.png$`));
+        expect(readFileSync(path)).toEqual(png);
+        expect(statSync(path).mode & 0o777).toBe(0o600);
+
+        expect((await upload(Buffer.from('<svg onload=alert(1)>'))).status).toBe(415);
+        expect((await upload(png, 'no-such-pane')).status).toBe(404);
+        expect(await upload(Buffer.alloc(MAX_ATTACHMENT_BYTES + 1)).then((response) => response.status, () => 'cut off')).toMatch(/413|cut off/);
+
+        await api('DELETE', `/api/sessions/${session.id}`);
+        expect(existsSync(path)).toBe(false);
     });
 });
 
@@ -633,6 +669,37 @@ describe('agent panes', () => {
             socket.close();
             await api('DELETE', `/api/sessions/${session.id}`);
         }
+    });
+
+    it('shows a Claude pane\'s conversation from the transcript its hooks name, from where the window stopped reading', async () => {
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: mkdtempSync(join(home, 'conversation-')) });
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'conversation',
+            panes: [{ adapter: 'claude', command: '--conversation-test' }, { adapter: 'shell' }],
+        });
+        const [paneId, shellId] = paneIds(session.layout);
+        const sid = '22222222-3333-4444-5555-666666666666';
+        const read = (source: string, from: number) => api<ConversationChunk>('GET', `/api/panes/${paneId}/conversation?source=${source}&from=${from}`);
+
+        expect((await read('', 0)).body).toEqual({ source: null, entries: [], next: 0, more: false });
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneId}`, { headers: { Authorization: `Bearer ${daemon.token}` } });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
+        await until(async () => (await read('', 0)).body.source === sid);
+
+        const { body: chunk } = await read('', 0);
+        expect(chunk).toMatchObject({ source: sid, more: false });
+        expect(chunk.entries.map((entry) => entry.kind)).toEqual(['prompt', 'text', 'tool', 'result']);
+        expect(chunk.entries[2]).toMatchObject({ name: 'Bash', summary: 'List files', detail: { kind: 'command', command: 'ls' } });
+        expect((await read(sid, chunk.next)).body).toEqual({ source: sid, entries: [], next: chunk.next, more: false });
+        expect((await read('another', chunk.next)).body.entries).toHaveLength(4);
+
+        expect((await api('GET', `/api/panes/${shellId}/conversation`)).status).toBe(400);
+        expect((await fetch(`${base}/api/panes/${paneId}/conversation`)).status).toBe(401);
+
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
     });
 
     it('give Claude the pane notes and hold them while Claude edits them', async () => {

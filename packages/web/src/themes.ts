@@ -58,6 +58,13 @@ export const UI_VARIABLES = [
     '--hover-tint',
     '--shadow',
     '--backdrop',
+    '--syntax-comment',
+    '--syntax-keyword',
+    '--syntax-string',
+    '--syntax-number',
+    '--syntax-type',
+    '--syntax-name',
+    '--syntax-tag',
 ] as const;
 
 export type UiPalette = Record<(typeof UI_VARIABLES)[number], string>;
@@ -152,6 +159,13 @@ function deriveUi(scheme: Scheme, t: TerminalTheme, accents: Partial<Record<Acce
         '--hover-tint': dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
         '--shadow': dark ? '#000000' : mix(text, t.background, 0.4),
         '--backdrop': dark ? `${mix(t.background, '#000000', 0.5)}99` : `${mix(text, '#000000', 0.3)}4d`,
+        '--syntax-comment': t.brightBlack,
+        '--syntax-keyword': t.magenta,
+        '--syntax-string': t.green,
+        '--syntax-number': t.yellow,
+        '--syntax-type': t.cyan,
+        '--syntax-name': t.blue,
+        '--syntax-tag': t.red,
     };
 }
 

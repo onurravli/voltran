@@ -22,6 +22,7 @@ function open(dir: string): { store: Store; hub: Hub } {
         adapters: [],
         scrollbackDir: dir,
         notesDir: join(dir, 'notes'),
+        attachmentsDir: join(dir, 'attachments'),
         hooksDir: join(dir, 'hooks'),
         worktreesDir: join(dir, 'worktrees'),
         pushDir: join(dir, 'push'),

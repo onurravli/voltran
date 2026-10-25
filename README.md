@@ -253,6 +253,18 @@ Claude pane: a read-only view laid out like Claude Code's own view of a subagent
 tool calls and their results, and its final report. It follows the subagent live and marks when it
 has finished.
 
+### Conversation view
+
+A Claude Code pane can also show its conversation as messages instead of a terminal: ⌃⌥C or the
+speech-bubble button in its title bar switches between the two. Prompts, Claude's replies (rendered
+as markdown), its thinking, its plan, and each tool call with its input, its result and the diff of
+an edit appear as Claude writes them, read from the transcript Claude Code keeps for the
+conversation. Each finished turn shows the model, how long it took and when it ended.
+
+The box at the bottom types your message into the terminal and presses Enter, so it reaches Claude as
+if you had typed it there. The terminal keeps running underneath: when Claude asks for a permission
+or a choice, the view says so, and you answer in the terminal.
+
 ### Notes
 
 Every pane has notes of its own: ⌃⌥E or the note button in its title bar opens them in a drawer on
@@ -290,6 +302,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 | ⌃⌥\ / ⌃⌥- | Split the focused pane right / down with a shell |
 | ⌃⌥↩ | Maximize or restore the focused pane |
 | ⌃⌥W | Close the focused pane; in a workspace, take it out of the workspace |
+| ⌃⌥C | Switch the focused Claude Code pane between its conversation and its terminal |
 | ⌃⌥E | Show or hide the notes of the focused pane |
 | ⌃⌥G | Show or hide the git changes of the focused session |
 | ⌃⌥/ | Show all shortcuts |

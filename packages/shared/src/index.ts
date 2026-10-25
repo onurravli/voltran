@@ -4,6 +4,7 @@ export * from './layout.ts';
 export * from './status.ts';
 export * from './command.ts';
 export * from './settings.ts';
+export * from './attachments.ts';
 export * from './notes.ts';
 export * from './worktrees.ts';
 export * from './diagnostics.ts';

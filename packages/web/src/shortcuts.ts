@@ -226,6 +226,17 @@ function toggleFocusedNotes(): void {
     state.toggleNotes(pane.id);
 }
 
+function toggleFocusedConversation(): void {
+    const state = useUi.getState();
+    const paneId = visibleFocusedPane();
+    const pane = state.app?.panes.find((entry) => entry.id === paneId);
+    if (!pane || pane.adapter !== 'claude') {
+        state.showToast('Focus a Claude Code pane to see its conversation');
+        return;
+    }
+    state.toggleConversation(pane.id);
+}
+
 export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyK', keys: keys('⌘K'), label: 'Open the command palette', run: togglePalette },
     { code: 'KeyJ', keys: keys('⌃⌥J'), label: 'Jump to the next pane that needs you', run: jumpToAttention },
@@ -251,6 +262,7 @@ export const SHORTCUTS: Shortcut[] = [
     },
     { code: 'KeyW', keys: keys('⌃⌥W'), label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
     { code: 'KeyE', keys: keys('⌃⌥E'), label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
+    { code: 'KeyC', keys: keys('⌃⌥C'), label: 'Switch the focused Claude Code pane between its conversation and its terminal', run: toggleFocusedConversation },
     { code: 'KeyG', keys: keys('⌃⌥G'), label: 'Show or hide the git changes of the focused session', run: toggleChanges },
     { code: 'Slash', keys: keys('⌃⌥/'), label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
 ];

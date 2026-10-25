@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Duplex } from 'node:stream';
 import { extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import { PREVIEW_FRAME_SOURCES, parseSettingsPatch, type Diagnostics, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
+import { MAX_ATTACHMENT_BYTES, PREVIEW_FRAME_SOURCES, parseSettingsPatch, type Diagnostics, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
 import { voltranVersion, writeNewToken, type Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
@@ -95,7 +95,11 @@ function sendText(res: ServerResponse, status: number, text: string, type = 'tex
     res.end(text);
 }
 
-function readBody(req: IncomingMessage, limit: number): Promise<string> {
+async function readBody(req: IncomingMessage, limit: number): Promise<string> {
+    return (await readBytes(req, limit)).toString('utf8');
+}
+
+function readBytes(req: IncomingMessage, limit: number): Promise<Buffer> {
     return new Promise((resolveBody, reject) => {
         const chunks: Buffer[] = [];
         let size = 0;
@@ -108,7 +112,7 @@ function readBody(req: IncomingMessage, limit: number): Promise<string> {
             }
             chunks.push(chunk);
         });
-        req.on('end', () => resolveBody(Buffer.concat(chunks).toString('utf8')));
+        req.on('end', () => resolveBody(Buffer.concat(chunks)));
         req.on('error', reject);
     });
 }
@@ -273,6 +277,12 @@ export function createVoltranServer(options: ServerOptions): Server {
         hub.seenPane(id);
         sendJson(res, 200, { ok: true });
     });
+    route('GET', '/api/panes/:id/conversation', (req, res, [id]) => {
+        const params = requestUrl(req).searchParams;
+        sendJson(res, 200, hub.paneConversation(id, params.get('source'), Number(params.get('from') ?? 0)));
+    });
+    route('GET', '/api/panes/:id/commands', (_req, res, [id]) => sendJson(res, 200, hub.paneCommands(id)));
+    route('POST', '/api/panes/:id/attachments', async (req, res, [id]) => sendJson(res, 201, hub.attach(id, await readBytes(req, MAX_ATTACHMENT_BYTES))));
     route('GET', '/api/panes/:id/notes', (_req, res, [id]) => sendJson(res, 200, hub.paneNotes(id)));
     route('PUT', '/api/panes/:id/notes', async (req, res, [id]) => sendJson(res, 200, hub.saveNotes(id, await readJson(req))));
     route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) => sendJson(res, 200, hub.lockNotes(id, await readJson(req))));

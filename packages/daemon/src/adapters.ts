@@ -39,6 +39,8 @@ interface AdapterDefinition {
     launch(ctx: LaunchContext): LaunchSpec;
 }
 
+export const claudeConfigDir = (env: NodeJS.ProcessEnv): string | null => env.CLAUDE_CONFIG_DIR || (env.HOME ? join(env.HOME, '.claude') : null);
+
 const DEFINITIONS: AdapterDefinition[] = [
     {
         id: 'claude',
@@ -55,8 +57,7 @@ const DEFINITIONS: AdapterDefinition[] = [
                 args.push(pane.agentResumable ? '--resume' : '--session-id', pane.agentSessionId);
             }
             args.push(...(splitArgs(pane.command ?? '') ?? []));
-            const configDir = baseEnv.CLAUDE_CONFIG_DIR || (baseEnv.HOME ? join(baseEnv.HOME, '.claude') : null);
-            const statusLine = userStatusLine(pane.cwd, configDir);
+            const statusLine = userStatusLine(pane.cwd, claudeConfigDir(baseEnv));
             return { file: 'claude', args, ...(statusLine ? { env: { VOLTRAN_STATUSLINE: statusLine } } : {}) };
         },
     },
