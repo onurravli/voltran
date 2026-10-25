@@ -7,11 +7,12 @@ import { ChevronIcon, MoreIcon } from './Icons.tsx';
 
 export type { MenuItem } from '../menus.ts';
 
-export function InlineEdit({ value, onSave, className, label, editing: requested, onEditingChange }: {
+export function InlineEdit({ value, onSave, className, label, hint = 'Double-click to rename', editing: requested, onEditingChange }: {
     value: string;
     onSave: (next: string) => Promise<unknown>;
     className: string;
     label: string;
+    hint?: string;
     editing?: boolean;
     onEditingChange?: (editing: boolean) => void;
 }) {
@@ -56,7 +57,7 @@ export function InlineEdit({ value, onSave, className, label, editing: requested
         );
     }
     return (
-        <span className={className} title="Double-click to rename" onDoubleClick={() => setEditing(true)}>
+        <span className={className} title={hint} onDoubleClick={() => setEditing(true)}>
             {value}
         </span>
     );

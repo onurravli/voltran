@@ -133,6 +133,30 @@ const DEFINITIONS: AdapterDefinition[] = [
             args: [SUBAGENT_VIEWER, pane.command ?? '', subagentRunning ? '--follow' : '--once'],
         }),
     },
+    {
+        id: 'preview',
+        label: 'Preview',
+        kind: 'page',
+        statusSource: 'process',
+        resumable: false,
+        reportsHooks: false,
+        binary: null,
+        launch: () => {
+            throw new Error('a preview pane runs no process');
+        },
+    },
+    {
+        id: 'changes',
+        label: 'Changes',
+        kind: 'page',
+        statusSource: 'process',
+        resumable: false,
+        reportsHooks: false,
+        binary: null,
+        launch: () => {
+            throw new Error('a changes pane runs no process');
+        },
+    },
 ];
 
 const BY_ID = new Map(DEFINITIONS.map((definition) => [definition.id, definition]));

@@ -73,6 +73,50 @@ describe('Hub', () => {
         expect(() => hub.revealSession('missing')).toThrow(HttpError);
     });
 
+    it('opens a preview pane only for a page on this computer and lets its address change', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'voltran-hub-'));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        const { store, hub } = open(dir);
+        cleanups.push(async () => {
+            await hub.shutdown();
+            store.close();
+        });
+        const project = hub.createProject({ path: dir });
+        const session = await hub.createSession({ projectId: project.id, title: 'web', panes: [{ adapter: 'shell' }] });
+        const shell = hub.state().panes.find((pane) => pane.sessionId === session.id)!;
+        const pane = hub.createPane(session.id, { adapter: 'preview', command: 'localhost:5173', splitFrom: shell.id, direction: 'horizontal' });
+        expect(pane).toMatchObject({ adapter: 'preview', command: 'http://localhost:5173/', title: 'localhost:5173' });
+        for (const command of ['example.com', 'localhost.example.com:80', 'file:///etc/passwd', undefined]) {
+            expect(() => hub.createPane(session.id, { adapter: 'preview', command })).toThrow(HttpError);
+        }
+        expect(hub.updatePane(pane.id, { url: 'http://127.0.0.1:3000/app' }).command).toBe('http://127.0.0.1:3000/app');
+        expect(store.getPane(pane.id)?.command).toBe('http://127.0.0.1:3000/app');
+        expect(() => hub.updatePane(pane.id, { url: 'https://example.com' })).toThrow(HttpError);
+        expect(() => hub.updatePane(shell.id, { url: 'localhost:3000' })).toThrow(HttpError);
+    });
+
+    it('opens a changes pane that runs nothing and reads both sides of a changed file', async () => {
+        const dir = realpathSync(mkdtempSync(join(tmpdir(), 'voltran-hub-')));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+        git('init', '-q', '-b', 'main');
+        writeFileSync(join(dir, 'app.ts'), 'const a = 1;\n');
+        git('add', '.');
+        git('-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'commit', '-q', '-m', 'first');
+        writeFileSync(join(dir, 'app.ts'), 'const a = 2;\n');
+        const { store, hub } = open(dir);
+        cleanups.push(async () => {
+            await hub.shutdown();
+            store.close();
+        });
+        const project = hub.createProject({ path: dir });
+        const session = await hub.createSession({ projectId: project.id, title: 'review', panes: [{ adapter: 'changes' }] });
+        const pane = hub.state().panes.find((entry) => entry.sessionId === session.id)!;
+        expect(pane).toMatchObject({ adapter: 'changes', title: 'Changes', command: null, status: 'idle', pid: null });
+        expect(await hub.sessionFileContents(session.id, 'app.ts')).toMatchObject({ original: 'const a = 1;\n', modified: 'const a = 2;\n' });
+        await expect(hub.sessionFileContents(session.id, 'missing.ts')).rejects.toMatchObject({ status: 409 });
+    });
+
     describe('worktrees', () => {
         const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 

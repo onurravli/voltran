@@ -212,7 +212,7 @@ export class PaneManager {
 
     restart(id: string): void {
         const runtime = this.runtimes.get(id);
-        if (!runtime) {
+        if (!runtime || adapterFor(runtime.pane.adapter).kind === 'page') {
             return;
         }
         this.stopProcess(runtime);
@@ -413,7 +413,7 @@ export class PaneManager {
             generation: 0,
             hookSecret: null,
             state: {
-                status: pane.ended ? 'exited' : 'suspended',
+                status: adapterFor(pane.adapter).kind === 'page' ? 'idle' : pane.ended ? 'exited' : 'suspended',
                 statusAt: Date.now(),
                 detail: null,
                 exitCode: null,
@@ -455,6 +455,9 @@ export class PaneManager {
     private spawn(runtime: Runtime): void {
         const { pane } = runtime;
         const adapter = adapterFor(pane.adapter);
+        if (adapter.kind === 'page') {
+            return;
+        }
         const generation = ++runtime.generation;
         const secret = adapter.reportsHooks ? randomBytes(24).toString('hex') : null;
         runtime.hooked = false;

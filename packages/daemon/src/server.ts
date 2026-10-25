@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Duplex } from 'node:stream';
 import { extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import { parseSettingsPatch, type Diagnostics, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
+import { PREVIEW_FRAME_SOURCES, parseSettingsPatch, type Diagnostics, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
 import { voltranVersion, writeNewToken, type Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
@@ -52,6 +52,7 @@ export function contentSecurityPolicy(html: string): string {
         `script-src 'self' ${hashes.join(' ')}`.trim(),
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data:",
+        `frame-src ${PREVIEW_FRAME_SOURCES.join(' ')}`,
         "connect-src 'self'",
         "object-src 'none'",
         "base-uri 'none'",
@@ -239,7 +240,7 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, 200, { ok: true });
     });
     route('GET', '/api/sessions/:id/changes', async (_req, res, [id]) => sendJson(res, 200, await hub.sessionChanges(id)));
-    route('GET', '/api/sessions/:id/diff', async (req, res, [id]) => sendJson(res, 200, await hub.sessionDiff(id, requestUrl(req).searchParams.get('path') ?? '')));
+    route('GET', '/api/sessions/:id/contents', async (req, res, [id]) => sendJson(res, 200, await hub.sessionFileContents(id, requestUrl(req).searchParams.get('path') ?? '')));
     route('POST', '/api/sessions/:id/reveal', (_req, res, [id]) => {
         hub.revealSession(id);
         sendJson(res, 200, { ok: true });

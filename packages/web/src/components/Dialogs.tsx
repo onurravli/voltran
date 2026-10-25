@@ -89,7 +89,7 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
 function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projectId?: string; worktree?: boolean; onClose: () => void }) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
-    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent');
+    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
     const currentProjectId = useUi((state) => state.app?.sessions.find((session) => session.id === state.selectedSessionId)?.projectId);
     const [project, setProject] = useState(projectId ?? currentProjectId ?? projects[0]?.id ?? '');
     const [title, setTitle] = useState('');
@@ -492,6 +492,10 @@ export function PaneMenu() {
     const target = useUi((state) => state.paneMenu);
     const adapters = useUi((state) => state.app?.adapters ?? NO_ADAPTERS);
     const openPaneMenu = useUi((state) => state.openPaneMenu);
+    const inGit = useUi((state) => {
+        const session = state.app?.sessions.find((entry) => entry.id === state.paneMenu?.sessionId);
+        return session ? Boolean(state.app?.git[session.cwd]) : false;
+    });
     const [command, setCommand] = useState('');
     const ref = useRef<HTMLDivElement>(null);
 
@@ -536,7 +540,7 @@ export function PaneMenu() {
 
     return (
         <div className="menu" ref={ref} style={{ left, top, width }} role="menu">
-            {adapters.filter((adapter) => adapter.id !== 'command' && adapter.id !== 'subagent').map((adapter) => (
+            {adapters.filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent').map((adapter) => (
                 <button
                     key={adapter.id}
                     type="button"
@@ -549,6 +553,10 @@ export function PaneMenu() {
                     <span className="menu__note">{adapter.available ? (adapter.kind === 'agent' ? 'agent' : '') : 'not installed'}</span>
                 </button>
             ))}
+            <button type="button" role="menuitem" className="menu__item" disabled={!inGit} onClick={() => create({ adapter: 'changes' })}>
+                <span>Changes</span>
+                <span className="menu__note">{inGit ? '' : 'not in git'}</span>
+            </button>
             <form
                 className="menu__command"
                 onSubmit={(event) => {
@@ -562,9 +570,9 @@ export function PaneMenu() {
                     className="field__input field__input--mono"
                     value={command}
                     onChange={(event) => setCommand(event.target.value)}
-                    placeholder="Run a command…"
+                    placeholder="Run a command or open localhost:…"
                     spellCheck={false}
-                    aria-label="Command to run"
+                    aria-label="Command to run or page to open"
                 />
             </form>
         </div>

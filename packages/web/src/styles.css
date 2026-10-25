@@ -1398,6 +1398,23 @@ button.git-count:hover {
     outline: none;
 }
 
+.changes--pane {
+    z-index: auto;
+    container-type: inline-size;
+}
+
+@container (max-width: 560px) {
+    .changes--pane .changes__body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(64px, 30%) minmax(0, 1fr);
+    }
+
+    .changes--pane .changes__files {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+    }
+}
+
 .changes__bar {
     flex: none;
     display: flex;
@@ -1516,15 +1533,19 @@ button.git-count:hover {
 }
 
 .changes__diff {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     min-height: 0;
-    overflow: auto;
+}
+
+.changes__editor {
+    flex: 1;
+    min-height: 0;
 }
 
 .changes__file-head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
+    flex: none;
     display: flex;
     align-items: baseline;
     gap: 12px;
@@ -1560,69 +1581,6 @@ button.git-count:hover {
 
 .changes__removed {
     color: var(--fault);
-}
-
-.diff {
-    min-width: max-content;
-    padding-bottom: 24px;
-    font-family: var(--font-mono);
-    font-size: calc(12px * var(--ui-scale));
-    line-height: 1.55;
-    tab-size: 4;
-}
-
-.diff__header {
-    padding: 6px 16px;
-    background: var(--fill);
-    color: var(--text-faint);
-    white-space: pre;
-}
-
-.diff__hunk + .diff__hunk {
-    margin-top: 10px;
-}
-
-.diff__line {
-    display: grid;
-    grid-template-columns: 5ch 5ch 2ch auto;
-    white-space: pre;
-}
-
-.diff__number {
-    padding-right: 1ch;
-    color: var(--text-faint);
-    text-align: right;
-    user-select: none;
-}
-
-.diff__sign {
-    padding-left: 0.5ch;
-    user-select: none;
-}
-
-.diff__text {
-    padding-right: 16px;
-}
-
-.diff__line--add {
-    background: color-mix(in srgb, var(--live) 13%, transparent);
-}
-
-.diff__line--add .diff__sign {
-    color: var(--live);
-}
-
-.diff__line--del {
-    background: color-mix(in srgb, var(--fault) 13%, transparent);
-}
-
-.diff__line--del .diff__sign {
-    color: var(--fault);
-}
-
-.diff__line--note {
-    color: var(--text-faint);
-    font-style: italic;
 }
 
 .git-pr {
@@ -2083,6 +2041,28 @@ button.git-count:hover {
 
 .terminal-host .xterm-viewport {
     background-color: transparent !important;
+}
+
+.pane__frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+}
+
+body:has(.separator[data-separator='active']) .pane__frame {
+    pointer-events: none;
+}
+
+.pane__address {
+    font-family: var(--font-mono);
+}
+
+.pane__address.inline-edit {
+    height: calc(22px * var(--ui-scale));
+    color: var(--text);
 }
 
 .pane__placeholder {

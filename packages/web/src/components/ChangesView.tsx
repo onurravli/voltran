@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChangedFile, ChangeState, FileDiff, SessionChanges } from '@voltran/shared';
+import { paneIds, type ChangedFile, type ChangeState, type FileContents, type SessionChanges } from '@voltran/shared';
 import { api } from '../api.ts';
 import { shortPath } from '../labels.ts';
-import { useUi } from '../store.ts';
-import { CloseIcon } from './Icons.tsx';
+import { reportError, selectedWorkspace, useUi } from '../store.ts';
+import { DiffEditor, type DiffStat } from './DiffEditor.tsx';
+import { CloseIcon, SplitRightIcon } from './Icons.tsx';
 
 const STATE_MARKS: Record<ChangeState, { mark: string; label: string }> = {
     modified: { mark: 'M', label: 'Modified' },
@@ -30,27 +31,48 @@ function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-export function ChangesView({ sessionId }: { sessionId: string }) {
+function openAsPane(sessionId: string): void {
+    const ui = useUi.getState();
+    const session = ui.app?.sessions.find((entry) => entry.id === sessionId);
+    const workspace = selectedWorkspace(ui);
+    const shown = workspace ? paneIds(workspace.layout) : session ? paneIds(session.layout) : [];
+    const splitFrom = ui.focusedPaneId && shown.includes(ui.focusedPaneId) ? ui.focusedPaneId : undefined;
+    api.createPane(sessionId, { adapter: 'changes', splitFrom, direction: 'horizontal', workspaceId: workspace?.id })
+        .then((pane) => {
+            ui.openChanges(null);
+            ui.focusPane(pane.id);
+        })
+        .catch(reportError);
+}
+
+export function ChangesView({ sessionId, pane = false, focusToken = null }: { sessionId: string; pane?: boolean; focusToken?: number | null }) {
     const session = useUi((state) => state.app?.sessions.find((entry) => entry.id === sessionId));
     const status = useUi((state) => (session ? state.app?.git[session.cwd] : undefined));
     const openChanges = useUi((state) => state.openChanges);
     const [changes, setChanges] = useState<SessionChanges | null>(null);
     const [selected, setSelected] = useState<string | null>(null);
-    const [diff, setDiff] = useState<FileDiff | null>(null);
+    const [contents, setContents] = useState<FileContents | null>(null);
+    const [stat, setStat] = useState<DiffStat | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [diffError, setDiffError] = useState<string | null>(null);
+    const [contentsError, setContentsError] = useState<string | null>(null);
     const root = useRef<HTMLElement>(null);
     const statusKey = status ? `${status.commit}:${status.changed}:${status.staged}:${status.unstaged}:${status.untracked}` : null;
     const [revision, setRevision] = useState(0);
 
     useEffect(() => {
-        root.current?.focus();
-    }, []);
+        if (!pane || (focusToken !== null && !root.current?.contains(document.activeElement))) {
+            root.current?.focus();
+        }
+    }, [pane, focusToken]);
 
     // The status poll notices an agent's edits; the list is read again then, and on a timer while
     // open, since an edit to an already changed file leaves the counts as they were.
     useEffect(() => {
-        const timer = setInterval(() => setRevision((value) => value + 1), 5000);
+        const timer = setInterval(() => {
+            if (!document.hidden) {
+                setRevision((value) => value + 1);
+            }
+        }, 5000);
         return () => clearInterval(timer);
     }, []);
 
@@ -73,22 +95,24 @@ export function ChangesView({ sessionId }: { sessionId: string }) {
 
     useEffect(() => {
         if (!selected) {
-            setDiff(null);
+            setContents(null);
             return;
         }
         let current = true;
-        api.diff(sessionId, selected)
+        api.contents(sessionId, selected)
             .then((next) => {
                 if (current) {
-                    setDiff(next);
-                    setDiffError(null);
+                    setContents(next);
+                    setContentsError(null);
                 }
             })
-            .catch((reason) => current && setDiffError(message(reason)));
+            .catch((reason) => current && setContentsError(message(reason)));
         return () => {
             current = false;
         };
     }, [sessionId, selected, changes]);
+
+    useEffect(() => setStat(null), [selected]);
 
     const files = changes?.files ?? [];
     const step = (delta: number): void => {
@@ -100,12 +124,14 @@ export function ChangesView({ sessionId }: { sessionId: string }) {
     };
 
     const onKeyDown = (event: React.KeyboardEvent): void => {
-        if (event.ctrlKey || event.altKey || event.metaKey) {
+        if (event.ctrlKey || event.altKey || event.metaKey || event.defaultPrevented) {
             return;
         }
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && !pane) {
             event.preventDefault();
             openChanges(null);
+        } else if ((event.target as Element).closest('.monaco-editor')) {
+            return;
         } else if (event.key === 'ArrowDown' || event.key === 'j') {
             event.preventDefault();
             step(1);
@@ -116,21 +142,32 @@ export function ChangesView({ sessionId }: { sessionId: string }) {
     };
 
     const file = files.find((entry) => entry.path === selected) ?? null;
-    const shown = diff && diff.path === selected ? diff : null;
+    const shown = contents && contents.path === selected ? contents : null;
+    const count = changes ? `${files.length}${changes.truncated ? '+' : ''} ${files.length === 1 ? 'file' : 'files'}` : '';
 
     return (
-        <section ref={root} className="changes" role="dialog" aria-label="Changes" tabIndex={-1} onKeyDown={onKeyDown}>
-            <header className="changes__bar">
-                <span className="changes__title">Changes</span>
-                {changes ? <span className="changes__root" title={changes.root}>{shortPath(changes.root)}</span> : null}
-                <span className="changes__count">
-                    {changes ? `${files.length}${changes.truncated ? '+' : ''} ${files.length === 1 ? 'file' : 'files'}` : ''}
-                </span>
-                <span className="changes__hint">↑↓ files · Esc closes</span>
-                <button type="button" className="icon-button" aria-label="Close" title="Close (Esc)" onClick={() => openChanges(null)}>
-                    <CloseIcon size={14} />
-                </button>
-            </header>
+        <section
+            ref={root}
+            className={`changes${pane ? ' changes--pane' : ''}`}
+            role={pane ? 'region' : 'dialog'}
+            aria-label="Changes"
+            tabIndex={-1}
+            onKeyDown={onKeyDown}
+        >
+            {pane ? null : (
+                <header className="changes__bar">
+                    <span className="changes__title">Changes</span>
+                    {changes ? <span className="changes__root" title={changes.root}>{shortPath(changes.root)}</span> : null}
+                    <span className="changes__count">{count}</span>
+                    <span className="changes__hint">↑↓ files · Esc closes</span>
+                    <button type="button" className="icon-button" aria-label="Open in a pane" title="Open in a pane" onClick={() => openAsPane(sessionId)}>
+                        <SplitRightIcon size={14} />
+                    </button>
+                    <button type="button" className="icon-button" aria-label="Close" title="Close (Esc)" onClick={() => openChanges(null)}>
+                        <CloseIcon size={14} />
+                    </button>
+                </header>
+            )}
             {error ? (
                 <div className="changes__empty">{error}</div>
             ) : changes && files.length === 0 ? (
@@ -162,14 +199,14 @@ export function ChangesView({ sessionId }: { sessionId: string }) {
                             <div className="changes__file-head">
                                 <span className="changes__path">{file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}</span>
                                 <span className="changes__stage">{STATE_MARKS[file.state].label}, {stageLabel(file)}</span>
-                                {shown && !shown.binary ? (
+                                {shown && stat ? (
                                     <span className="changes__stat">
-                                        <span className="changes__added">+{shown.added}</span> <span className="changes__removed">−{shown.removed}</span>
+                                        <span className="changes__added">+{stat.added}</span> <span className="changes__removed">−{stat.removed}</span>
                                     </span>
                                 ) : null}
                             </div>
                         ) : null}
-                        {diffError ? <div className="changes__empty">{diffError}</div> : shown ? <DiffBody diff={shown} /> : null}
+                        {contentsError ? <div className="changes__empty">{contentsError}</div> : shown ? <DiffBody contents={shown} onStat={setStat} /> : null}
                     </div>
                 </div>
             )}
@@ -177,31 +214,15 @@ export function ChangesView({ sessionId }: { sessionId: string }) {
     );
 }
 
-function DiffBody({ diff }: { diff: FileDiff }) {
-    if (diff.binary) {
+function DiffBody({ contents, onStat }: { contents: FileContents; onStat: (stat: DiffStat | null) => void }) {
+    if (contents.binary) {
         return <div className="changes__empty">A binary file; its contents are not shown.</div>;
     }
-    if (diff.tooLarge) {
-        return <div className="changes__empty">Too large to show here ({diff.added + diff.removed} changed lines).</div>;
+    if (contents.tooLarge) {
+        return <div className="changes__empty">Too large to show here.</div>;
     }
-    if (diff.hunks.length === 0) {
+    if (contents.original === contents.modified) {
         return <div className="changes__empty">No changes to the contents.</div>;
     }
-    return (
-        <div className="diff">
-            {diff.hunks.map((hunk, index) => (
-                <div key={index} className="diff__hunk">
-                    <div className="diff__header">{hunk.header}</div>
-                    {hunk.lines.map((line, lineIndex) => (
-                        <div key={lineIndex} className={`diff__line diff__line--${line.kind}`}>
-                            <span className="diff__number">{line.old ?? ''}</span>
-                            <span className="diff__number">{line.new ?? ''}</span>
-                            <span className="diff__sign">{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span>
-                            <span className="diff__text">{line.text}</span>
-                        </div>
-                    ))}
-                </div>
-            ))}
-        </div>
-    );
+    return <DiffEditor contents={contents} onStat={onStat} />;
 }

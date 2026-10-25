@@ -1,6 +1,11 @@
+import { previewUrl } from './preview.ts';
 import type { PaneSpec } from './types.ts';
 
 export function commandPane(command: string): PaneSpec {
+    const url = previewUrl(command);
+    if (url) {
+        return { adapter: 'preview', command: url };
+    }
     const agent = /^\s*(claude|opencode)(?:\s+([\s\S]*))?$/.exec(command);
     if (!agent) {
         return { adapter: 'command', command: command.trim() };

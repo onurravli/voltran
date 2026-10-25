@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, unlinkSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SessionChangesReader, parseChangedFiles, parsePatch } from './changes.ts';
+import { MAX_FILE_BYTES, SessionChangesReader, parseChangedFiles } from './changes.ts';
 import { commandRunner } from './git.ts';
 
 const cleanups: (() => void)[] = [];
@@ -46,21 +46,6 @@ describe('parseChangedFiles', () => {
     });
 });
 
-describe('parsePatch', () => {
-    it('numbers old and new lines through each hunk', () => {
-        const hunks = parsePatch('diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -2,3 +2,3 @@ fn\n keep\n-old\n+new\n\\ No newline at end of file\n');
-        expect(hunks).toEqual([{
-            header: '@@ -2,3 +2,3 @@ fn',
-            lines: [
-                { kind: 'context', text: 'keep', old: 2, new: 2 },
-                { kind: 'del', text: 'old', old: 3, new: null },
-                { kind: 'add', text: 'new', old: null, new: 3 },
-                { kind: 'note', text: 'No newline at end of file', old: null, new: null },
-            ],
-        }]);
-    });
-});
-
 describe('SessionChangesReader', () => {
     it('lists the changes of the whole repository and shows each one', async () => {
         const { root, git } = repository();
@@ -83,19 +68,27 @@ describe('SessionChangesReader', () => {
             'untracked blob.bin', 'untracked fresh.txt', 'deleted gone.txt', 'modified kept.txt', 'untracked link', 'renamed renamed.txt',
         ]);
 
-        const kept = await reader().diff(root, 'kept.txt');
-        expect(kept).toMatchObject({ added: 1, removed: 1, binary: false, tooLarge: false });
-        expect(kept.hunks[0].lines.filter((line) => line.kind !== 'context')).toEqual([
-            { kind: 'del', text: 'two', old: 2, new: null },
-            { kind: 'add', text: '2', old: null, new: 2 },
-        ]);
-        expect((await reader().diff(root, 'gone.txt')).removed).toBe(1);
-        expect(await reader().diff(root, 'renamed.txt')).toMatchObject({ added: 0, removed: 0, hunks: [] });
-        const fresh = await reader().diff(root, 'fresh.txt');
-        expect(fresh.added).toBe(2);
-        expect(fresh.hunks[0].lines.map((line) => line.text)).toEqual(['hello', 'world', 'No newline at end of file']);
-        expect((await reader().diff(root, 'blob.bin')).binary).toBe(true);
-        expect((await reader().diff(root, 'link')).hunks[0].lines[0].text).toBe('/etc/hosts');
+        const contents = (path: string) => reader().contents(root, path);
+        expect(await contents('kept.txt')).toEqual({
+            path: 'kept.txt', oldPath: null, original: 'one\ntwo\nthree\n', modified: 'one\n2\nthree\n', binary: false, tooLarge: false,
+        });
+        expect(await contents('gone.txt')).toMatchObject({ original: 'bye\n', modified: null });
+        expect(await contents('renamed.txt')).toMatchObject({ oldPath: 'moved.txt', original: 'a\nb\nc\nd\ne\n', modified: 'a\nb\nc\nd\ne\n' });
+        expect(await contents('fresh.txt')).toMatchObject({ original: null, modified: 'hello\nworld' });
+        expect(await contents('blob.bin')).toMatchObject({ original: null, modified: null, binary: true });
+        expect(await contents('link')).toMatchObject({ modified: '/etc/hosts' });
+    });
+
+    it('shows neither side of a file too large or binary on either side', async () => {
+        const { root, git } = repository();
+        writeFileSync(join(root, 'big.txt'), 'x'.repeat(MAX_FILE_BYTES + 1));
+        writeFileSync(join(root, 'was-binary'), Buffer.from([0, 1, 2]));
+        git('add', '.');
+        git('commit', '-q', '-m', 'first');
+        writeFileSync(join(root, 'big.txt'), 'small\n');
+        writeFileSync(join(root, 'was-binary'), 'text now\n');
+        expect(await reader().contents(root, 'big.txt')).toMatchObject({ original: null, modified: 'small\n', tooLarge: true });
+        expect(await reader().contents(root, 'was-binary')).toMatchObject({ original: null, modified: 'text now\n', binary: true });
     });
 
     it('reads only files that have changes', async () => {
@@ -103,15 +96,15 @@ describe('SessionChangesReader', () => {
         writeFileSync(join(root, 'a.txt'), 'a\n');
         git('add', '.');
         git('commit', '-q', '-m', 'first');
-        await expect(reader().diff(root, 'a.txt')).rejects.toThrow('has no changes');
-        await expect(reader().diff(root, '../../etc/passwd')).rejects.toThrow('has no changes');
+        await expect(reader().contents(root, 'a.txt')).rejects.toThrow('has no changes');
+        await expect(reader().contents(root, '../../etc/passwd')).rejects.toThrow('has no changes');
     });
 
-    it('shows a repository with no commits against the empty tree', async () => {
+    it('shows a repository with no commits as all new', async () => {
         const { root, git } = repository();
         writeFileSync(join(root, 'first.txt'), 'x\n');
         git('add', '.');
-        expect(await reader().diff(root, 'first.txt')).toMatchObject({ added: 1, removed: 0 });
+        expect(await reader().contents(root, 'first.txt')).toMatchObject({ original: null, modified: 'x\n' });
     });
 
     it('runs no command the repository configures', async () => {
@@ -130,8 +123,7 @@ describe('SessionChangesReader', () => {
 
         const changes = await reader().list(root);
         expect(changes.files.map((file) => file.path)).toEqual(['a.txt']);
-        const diff = await reader().diff(root, 'a.txt');
-        expect(diff.hunks[0].lines.map((line) => `${line.kind} ${line.text}`)).toEqual(['del a', 'add b']);
+        expect(await reader().contents(root, 'a.txt')).toMatchObject({ original: 'a\n', modified: 'b\n' });
         for (const name of ['external', 'driver', 'textconv', 'clean', 'fsmonitor']) {
             expect(existsSync(marker(name)), name).toBe(false);
         }

@@ -1,25 +1,13 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ChangedFile, DiffHunk, DiffLine, FileDiff, SessionChanges } from '@voltran/shared';
+import type { ChangedFile, FileContents, SessionChanges } from '@voltran/shared';
 import { FILTER_CONFIG_ARGS, SUBMODULE_ARGS, repositoryFilterOverrides, type GitRunner } from './git.ts';
 
 export const MAX_FILES = 500;
-export const MAX_DIFF_LINES = 5000;
-const MAX_UNTRACKED_BYTES = 512 * 1024;
-const EMPTY_TREE: Record<string, string> = {
-    sha1: '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
-    sha256: '6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321',
-};
+export const MAX_FILE_BYTES = 512 * 1024;
 
 export class ChangesError extends Error {}
 
-// The same guards as the status poll, plus what `git diff` adds: an external diff command or a
-// textconv driver from the repository's config would run a program of the repository's choosing.
-// The prefixes and paths are pinned so that the user's diff settings cannot change the output's shape.
-const DIFF_ARGS = [
-    'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-relative', '--src-prefix=a/', '--dst-prefix=b/',
-    '--submodule=short', '--find-renames', ...SUBMODULE_ARGS,
-];
 const QUIET = ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false'];
 
 export function parseChangedFiles(output: string): ChangedFile[] {
@@ -44,87 +32,36 @@ export function parseChangedFiles(output: string): ChangedFile[] {
     return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-export function parsePatch(patch: string): DiffHunk[] {
-    const hunks: DiffHunk[] = [];
-    let hunk: DiffHunk | null = null;
-    let oldLine = 0;
-    let newLine = 0;
-    for (const text of patch.split('\n')) {
-        const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(text);
-        if (header) {
-            hunk = { header: text, lines: [] };
-            hunks.push(hunk);
-            oldLine = Number(header[1]);
-            newLine = Number(header[2]);
-            continue;
-        }
-        if (!hunk) {
-            continue;
-        }
-        let line: DiffLine;
-        if (text.startsWith('+')) {
-            line = { kind: 'add', text: text.slice(1), old: null, new: newLine++ };
-        } else if (text.startsWith('-')) {
-            line = { kind: 'del', text: text.slice(1), old: oldLine++, new: null };
-        } else if (text.startsWith(' ')) {
-            line = { kind: 'context', text: text.slice(1), old: oldLine++, new: newLine++ };
-        } else if (text.startsWith('\\')) {
-            line = { kind: 'note', text: text.slice(2), old: null, new: null };
-        } else {
-            continue;
-        }
-        hunk.lines.push(line);
-    }
-    return hunks;
-}
+type Side = { text: string } | 'binary' | 'tooLarge' | null;
 
-// An untracked file is shown whole, as git would show a new file. It is opened without following a
-// link, so a file swapped for a link after the status was read still shows only the link.
-export function untrackedDiff(root: string, path: string): FileDiff {
+// A file in the working tree is opened without following a link, so a file swapped for a link after
+// the status was read still shows only the link. A file that is not there reads as null.
+export function readWorkingFile(root: string, path: string): Side {
     const file = join(root, path);
-    const base: FileDiff = { path, added: 0, removed: 0, binary: false, tooLarge: false, hunks: [] };
-    if (lstatSync(file).isSymbolicLink()) {
-        return withLines(base, [readlinkSync(file)], false);
+    let link: boolean;
+    try {
+        link = lstatSync(file).isSymbolicLink();
+    } catch {
+        return null;
+    }
+    if (link) {
+        return { text: readlinkSync(file) };
     }
     const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
         const stat = fstatSync(fd);
         if (!stat.isFile()) {
-            return { ...base, binary: true };
+            return 'binary';
         }
-        if (stat.size > MAX_UNTRACKED_BYTES) {
-            return { ...base, tooLarge: true };
+        if (stat.size > MAX_FILE_BYTES) {
+            return 'tooLarge';
         }
         const buffer = Buffer.alloc(stat.size);
-        const read = readSync(fd, buffer, 0, stat.size, 0);
-        const content = buffer.subarray(0, read);
-        if (content.includes(0)) {
-            return { ...base, binary: true };
-        }
-        const text = content.toString('utf8');
-        const lines = text.split('\n');
-        const endsWithNewline = text.endsWith('\n');
-        if (endsWithNewline) {
-            lines.pop();
-        }
-        if (lines.length > MAX_DIFF_LINES) {
-            return { ...base, added: lines.length, tooLarge: true };
-        }
-        return withLines(base, lines, !endsWithNewline && text.length > 0);
+        const content = buffer.subarray(0, readSync(fd, buffer, 0, stat.size, 0));
+        return content.includes(0) ? 'binary' : { text: content.toString('utf8') };
     } finally {
         closeSync(fd);
     }
-}
-
-function withLines(base: FileDiff, lines: string[], noNewline: boolean): FileDiff {
-    if (lines.length === 0) {
-        return base;
-    }
-    const diffLines: DiffLine[] = lines.map((text, index) => ({ kind: 'add', text, old: null, new: index + 1 }));
-    if (noNewline) {
-        diffLines.push({ kind: 'note', text: 'No newline at end of file', old: null, new: null });
-    }
-    return { ...base, added: lines.length, hunks: [{ header: `@@ -0,0 +1,${lines.length} @@`, lines: diffLines }] };
 }
 
 // Reads what changed in a session's repository, on request only. Every command runs with the
@@ -165,35 +102,47 @@ export class SessionChangesReader {
         return { root, files: files.slice(0, MAX_FILES), truncated: files.length > MAX_FILES };
     }
 
-    private async status(cwd: string): Promise<{ root: string; guards: string[]; files: ChangedFile[] }> {
+    private async status(cwd: string): Promise<{ root: string; files: ChangedFile[] }> {
         const root = await this.root(cwd);
         const guards = await this.guards(root);
         const files = parseChangedFiles(await this.git([...guards, 'status', '--porcelain=v2', '-z', '--untracked-files=all', ...SUBMODULE_ARGS], root));
-        return { root, guards, files };
+        return { root, files };
     }
 
     // Only a file the status lists right now can be read, so a client cannot name any other path.
-    async diff(cwd: string, path: string): Promise<FileDiff> {
-        const { root, guards, files } = await this.status(cwd);
+    // A side the file does not have, such as the last commit's side of a new file, is null.
+    async contents(cwd: string, path: string): Promise<FileContents> {
+        const { root, files } = await this.status(cwd);
         const file = files.find((entry) => entry.path === path);
         if (!file) {
             throw new ChangesError(`${path} has no changes`);
         }
-        if (file.state === 'untracked') {
-            return untrackedDiff(root, path);
+        const sides = [file.state === 'untracked' ? null : await this.committed(root, file.oldPath ?? path), readWorkingFile(root, path)];
+        const text = sides.map((side) => (side !== null && typeof side === 'object' ? side.text : null));
+        return {
+            path,
+            oldPath: file.oldPath,
+            original: text[0],
+            modified: text[1],
+            binary: sides.includes('binary'),
+            tooLarge: sides.includes('tooLarge'),
+        };
+    }
+
+    // cat-file shows the blob as it is stored, so no filter or textconv of the repository runs.
+    private async committed(root: string, path: string): Promise<Side> {
+        const object = `HEAD:${path}`;
+        const size = await this.run('git', [...QUIET, 'cat-file', '-s', object], root);
+        if (!size.ok) {
+            return null;
         }
-        const head = await this.run('git', ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], root);
-        const base = head.ok ? 'HEAD' : EMPTY_TREE[(await this.git(['rev-parse', '--show-object-format'], root)).trim()] ?? EMPTY_TREE.sha1;
-        const paths = file.oldPath ? [file.oldPath, file.path] : [file.path];
-        const numstat = (await this.git([...guards, ...DIFF_ARGS, '--numstat', base, '--', ...paths], root)).split('\n').filter(Boolean);
-        const counts = numstat.map((line) => line.split('\t'));
-        const binary = counts.some(([added]) => added === '-');
-        const added = counts.reduce((sum, [count]) => sum + (Number(count) || 0), 0);
-        const removed = counts.reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
-        const result: FileDiff = { path, added, removed, binary, tooLarge: added + removed > MAX_DIFF_LINES, hunks: [] };
-        if (binary || result.tooLarge) {
-            return result;
+        if (Number(size.stdout.trim()) > MAX_FILE_BYTES) {
+            return 'tooLarge';
         }
-        return { ...result, hunks: parsePatch(await this.git([...guards, ...DIFF_ARGS, base, '--', ...paths], root)) };
+        const blob = await this.run('git', [...QUIET, 'cat-file', 'blob', object], root);
+        if (!blob.ok) {
+            return 'binary';
+        }
+        return blob.stdout.includes('\0') ? 'binary' : { text: blob.stdout };
     }
 }

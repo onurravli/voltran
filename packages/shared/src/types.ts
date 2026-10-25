@@ -1,8 +1,8 @@
 import type { SettingsState } from './settings.ts';
 
-export type AdapterId = 'claude' | 'opencode' | 'codex' | 'antigravity' | 'shell' | 'command' | 'subagent';
+export type AdapterId = 'claude' | 'opencode' | 'codex' | 'antigravity' | 'shell' | 'command' | 'subagent' | 'preview' | 'changes';
 
-export type PaneKind = 'agent' | 'shell' | 'process';
+export type PaneKind = 'agent' | 'shell' | 'process' | 'page';
 
 export type StatusSource = 'hooks' | 'heuristic' | 'process';
 
@@ -95,25 +95,13 @@ export interface SessionChanges {
     truncated: boolean;
 }
 
-export interface DiffLine {
-    kind: 'add' | 'del' | 'context' | 'note';
-    text: string;
-    old: number | null;
-    new: number | null;
-}
-
-export interface DiffHunk {
-    header: string;
-    lines: DiffLine[];
-}
-
-export interface FileDiff {
+export interface FileContents {
     path: string;
-    added: number;
-    removed: number;
+    oldPath: string | null;
+    original: string | null;
+    modified: string | null;
     binary: boolean;
     tooLarge: boolean;
-    hunks: DiffHunk[];
 }
 
 export interface Workspace {
@@ -294,6 +282,7 @@ export interface UpdateWorkspaceBody {
 
 export interface UpdatePaneBody {
     title?: string;
+    url?: string;
 }
 
 export interface MovePaneBody {

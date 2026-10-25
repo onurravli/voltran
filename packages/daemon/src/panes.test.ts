@@ -124,6 +124,18 @@ describe('PaneManager', () => {
         expect(recorded.records.at(-1)?.ended).toBe(true);
     });
 
+    it('never starts a process for a preview or changes pane', () => {
+        const { manager, recorded } = setup();
+        for (const pane of [makePane({ adapter: 'preview', command: 'http://localhost:5173/' }), makePane({ adapter: 'changes' })]) {
+            manager.add(pane);
+            manager.attach(pane.id, new FakeClient());
+            manager.resize(pane.id, 80, 24);
+            manager.restart(pane.id);
+            expect(view(manager, pane.id)).toMatchObject({ status: 'idle', pid: null });
+        }
+        expect(recorded.records).toEqual([]);
+    });
+
     it('sends a snapshot plus queued output without losing or repeating bytes', async () => {
         const { manager } = setup();
         const pane = makePane();

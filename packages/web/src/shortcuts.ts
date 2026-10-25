@@ -3,6 +3,7 @@ import { api } from './api.ts';
 import { isPrimaryChord, keyLabel } from './keymap.ts';
 import { revealPane } from './notify.ts';
 import { attentionPanes, reportError, selectedWorkspace, shownPaneIds, useUi } from './store.ts';
+import { peekTerminal } from './terminals.ts';
 import { removeFromWorkspace } from './workspace-actions.ts';
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -218,7 +219,7 @@ function toggleFocusedNotes(): void {
     const state = useUi.getState();
     const paneId = visibleFocusedPane();
     const pane = state.app?.panes.find((entry) => entry.id === paneId);
-    if (!pane || pane.adapter === 'subagent') {
+    if (!pane || pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes') {
         state.showToast('Focus a terminal pane to see its notes');
         return;
     }
@@ -266,7 +267,9 @@ export function visibleFocusedPane(): string | null {
 }
 
 function findablePane(): string | null {
-    return useUi.getState().dialog ? null : visibleFocusedPane();
+    const state = useUi.getState();
+    const paneId = state.dialog || state.changesSessionId ? null : visibleFocusedPane();
+    return paneId && peekTerminal(paneId) ? paneId : null;
 }
 
 function isFindKey(event: KeyboardEvent): boolean {

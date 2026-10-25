@@ -5,7 +5,7 @@ import type {
     CreateWorkspaceBody,
     Diagnostics,
     EditSettingsBody,
-    FileDiff,
+    FileContents,
     MovePaneBody,
     NotesLockBody,
     NotesMeta,
@@ -166,7 +166,7 @@ export const api = {
     health: () => request<{ version: string }>('GET', '/api/health'),
     diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
-    diff: (sessionId: string, path: string) => request<FileDiff>('GET', `/api/sessions/${sessionId}/diff?path=${encodeURIComponent(path)}`),
+    contents: (sessionId: string, path: string) => request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };
