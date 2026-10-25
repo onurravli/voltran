@@ -52,7 +52,7 @@ const text = (value: unknown): string | null => {
 };
 
 const record = (value: unknown): Record<string, unknown> =>
-    value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
 // Claude Code reports a subagent's id on SubagentStart but its description only on the Agent tool
 // call before it, so starts are paired with queued calls of the same type and corrected once
@@ -219,15 +219,16 @@ export class SubagentTracker {
         }
         for (const [id, task] of live) {
             if (!this.running.has(id)) {
-                changed = this.add({
-                    id,
-                    type: 'agent',
-                    description: text(task.description) ?? 'Background agent',
-                    background: true,
-                    startedAt: now,
-                    toolUseId: null,
-                    transcriptPath: null,
-                }) || changed;
+                changed =
+                    this.add({
+                        id,
+                        type: 'agent',
+                        description: text(task.description) ?? 'Background agent',
+                        background: true,
+                        startedAt: now,
+                        toolUseId: null,
+                        transcriptPath: null,
+                    }) || changed;
             }
         }
         return changed;
@@ -258,9 +259,11 @@ export class SubagentTracker {
             return false;
         }
         this.running.set(entry.id, entry);
-        return !previous
-            || previous.description !== entry.description
-            || previous.background !== entry.background
-            || previous.type !== entry.type;
+        return (
+            !previous ||
+            previous.description !== entry.description ||
+            previous.background !== entry.background ||
+            previous.type !== entry.type
+        );
     }
 }

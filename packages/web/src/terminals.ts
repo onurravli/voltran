@@ -178,7 +178,12 @@ export class TerminalSession {
             }
         }
         const end = lines.findIndex((line) => line.startsWith('─'));
-        return (lines.slice(0, end < 0 ? undefined : end).join('\n').match(/\[Image #\d+\]/g) ?? []).length;
+        return (
+            lines
+                .slice(0, end < 0 ? undefined : end)
+                .join('\n')
+                .match(/\[Image #\d+\]/g) ?? []
+        ).length;
     }
 
     private until(condition: () => boolean, timeoutMs: number): Promise<void> {

@@ -35,7 +35,8 @@ interface MenuSubmenu {
 export type MenuItem = MenuAction | MenuSwatches | MenuSubmenu;
 
 function copy(text: string, what: string): void {
-    navigator.clipboard.writeText(text)
+    navigator.clipboard
+        .writeText(text)
         .then(() => useUi.getState().showToast(`Copied the ${what}`))
         .catch(reportError);
 }
@@ -49,7 +50,9 @@ function addPaneItems(sessionId: string): MenuItem[] {
             .then((pane) => revealPane(sessionId, pane.id))
             .catch(reportError);
     };
-    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
+    const adapters = (app?.adapters ?? []).filter(
+        (adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent',
+    );
     return [
         ...adapters.map((adapter) => ({
             label: adapter.label,
@@ -110,7 +113,9 @@ export function removeProject(project: Project): void {
         kind: 'confirm',
         title: `Remove ${project.name}?`,
         body: `Its ${sessions.length === 1 ? 'session' : `${sessions.length} sessions`} and every process in them stop. Files in ${project.path} are not touched.${
-            sessions.some((session) => session.worktree) ? ' Session worktrees without uncommitted changes are removed; the others and every branch stay.' : ''
+            sessions.some((session) => session.worktree)
+                ? ' Session worktrees without uncommitted changes are removed; the others and every branch stay.'
+                : ''
         }`,
         action: 'Remove project',
         onConfirm: () => api.deleteProject(project.id),
@@ -149,7 +154,12 @@ export function projectMenu(project: Project, rename: () => void): MenuItem[] {
     return [
         { label: 'New session…', onSelect: () => ui.openDialog({ kind: 'session', projectId: project.id }) },
         ...(ui.app?.git[project.path]
-            ? [{ label: 'New session in a worktree…', onSelect: () => ui.openDialog({ kind: 'session', projectId: project.id, worktree: true }) }]
+            ? [
+                  {
+                      label: 'New session in a worktree…',
+                      onSelect: () => ui.openDialog({ kind: 'session', projectId: project.id, worktree: true }),
+                  },
+              ]
             : []),
         { label: 'Rename', separated: true, onSelect: rename },
         {
@@ -160,20 +170,30 @@ export function projectMenu(project: Project, rename: () => void): MenuItem[] {
         },
         { label: collapsed ? 'Expand' : 'Collapse', onSelect: () => ui.toggleProject(project.id) },
         { label: 'Copy folder path', onSelect: () => copy(project.path, 'folder path') },
-        ...moveItems((ui.app?.projects ?? []).map((entry) => entry.id), project.id, (moveBefore) => api.updateProject(project.id, { moveBefore })),
+        ...moveItems(
+            (ui.app?.projects ?? []).map((entry) => entry.id),
+            project.id,
+            (moveBefore) => api.updateProject(project.id, { moveBefore }),
+        ),
         { label: 'Remove project…', danger: true, separated: true, onSelect: () => removeProject(project) },
     ];
 }
 
 // The header has its own Add pane button and shows no pane list, so those two items are sidebar only.
-export function sessionMenu(session: Session, actions: { rename: () => void; editLink: () => void }, where: 'sidebar' | 'header'): MenuItem[] {
+export function sessionMenu(
+    session: Session,
+    actions: { rename: () => void; editLink: () => void },
+    where: 'sidebar' | 'header',
+): MenuItem[] {
     const ui = useUi.getState();
     const panes = panesOf(ui.app, session.id);
-    const branch = session.worktree ? ui.app?.git[session.cwd]?.branch ?? null : null;
+    const branch = session.worktree ? (ui.app?.git[session.cwd]?.branch ?? null) : null;
     const finished = panes.filter((pane) => pane.status === 'done');
     const link = session.link;
     const sidebar = where === 'sidebar';
-    const siblings = orderedSessions(ui.app, ui.showArchived).filter((entry) => entry.projectId === session.projectId).map((entry) => entry.id);
+    const siblings = orderedSessions(ui.app, ui.showArchived)
+        .filter((entry) => entry.projectId === session.projectId)
+        .map((entry) => entry.id);
     return [
         ...(sidebar ? [{ label: 'Add pane', items: addPaneItems(session.id), disabled: session.archived }] : []),
         { label: 'Rename', onSelect: actions.rename },
@@ -186,12 +206,26 @@ export function sessionMenu(session: Session, actions: { rename: () => void; edi
             : []),
         { label: 'Add to workspace', items: workspaceItems({ kind: 'session', sessionId: session.id }), disabled: panes.length === 0 },
         ...(finished.length > 0
-            ? [{ label: finished.length === 1 ? 'Mark as seen' : 'Mark all as seen', onSelect: () => finished.forEach((pane) => api.seenPane(pane.id).catch(reportError)) }]
+            ? [
+                  {
+                      label: finished.length === 1 ? 'Mark as seen' : 'Mark all as seen',
+                      onSelect: () => finished.forEach((pane) => api.seenPane(pane.id).catch(reportError)),
+                  },
+              ]
             : []),
         ...(sidebar ? moveItems(siblings, session.id, (moveBefore) => api.updateSession(session.id, { moveBefore })) : []),
         session.archived
-            ? { label: 'Restore session', separated: true, onSelect: () => api.updateSession(session.id, { archived: false }).catch(reportError) }
-            : { label: 'Archive session', note: 'stops its processes', separated: true, onSelect: () => api.updateSession(session.id, { archived: true }).catch(reportError) },
+            ? {
+                  label: 'Restore session',
+                  separated: true,
+                  onSelect: () => api.updateSession(session.id, { archived: false }).catch(reportError),
+              }
+            : {
+                  label: 'Archive session',
+                  note: 'stops its processes',
+                  separated: true,
+                  onSelect: () => api.updateSession(session.id, { archived: true }).catch(reportError),
+              },
         { label: 'Delete session…', danger: true, onSelect: () => deleteSession(session) },
     ];
 }
@@ -236,8 +270,17 @@ export function paneMenu(pane: PaneView): MenuItem[] {
     return [
         { label: 'Show', onSelect: () => revealPane(session.id, pane.id) },
         { label: maximized ? 'Restore size' : 'Maximize', onSelect: () => maximize(pane, !maximized) },
-        ...(pane.adapter === 'claude' ? [{ label: conversationOpen ? 'Show terminal' : 'Show conversation', onSelect: () => showConversation(pane, !conversationOpen) }] : []),
-        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes' ? [] : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
+        ...(pane.adapter === 'claude'
+            ? [
+                  {
+                      label: conversationOpen ? 'Show terminal' : 'Show conversation',
+                      onSelect: () => showConversation(pane, !conversationOpen),
+                  },
+              ]
+            : []),
+        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes'
+            ? []
+            : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
         {
             label: adapter?.resumable ? 'Restart and resume' : 'Restart',
             separated: true,
@@ -280,7 +323,13 @@ export function sidebarMenu(): MenuItem[] {
         { label: 'Add project…', onSelect: () => ui.openDialog({ kind: 'project' }) },
         { label: 'New workspace', onSelect: createWorkspace },
         ...(archived || ui.showArchived
-            ? [{ label: ui.showArchived ? 'Hide archived sessions' : 'Show archived sessions', separated: true, onSelect: () => ui.setShowArchived(!ui.showArchived) }]
+            ? [
+                  {
+                      label: ui.showArchived ? 'Hide archived sessions' : 'Show archived sessions',
+                      separated: true,
+                      onSelect: () => ui.setShowArchived(!ui.showArchived),
+                  },
+              ]
             : []),
     ];
 }

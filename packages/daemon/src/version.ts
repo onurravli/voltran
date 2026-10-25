@@ -11,7 +11,9 @@ interface Built {
 function readBuilt(file: string): Built | null {
     try {
         const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<Built> | null;
-        return parsed && typeof parsed.ui === 'string' && typeof parsed.protocol === 'string' ? { ui: parsed.ui, protocol: parsed.protocol } : null;
+        return parsed && typeof parsed.ui === 'string' && typeof parsed.protocol === 'string'
+            ? { ui: parsed.ui, protocol: parsed.protocol }
+            : null;
     } catch {
         return null;
     }

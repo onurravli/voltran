@@ -46,7 +46,14 @@ export function isPrimaryChord(event: KeyInput, mac: boolean): boolean {
         : event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey;
 }
 
-const KEY_NAMES: [string, string][] = [['⌃', 'Ctrl+'], ['⌥', 'Alt+'], ['⇧', 'Shift+'], ['⌘', 'Ctrl+Shift+'], ['↩', 'Enter'], ['⌫', 'Backspace']];
+const KEY_NAMES: [string, string][] = [
+    ['⌃', 'Ctrl+'],
+    ['⌥', 'Alt+'],
+    ['⇧', 'Shift+'],
+    ['⌘', 'Ctrl+Shift+'],
+    ['↩', 'Enter'],
+    ['⌫', 'Backspace'],
+];
 
 export function keyLabel(keys: string, mac: boolean): string {
     return mac ? keys : KEY_NAMES.reduce((label, [glyph, name]) => label.replaceAll(glyph, name), keys);

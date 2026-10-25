@@ -69,9 +69,10 @@ export function addToWorkspace(workspaceId: string | null, dragged: Dragged): vo
     if (!app) {
         return;
     }
-    const target = workspaceId === null
-        ? api.createWorkspace({ title: nextWorkspaceTitle(app.workspaces) })
-        : Promise.resolve(app.workspaces.find((entry) => entry.id === workspaceId));
+    const target =
+        workspaceId === null
+            ? api.createWorkspace({ title: nextWorkspaceTitle(app.workspaces) })
+            : Promise.resolve(app.workspaces.find((entry) => entry.id === workspaceId));
     target
         .then(async (workspace) => {
             if (!workspace) {

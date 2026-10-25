@@ -19,16 +19,23 @@ function applyTheme(state: UiState): void {
     }
     // An installed app window paints its title bar in this color, so it matches the bars below it.
     document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', properties['--bay']);
-    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify({
-        appearance: state.appearance,
-        dark: themeProperties(themeById(state.themeIds.dark)),
-        light: themeProperties(themeById(state.themeIds.light)),
-    }));
+    localStorage.setItem(
+        THEME_CACHE_KEY,
+        JSON.stringify({
+            appearance: state.appearance,
+            dark: themeProperties(themeById(state.themeIds.dark)),
+            light: themeProperties(themeById(state.themeIds.light)),
+        }),
+    );
 }
 
 applyTheme(useUi.getState());
 useUi.subscribe((state, previous) => {
-    if (activeThemeId(state) !== activeThemeId(previous) || state.appearance !== previous.appearance || state.themeIds !== previous.themeIds) {
+    if (
+        activeThemeId(state) !== activeThemeId(previous) ||
+        state.appearance !== previous.appearance ||
+        state.themeIds !== previous.themeIds
+    ) {
         applyTheme(state);
     }
 });

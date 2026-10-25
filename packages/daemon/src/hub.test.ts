@@ -43,7 +43,15 @@ describe('Hub', () => {
         const kept = session.layout?.type === 'pane' ? session.layout.paneId : '';
         const workspace = first.hub.createWorkspace({ title: 'stale' });
         first.store.updateWorkspace(workspace.id, {
-            layout: { type: 'split', direction: 'horizontal', children: [{ type: 'pane', paneId: 'gone' }, { type: 'pane', paneId: kept }], sizes: [50, 50] },
+            layout: {
+                type: 'split',
+                direction: 'horizontal',
+                children: [
+                    { type: 'pane', paneId: 'gone' },
+                    { type: 'pane', paneId: kept },
+                ],
+                sizes: [50, 50],
+            },
         });
         await first.hub.shutdown();
         first.store.close();
@@ -53,7 +61,9 @@ describe('Hub', () => {
             await second.hub.shutdown();
             second.store.close();
         });
-        expect(second.hub.state().workspaces).toEqual([expect.objectContaining({ id: workspace.id, layout: { type: 'pane', paneId: kept } })]);
+        expect(second.hub.state().workspaces).toEqual([
+            expect.objectContaining({ id: workspace.id, layout: { type: 'pane', paneId: kept } }),
+        ]);
     });
 
     it('sends the new state before it tells windows to open a session', async () => {
@@ -67,7 +77,9 @@ describe('Hub', () => {
         const project = hub.createProject({ path: dir });
         const session = await hub.createSession({ projectId: project.id, title: 'new', panes: [{ adapter: 'shell' }] });
         const events: string[] = [];
-        hub.subscribe((event) => events.push(event.type === 'state' ? `state:${event.state.sessions.some((entry) => entry.id === session.id)}` : event.type));
+        hub.subscribe((event) =>
+            events.push(event.type === 'state' ? `state:${event.state.sessions.some((entry) => entry.id === session.id)}` : event.type),
+        );
         hub.revealSession(session.id);
         expect(events.slice(-2)).toEqual(['state:true', 'reveal']);
         expect(() => hub.revealSession('missing')).toThrow(HttpError);
@@ -84,7 +96,12 @@ describe('Hub', () => {
         const project = hub.createProject({ path: dir });
         const session = await hub.createSession({ projectId: project.id, title: 'web', panes: [{ adapter: 'shell' }] });
         const shell = hub.state().panes.find((pane) => pane.sessionId === session.id)!;
-        const pane = hub.createPane(session.id, { adapter: 'preview', command: 'localhost:5173', splitFrom: shell.id, direction: 'horizontal' });
+        const pane = hub.createPane(session.id, {
+            adapter: 'preview',
+            command: 'localhost:5173',
+            splitFrom: shell.id,
+            direction: 'horizontal',
+        });
         expect(pane).toMatchObject({ adapter: 'preview', command: 'http://localhost:5173/', title: 'localhost:5173' });
         for (const command of ['example.com', 'localhost.example.com:80', 'file:///etc/passwd', undefined]) {
             expect(() => hub.createPane(session.id, { adapter: 'preview', command })).toThrow(HttpError);
@@ -113,7 +130,10 @@ describe('Hub', () => {
         const session = await hub.createSession({ projectId: project.id, title: 'review', panes: [{ adapter: 'changes' }] });
         const pane = hub.state().panes.find((entry) => entry.sessionId === session.id)!;
         expect(pane).toMatchObject({ adapter: 'changes', title: 'Changes', command: null, status: 'idle', pid: null });
-        expect(await hub.sessionFileContents(session.id, 'app.ts')).toMatchObject({ original: 'const a = 1;\n', modified: 'const a = 2;\n' });
+        expect(await hub.sessionFileContents(session.id, 'app.ts')).toMatchObject({
+            original: 'const a = 1;\n',
+            modified: 'const a = 2;\n',
+        });
         await expect(hub.sessionFileContents(session.id, 'missing.ts')).rejects.toMatchObject({ status: 409 });
     });
 
@@ -138,7 +158,10 @@ describe('Hub', () => {
         }
 
         const refused = async (action: Promise<unknown>): Promise<HttpError> => {
-            const error = await action.then(() => null, (failure: unknown) => failure);
+            const error = await action.then(
+                () => null,
+                (failure: unknown) => failure,
+            );
             expect(error).toBeInstanceOf(HttpError);
             return error as HttpError;
         };
@@ -147,7 +170,11 @@ describe('Hub', () => {
             const { dir, repo, hub } = repository();
             git(repo, 'branch', 'feature');
             const project = hub.createProject({ path: repo });
-            expect(await hub.projectGit(project.id)).toEqual({ repository: true, branch: 'main', branches: expect.arrayContaining(['main', 'feature']) });
+            expect(await hub.projectGit(project.id)).toEqual({
+                repository: true,
+                branch: 'main',
+                branches: expect.arrayContaining(['main', 'feature']),
+            });
             mkdirSync(join(dir, 'plain'));
             const plain = hub.createProject({ path: join(dir, 'plain') });
             expect((await hub.projectGit(plain.id)).repository).toBe(false);
@@ -173,9 +200,19 @@ describe('Hub', () => {
             const project = hub.createProject({ path: repo });
             const session = await hub.createSession({ projectId: project.id, title: 'Feature', worktree: { branch: 'feature' } });
             expect(git(session.cwd, 'branch', '--show-current')).toBe('feature');
-            expect((await refused(hub.createSession({ projectId: project.id, title: 'Main', worktree: { branch: 'main' } }))).status).toBe(409);
-            expect((await refused(hub.createSession({ projectId: project.id, title: 'Bad', worktree: { branch: 'bad..name' } }))).message).toContain('not a valid branch name');
-            expect((await refused(hub.createSession({ projectId: project.id, title: 'Bad base', worktree: { branch: 'new', base: 'nowhere' } }))).message).toContain('not a branch or commit');
+            expect((await refused(hub.createSession({ projectId: project.id, title: 'Main', worktree: { branch: 'main' } }))).status).toBe(
+                409,
+            );
+            expect(
+                (await refused(hub.createSession({ projectId: project.id, title: 'Bad', worktree: { branch: 'bad..name' } }))).message,
+            ).toContain('not a valid branch name');
+            expect(
+                (
+                    await refused(
+                        hub.createSession({ projectId: project.id, title: 'Bad base', worktree: { branch: 'new', base: 'nowhere' } }),
+                    )
+                ).message,
+            ).toContain('not a branch or commit');
             expect(hub.state().sessions).toHaveLength(1);
         });
 
@@ -207,7 +244,7 @@ describe('Hub', () => {
             expect(existsSync(removed.worktree!)).toBe(false);
         });
 
-        it('counts a worktree\'s changes without running a filter the repository configured', async () => {
+        it("counts a worktree's changes without running a filter the repository configured", async () => {
             const { dir, repo, hub } = repository();
             const marker = join(dir, 'filter-ran');
             writeFileSync(join(repo, '.gitattributes'), '*.ts filter=x\n');
@@ -234,7 +271,18 @@ describe('Hub', () => {
             const project = hub.createProject({ path: repo });
             const session = await hub.createSession({ projectId: project.id, title: 'Submodule', worktree: { branch: 'submodule' } });
             git(session.worktree!, '-c', 'protocol.file.allow=always', 'submodule', '-q', 'add', inner, 'inner');
-            git(session.worktree!, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'submodule');
+            git(
+                session.worktree!,
+                '-c',
+                'user.name=Test',
+                '-c',
+                'user.email=test@example.com',
+                'commit',
+                '-q',
+                '--no-gpg-sign',
+                '-m',
+                'submodule',
+            );
             const marker = join(dir, 'submodule-filter-ran');
             git(join(session.worktree!, 'inner'), 'config', 'filter.sub.clean', `touch '${marker}'; cat`);
             utimesSync(join(session.worktree!, 'inner', 'a.ts'), new Date(), new Date(Date.now() + 60_000));
@@ -272,7 +320,10 @@ describe('Hub', () => {
         };
         const projectNames = (hub: Hub): string[] => hub.state().projects.map((entry) => entry.name);
         const sessionTitles = (hub: Hub, projectId: string): string[] =>
-            hub.state().sessions.filter((entry) => entry.projectId === projectId).map((entry) => entry.title);
+            hub
+                .state()
+                .sessions.filter((entry) => entry.projectId === projectId)
+                .map((entry) => entry.title);
 
         it('moves a project in front of another, or to the end', () => {
             const { dir, hub } = opened();

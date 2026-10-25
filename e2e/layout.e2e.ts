@@ -95,7 +95,14 @@ describe('layout', () => {
             direction: 'horizontal',
             children: [
                 { type: 'pane', paneId: panes[2].id },
-                { type: 'split', direction: 'vertical', children: [{ type: 'pane', paneId: panes[1].id }, { type: 'pane', paneId: panes[0].id }] },
+                {
+                    type: 'split',
+                    direction: 'vertical',
+                    children: [
+                        { type: 'pane', paneId: panes[1].id },
+                        { type: 'pane', paneId: panes[0].id },
+                    ],
+                },
             ],
         });
         await until(async () => {

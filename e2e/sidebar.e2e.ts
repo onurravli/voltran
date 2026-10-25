@@ -55,7 +55,10 @@ describe('sidebar menus', () => {
         await page.getByRole('menuitem', { name: /Archive session/ }).click();
         await page.getByText('This session is archived and its processes are stopped.').waitFor();
         await pane.getByText('Archived. Restore the session to resume this pane.').waitFor();
-        await until(async () => (await voltran.state()).panes.every((entry) => entry.sessionId !== session.id || entry.pid === null), 'the process to stop');
+        await until(
+            async () => (await voltran.state()).panes.every((entry) => entry.sessionId !== session.id || entry.pid === null),
+            'the process to stop',
+        );
 
         await page.getByRole('button', { name: 'Restore session' }).click();
         await waitForText(pane, /archived-64[^]*── suspended ──[^]*e2e\$/);
@@ -65,7 +68,11 @@ describe('sidebar menus', () => {
 
     it('moves a pane to another session of the project by dropping it on the session', async () => {
         const { project, session } = await voltran.seed('move', 2);
-        const other = await voltran.api<Session>('POST', '/api/sessions', { projectId: project.id, title: 'other session', panes: [{ adapter: 'shell', title: 'other 1' }] });
+        const other = await voltran.api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'other session',
+            panes: [{ adapter: 'shell', title: 'other 1' }],
+        });
         const page = await voltran.open(context, session.id);
         const moving = paneBox(page, 'move 2');
         await waitForText(moving, 'e2e$');

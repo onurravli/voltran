@@ -56,7 +56,8 @@ export function codexTransition(event: CodexHookEvent, payload: Record<string, u
         case 'PostToolUse':
             return { status: 'working', detail: oneLine(payload.tool_name, 80) };
         case 'PermissionRequest': {
-            const input = payload.tool_input && typeof payload.tool_input === 'object' ? payload.tool_input as Record<string, unknown> : {};
+            const input =
+                payload.tool_input && typeof payload.tool_input === 'object' ? (payload.tool_input as Record<string, unknown>) : {};
             const tool = oneLine(payload.tool_name, 40) ?? 'a tool';
             return { status: 'needs-input', detail: oneLine(input.description, 200) ?? `Allow ${tool}?` };
         }
@@ -89,7 +90,9 @@ export class OpencodeStatus {
             case 'ToolStart':
                 return this.pending.size > 0 ? null : { status: 'working', detail: oneLine(payload.tool_name, 80) };
             case 'Permission': {
-                const resources = Array.isArray(payload.resources) ? payload.resources.filter((value) => typeof value === 'string').join(' ') : '';
+                const resources = Array.isArray(payload.resources)
+                    ? payload.resources.filter((value) => typeof value === 'string').join(' ')
+                    : '';
                 const action = oneLine(payload.action, 40) ?? 'a tool';
                 return this.ask(payload.request_id, oneLine(resources ? `Allow ${action}: ${resources}` : `Allow ${action}?`, 200) ?? '');
             }
@@ -109,7 +112,10 @@ export class OpencodeStatus {
                     return { status: 'idle', detail: null };
                 }
                 if (payload.outcome === 'failed') {
-                    return { status: 'done', detail: oneLine(`Failed: ${typeof payload.message === 'string' ? payload.message : 'unknown error'}`, 280) };
+                    return {
+                        status: 'done',
+                        detail: oneLine(`Failed: ${typeof payload.message === 'string' ? payload.message : 'unknown error'}`, 280),
+                    };
                 }
                 return { status: 'done', detail: oneLine(payload.message, 280) };
         }

@@ -56,7 +56,9 @@ function result(entry: Extract<TranscriptEntry, { kind: 'result' }>, state: Rend
         return null;
     }
     const color = entry.error ? RED : DIM;
-    const all = entry.text.replace(/\r/g, '').split('\n')
+    const all = entry.text
+        .replace(/\r/g, '')
+        .split('\n')
         .filter((line, index, list) => line.trim() || index < list.length - 1)
         .map((line) => (line.length > RESULT_WIDTH ? `${line.slice(0, RESULT_WIDTH - 1)}…` : line));
     const shown = all.length > 0 ? all.slice(0, RESULT_LINES) : ['(no output)'];
@@ -76,7 +78,15 @@ export function renderEntries(entries: TranscriptEntry[], state: RenderState): s
     for (const entry of entries) {
         switch (entry.kind) {
             case 'prompt':
-                blocks.push(indent(entry.text.replace(/\r/g, '').split('\n').map((line) => `${DIM}${line}${RESET}`), `${DIM}> ${RESET}`));
+                blocks.push(
+                    indent(
+                        entry.text
+                            .replace(/\r/g, '')
+                            .split('\n')
+                            .map((line) => `${DIM}${line}${RESET}`),
+                        `${DIM}> ${RESET}`,
+                    ),
+                );
                 break;
             case 'text':
                 blocks.push(indent(markdown(entry.text), '● '));
@@ -95,7 +105,10 @@ export function renderEntries(entries: TranscriptEntry[], state: RenderState): s
             }
         }
     }
-    return blocks.map((block) => `${block}\r\n`).join('').replace(/(^|\r\n)(● )/g, '$1\r\n$2');
+    return blocks
+        .map((block) => `${block}\r\n`)
+        .join('')
+        .replace(/(^|\r\n)(● )/g, '$1\r\n$2');
 }
 
 export function renderNote(text: string, tone: 'dim' | 'error' = 'dim'): string {

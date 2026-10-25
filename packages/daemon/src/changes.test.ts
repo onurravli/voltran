@@ -65,15 +65,29 @@ describe('SessionChangesReader', () => {
         const changes = await reader().list(join(root, 'sub'));
         expect(changes.root).toBe(root);
         expect(changes.files.map((file) => `${file.state} ${file.path}`)).toEqual([
-            'untracked blob.bin', 'untracked fresh.txt', 'deleted gone.txt', 'modified kept.txt', 'untracked link', 'renamed renamed.txt',
+            'untracked blob.bin',
+            'untracked fresh.txt',
+            'deleted gone.txt',
+            'modified kept.txt',
+            'untracked link',
+            'renamed renamed.txt',
         ]);
 
         const contents = (path: string) => reader().contents(root, path);
         expect(await contents('kept.txt')).toEqual({
-            path: 'kept.txt', oldPath: null, original: 'one\ntwo\nthree\n', modified: 'one\n2\nthree\n', binary: false, tooLarge: false,
+            path: 'kept.txt',
+            oldPath: null,
+            original: 'one\ntwo\nthree\n',
+            modified: 'one\n2\nthree\n',
+            binary: false,
+            tooLarge: false,
         });
         expect(await contents('gone.txt')).toMatchObject({ original: 'bye\n', modified: null });
-        expect(await contents('renamed.txt')).toMatchObject({ oldPath: 'moved.txt', original: 'a\nb\nc\nd\ne\n', modified: 'a\nb\nc\nd\ne\n' });
+        expect(await contents('renamed.txt')).toMatchObject({
+            oldPath: 'moved.txt',
+            original: 'a\nb\nc\nd\ne\n',
+            modified: 'a\nb\nc\nd\ne\n',
+        });
         expect(await contents('fresh.txt')).toMatchObject({ original: null, modified: 'hello\nworld' });
         expect(await contents('blob.bin')).toMatchObject({ original: null, modified: null, binary: true });
         expect(await contents('link')).toMatchObject({ modified: '/etc/hosts' });

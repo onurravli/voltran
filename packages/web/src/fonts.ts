@@ -1,4 +1,11 @@
-import { DEFAULT_SETTINGS, MAX_FONT_FAMILY_LENGTH, MAX_FONT_SIZE, MAX_UI_FONT_SIZE, MIN_FONT_SIZE, MIN_UI_FONT_SIZE } from '@voltran/shared';
+import {
+    DEFAULT_SETTINGS,
+    MAX_FONT_FAMILY_LENGTH,
+    MAX_FONT_SIZE,
+    MAX_UI_FONT_SIZE,
+    MIN_FONT_SIZE,
+    MIN_UI_FONT_SIZE,
+} from '@voltran/shared';
 
 export interface TerminalFont {
     family: string;
@@ -70,7 +77,10 @@ export function clampUiFontSize(size: number): number {
 }
 
 export function cleanFamily(family: string): string {
-    return family.replace(/["\\;{}]/g, '').trim().slice(0, MAX_FONT_FAMILY_LENGTH);
+    return family
+        .replace(/["\\;{}]/g, '')
+        .trim()
+        .slice(0, MAX_FONT_FAMILY_LENGTH);
 }
 
 export function fontStack(family: string): string {

@@ -172,7 +172,9 @@ describe('PaneManager', () => {
 
         expect(client.stream.slice(1)).toEqual(['\x1b[1;100H*\r\n', { type: 'resize', cols: 40, rows: 10 }, 'after']);
         const lines = await new Promise<string[]>((resolve) => {
-            runtime.term.write('', () => resolve([0, 1, 2, 3].map((y) => runtime.term.buffer.active.getLine(y)?.translateToString(true) ?? '')));
+            runtime.term.write('', () =>
+                resolve([0, 1, 2, 3].map((y) => runtime.term.buffer.active.getLine(y)?.translateToString(true) ?? '')),
+            );
         });
         expect(lines).toEqual(['', '', `${' '.repeat(19)}*`, 'after']);
     });
@@ -203,7 +205,9 @@ describe('PaneManager', () => {
 
         expect(manager.hook(pane.id, 'wrong-secret!!!!', 'Stop', {})).toBe(false);
 
-        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' })).toBe(true);
+        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' })).toBe(
+            true,
+        );
         expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', agentResumable: false });
         manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '--dangerously-skip-permissions' });
         expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' });
@@ -256,7 +260,12 @@ describe('PaneManager', () => {
         const claude = makePane({ adapter: 'claude', command: null });
         manager.add(claude);
         (manager as unknown as Internals).runtimes.get(claude.id)!.hookSecret = 'per-spawn-secret';
-        manager.hook(claude.id, 'per-spawn-secret', 'SubagentStart', { agent_id: 'a1', agent_type: 'general-purpose', transcript_path: parentTranscript, session_id: sessionId });
+        manager.hook(claude.id, 'per-spawn-secret', 'SubagentStart', {
+            agent_id: 'a1',
+            agent_type: 'general-purpose',
+            transcript_path: parentTranscript,
+            session_id: sessionId,
+        });
         expect(manager.subagent(claude.id, 'a1')).toMatchObject({ path: transcript, finished: false });
 
         const viewer = makePane({ adapter: 'subagent', command: transcript });
@@ -266,7 +275,10 @@ describe('PaneManager', () => {
         manager.resize(viewer.id, 80, 24);
         await until(() => client.output.includes('Find the Jokers.'));
 
-        appendFileSync(transcript, `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'WebSearch', input: { query: 'jokers cast' } }] } })}\n`);
+        appendFileSync(
+            transcript,
+            `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'WebSearch', input: { query: 'jokers cast' } }] } })}\n`,
+        );
         await until(() => client.output.includes('WebSearch'));
 
         manager.hook(claude.id, 'per-spawn-secret', 'SubagentStop', { agent_id: 'a1' });
@@ -358,7 +370,10 @@ describe('PaneManager', () => {
         const client = new FakeClient();
         second.manager.attach(pane.id, client);
         await until(() => client.texts.length > 0);
-        const lines = client.snapshot().replace(/\x1b\[[0-9;]*m/g, '').split('\r\n');
+        const lines = client
+            .snapshot()
+            .replace(/\x1b\[[0-9;]*m/g, '')
+            .split('\r\n');
         expect(lines.slice(0, 4)).toEqual(['first line', 'second line', 'third line', '$ ']);
         expect(lines[4]).toContain('restored');
     });
@@ -375,7 +390,10 @@ describe('PaneManager', () => {
         const { manager } = setup(undefined, { startupPromptMs: 150 });
         const pane = makePane({ adapter: 'claude', command: null, agentSessionId: randomUUID() });
         manager.add(pane);
-        const internals = manager as unknown as { maintain(): void; runtimes: Map<string, { pty: unknown; lastOutputAt: number; state: { status: string; statusAt: number } }> };
+        const internals = manager as unknown as {
+            maintain(): void;
+            runtimes: Map<string, { pty: unknown; lastOutputAt: number; state: { status: string; statusAt: number } }>;
+        };
         const runtime = internals.runtimes.get(pane.id)!;
         runtime.pty = { process: 'claude' };
         runtime.state.status = 'starting';

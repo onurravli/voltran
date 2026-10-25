@@ -16,13 +16,23 @@ afterEach(async () => {
     }
 });
 
-const limits = (fiveHour: unknown, sevenDay?: unknown): Record<string, unknown> => ({ rate_limits: { five_hour: fiveHour, seven_day: sevenDay } });
+const limits = (fiveHour: unknown, sevenDay?: unknown): Record<string, unknown> => ({
+    rate_limits: { five_hour: fiveHour, seven_day: sevenDay },
+});
 
 describe('mergeUsage', () => {
-    const current: Usage = { fiveHour: { usedPercent: 40, resetsAt: 2_000_000_000_000 }, sevenDay: { usedPercent: 10, resetsAt: 2_000_500_000_000 } };
+    const current: Usage = {
+        fiveHour: { usedPercent: 40, resetsAt: 2_000_000_000_000 },
+        sevenDay: { usedPercent: 10, resetsAt: 2_000_500_000_000 },
+    };
 
     it('reads both windows, with the reset in milliseconds', () => {
-        expect(mergeUsage(null, limits({ used_percentage: 38.5, resets_at: 2_000_000_000 }, { used_percentage: 61, resets_at: 2_000_500_000 }))).toEqual({
+        expect(
+            mergeUsage(
+                null,
+                limits({ used_percentage: 38.5, resets_at: 2_000_000_000 }, { used_percentage: 61, resets_at: 2_000_500_000 }),
+            ),
+        ).toEqual({
             fiveHour: { usedPercent: 38.5, resetsAt: 2_000_000_000_000 },
             sevenDay: { usedPercent: 61, resetsAt: 2_000_500_000_000 },
         });
@@ -36,7 +46,10 @@ describe('mergeUsage', () => {
     });
 
     it('keeps a window the input leaves out', () => {
-        expect(mergeUsage(current, limits({ used_percentage: 45, resets_at: 2_000_000_000 }))).toEqual({ ...current, fiveHour: { usedPercent: 45, resetsAt: 2_000_000_000_000 } });
+        expect(mergeUsage(current, limits({ used_percentage: 45, resets_at: 2_000_000_000 }))).toEqual({
+            ...current,
+            fiveHour: { usedPercent: 45, resetsAt: 2_000_000_000_000 },
+        });
     });
 
     it('ignores an older view of a window from a quieter pane', () => {
@@ -46,11 +59,17 @@ describe('mergeUsage', () => {
     });
 
     it('takes a later window even when less of it is used', () => {
-        expect(mergeUsage(current, limits({ used_percentage: 2, resets_at: 2_000_018_000 }))?.fiveHour).toEqual({ usedPercent: 2, resetsAt: 2_000_018_000_000 });
+        expect(mergeUsage(current, limits({ used_percentage: 2, resets_at: 2_000_018_000 }))?.fiveHour).toEqual({
+            usedPercent: 2,
+            resetsAt: 2_000_018_000_000,
+        });
     });
 
     it('keeps the percentage between 0 and 100 and drops a reset it cannot read', () => {
-        expect(mergeUsage(null, limits({ used_percentage: 130, resets_at: 'soon' }))?.fiveHour).toEqual({ usedPercent: 100, resetsAt: null });
+        expect(mergeUsage(null, limits({ used_percentage: 130, resets_at: 'soon' }))?.fiveHour).toEqual({
+            usedPercent: 100,
+            resetsAt: null,
+        });
         expect(mergeUsage(null, limits({ used_percentage: -1 }))?.fiveHour).toEqual({ usedPercent: 0, resetsAt: null });
     });
 });
@@ -80,7 +99,7 @@ describe('userStatusLine', () => {
         expect(userStatusLine(sub, null)).toBeNull();
     });
 
-    it('follows Claude\'s order: local at the repository root, local here, project here, then the user\'s', () => {
+    it("follows Claude's order: local at the repository root, local here, project here, then the user's", () => {
         const { root, sub, config, write } = folders();
         write(config, 'settings.json', line('user'));
         expect(userStatusLine(sub, config)).toBe('user');
@@ -131,13 +150,15 @@ describe('status line script', () => {
         }
     }
 
-    it('prints the user\'s own status line from the same input', () => {
-        expect(run('{"model":{}}', { VOLTRAN_STATUSLINE: 'cat; printf " mine"' })).toEqual(expect.objectContaining({ status: 0, stdout: '{"model":{}} mine' }));
+    it("prints the user's own status line from the same input", () => {
+        expect(run('{"model":{}}', { VOLTRAN_STATUSLINE: 'cat; printf " mine"' })).toEqual(
+            expect.objectContaining({ status: 0, stdout: '{"model":{}} mine' }),
+        );
         expect(run('{}', { VOLTRAN_STATUSLINE: 'exit 3' }).status).toBe(3);
         expect(run('{}', {})).toEqual(expect.objectContaining({ status: 0, stdout: '' }));
     });
 
-    it('reports input that carries the usage limits to the pane\'s hook route', async () => {
+    it("reports input that carries the usage limits to the pane's hook route", async () => {
         const { url, requests } = await daemon();
         const header = join(mkdtempSync(join(tmpdir(), 'voltran-header-')), 'pane-1');
         cleanups.push(() => rmSync(dirname(header), { recursive: true, force: true }));

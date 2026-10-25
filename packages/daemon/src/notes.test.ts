@@ -1,5 +1,20 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+    appendFileSync,
+    chmodSync,
+    existsSync,
+    linkSync,
+    lstatSync,
+    mkdirSync,
+    mkdtempSync,
+    readdirSync,
+    readFileSync,
+    renameSync,
+    rmSync,
+    statSync,
+    symlinkSync,
+    writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -191,7 +206,7 @@ describe('NotesStore', () => {
         expect(readFileSync(precious, 'utf8')).toBe('precious\n');
     });
 
-    it('reads no more of an agent\'s notes than it would ever show', () => {
+    it("reads no more of an agent's notes than it would ever show", () => {
         const { store } = setup();
         const paneId = randomUUID();
         store.read(paneId);
@@ -258,7 +273,7 @@ describe('NotesStore', () => {
         expect(store.meta(paneId)).toMatchObject({ lock: 'user', holder: HOLDER });
     });
 
-    it('reports a write it did not make as the agent\'s once the agent is done', () => {
+    it("reports a write it did not make as the agent's once the agent is done", () => {
         const { store, changes } = setup();
         const paneId = randomUUID();
         const file = store.file(paneId);
@@ -303,7 +318,7 @@ describe('NotesStore', () => {
         expect(existsSync(join(dir, `${gone}.changed`))).toBe(false);
     });
 
-    it('deletes a pane\'s note even while it is locked', () => {
+    it("deletes a pane's note even while it is locked", () => {
         const { dir, store } = setup();
         const paneId = randomUUID();
         store.lock(paneId, HOLDER, store.read(paneId).version);

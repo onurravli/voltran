@@ -19,7 +19,7 @@ function transcript(lines: object[], name = `${CONVERSATION}.jsonl`): string {
     const dir = mkdtempSync(join(tmpdir(), 'voltran-naming-'));
     cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     const file = join(dir, name);
-    writeFileSync(file, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
+    writeFileSync(file, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
     return file;
 }
 
@@ -54,7 +54,10 @@ describe('titleFromPrompt', () => {
     it.each([
         ['fix the login redirect', 'fix the login redirect'],
         ['\n\n  fix   the\tlogin redirect  \nand then the tests', 'fix the login redirect'],
-        ['make the sidebar remember which projects are collapsed after a reload, please', 'make the sidebar remember which projects are collapsed after…'],
+        [
+            'make the sidebar remember which projects are collapsed after a reload, please',
+            'make the sidebar remember which projects are collapsed after…',
+        ],
         ['fix \u001b[2Jthe\u009b login', 'fix [2Jthe login'],
         ['/review', null],
         ['   ', null],
@@ -66,7 +69,10 @@ describe('titleFromPrompt', () => {
 
 describe('readAiTitle', () => {
     it('reads the title Claude Code gave the conversation', () => {
-        const file = transcript([{ type: 'user', message: { content: 'hi' } }, { type: 'ai-title', aiTitle: '  Login  redirect fix ', sessionId: CONVERSATION }]);
+        const file = transcript([
+            { type: 'user', message: { content: 'hi' } },
+            { type: 'ai-title', aiTitle: '  Login  redirect fix ', sessionId: CONVERSATION },
+        ]);
         expect(readAiTitle(file, CONVERSATION)).toBe('Login redirect fix');
         const escaped = transcript([{ type: 'ai-title', aiTitle: 'Login\u001b]0;x\u0007 fix', sessionId: CONVERSATION }]);
         expect(readAiTitle(escaped, CONVERSATION)).toBe('Login]0;x fix');
@@ -86,15 +92,21 @@ describe('readAiTitle', () => {
 
     it('returns nothing before Claude has named the conversation', () => {
         expect(readAiTitle(transcript([{ type: 'user', message: { content: 'hi' } }]), CONVERSATION)).toBeNull();
-        expect(readAiTitle('/nonexistent/' + `${CONVERSATION}.jsonl`, CONVERSATION)).toBeNull();
+        expect(readAiTitle(`/nonexistent/${CONVERSATION}.jsonl`, CONVERSATION)).toBeNull();
     });
 });
 
 describe('SessionNamer', () => {
     it('names a pending session from the first prompt of any agent', () => {
         const namer = new SessionNamer();
-        expect(namer.name(session('pending'), pane('codex'), 'UserPromptSubmit', { prompt: 'bump postgres' })).toEqual({ title: 'bump postgres', titleSource: 'prompt' });
-        expect(namer.name(session('pending'), pane('opencode'), 'PromptSubmit', { prompt: 'add dark mode' })).toEqual({ title: 'add dark mode', titleSource: 'prompt' });
+        expect(namer.name(session('pending'), pane('codex'), 'UserPromptSubmit', { prompt: 'bump postgres' })).toEqual({
+            title: 'bump postgres',
+            titleSource: 'prompt',
+        });
+        expect(namer.name(session('pending'), pane('opencode'), 'PromptSubmit', { prompt: 'add dark mode' })).toEqual({
+            title: 'add dark mode',
+            titleSource: 'prompt',
+        });
         expect(namer.name(session('prompt'), pane('codex'), 'UserPromptSubmit', { prompt: 'second prompt' })).toBeNull();
         expect(namer.name(session('pending'), pane('codex'), 'Stop', { prompt: 'not a prompt event' })).toBeNull();
     });
@@ -103,7 +115,10 @@ describe('SessionNamer', () => {
         const namer = new SessionNamer();
         const file = transcript([{ type: 'ai-title', aiTitle: 'Login redirect fix' }]);
         const payload = { prompt: 'fix it', transcript_path: file, session_id: CONVERSATION };
-        expect(namer.name(session('pending'), pane('claude'), 'UserPromptSubmit', payload, 0)).toEqual({ title: 'Login redirect fix', titleSource: 'agent' });
+        expect(namer.name(session('pending'), pane('claude'), 'UserPromptSubmit', payload, 0)).toEqual({
+            title: 'Login redirect fix',
+            titleSource: 'agent',
+        });
         expect(namer.name(session('agent'), pane('claude'), 'Stop', payload, 5000)).toBeNull();
     });
 
@@ -111,14 +126,23 @@ describe('SessionNamer', () => {
         const namer = new SessionNamer();
         const empty = transcript([{ type: 'user', message: { content: 'fix it' } }]);
         const payload = { prompt: 'fix it', transcript_path: empty, session_id: CONVERSATION };
-        expect(namer.name(session('pending'), pane('claude'), 'UserPromptSubmit', payload, 0)).toEqual({ title: 'fix it', titleSource: 'prompt' });
-        writeFileSync(empty, JSON.stringify({ type: 'ai-title', aiTitle: 'Named' }) + '\n', { flag: 'a' });
+        expect(namer.name(session('pending'), pane('claude'), 'UserPromptSubmit', payload, 0)).toEqual({
+            title: 'fix it',
+            titleSource: 'prompt',
+        });
+        writeFileSync(empty, `${JSON.stringify({ type: 'ai-title', aiTitle: 'Named' })}\n`, { flag: 'a' });
         expect(namer.name(session('prompt'), pane('claude'), 'PreToolUse', payload, 1000)).toBeNull();
         expect(namer.name(session('prompt'), pane('claude'), 'Stop', payload, 2500)).toEqual({ title: 'Named', titleSource: 'agent' });
     });
 
     it('never renames a session the user titled', () => {
         const file = transcript([{ type: 'ai-title', aiTitle: 'Named' }]);
-        expect(new SessionNamer().name(session('user'), pane('claude'), 'UserPromptSubmit', { prompt: 'x', transcript_path: file, session_id: CONVERSATION })).toBeNull();
+        expect(
+            new SessionNamer().name(session('user'), pane('claude'), 'UserPromptSubmit', {
+                prompt: 'x',
+                transcript_path: file,
+                session_id: CONVERSATION,
+            }),
+        ).toBeNull();
     });
 });

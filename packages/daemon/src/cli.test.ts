@@ -25,13 +25,15 @@ function homebrew(): string {
 }
 
 describe('autostartProgram', () => {
-    it('runs Homebrew\'s Node and Voltran through links that outlive an upgrade', () => {
+    it("runs Homebrew's Node and Voltran through links that outlive an upgrade", () => {
         const prefix = homebrew();
-        expect(autostartProgram(
-            join(prefix, 'Cellar/node/26.1.0/bin/node'),
-            join(prefix, 'bin/voltran'),
-            join(prefix, 'Cellar/voltran/1.0.0/libexec/bin/voltran.mjs'),
-        )).toEqual([join(prefix, 'opt/node/bin/node'), join(prefix, 'bin/voltran'), 'up', '--no-open']);
+        expect(
+            autostartProgram(
+                join(prefix, 'Cellar/node/26.1.0/bin/node'),
+                join(prefix, 'bin/voltran'),
+                join(prefix, 'Cellar/voltran/1.0.0/libexec/bin/voltran.mjs'),
+            ),
+        ).toEqual([join(prefix, 'opt/node/bin/node'), join(prefix, 'bin/voltran'), 'up', '--no-open']);
     });
 
     it('keeps the real paths when there is no such link', () => {
@@ -49,17 +51,37 @@ describe('parseNewArgs', () => {
     });
 
     it('keeps panes in order with their arguments as typed', () => {
-        const parsed = parseNewArgs(['../api', '--pane', 'claude --model opus', '--pane=shell', '--pane', 'command npm run dev -- --port 3000', '--title', 'Refactor auth', '--no-open'], '/work/app');
+        const parsed = parseNewArgs(
+            [
+                '../api',
+                '--pane',
+                'claude --model opus',
+                '--pane=shell',
+                '--pane',
+                'command npm run dev -- --port 3000',
+                '--title',
+                'Refactor auth',
+                '--no-open',
+            ],
+            '/work/app',
+        );
         expect(parsed).toEqual({
             path: '/work/api',
             title: 'Refactor auth',
-            panes: [{ adapter: 'claude', command: '--model opus' }, { adapter: 'shell' }, { adapter: 'command', command: 'npm run dev -- --port 3000' }],
+            panes: [
+                { adapter: 'claude', command: '--model opus' },
+                { adapter: 'shell' },
+                { adapter: 'command', command: 'npm run dev -- --port 3000' },
+            ],
             windowArgs: ['--no-open'],
         });
     });
 
     it('opens a changes pane next to an agent', () => {
-        expect(parseNewArgs(['--pane', 'claude', '--pane', 'changes'], '/w').panes).toEqual([{ adapter: 'claude' }, { adapter: 'changes' }]);
+        expect(parseNewArgs(['--pane', 'claude', '--pane', 'changes'], '/w').panes).toEqual([
+            { adapter: 'claude' },
+            { adapter: 'changes' },
+        ]);
     });
 
     it('reads a worktree branch and an optional base', () => {

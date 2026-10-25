@@ -7,7 +7,7 @@ const TOKEN = 'a'.repeat(64);
 const config = loadConfig({ VOLTRAN_HOME: '/tmp/voltran-guard-test', VOLTRAN_PORT: '4800' });
 const guard = new Guard(config, TOKEN);
 
-const request = (headers: Record<string, string>): IncomingMessage => ({ headers } as unknown as IncomingMessage);
+const request = (headers: Record<string, string>): IncomingMessage => ({ headers }) as unknown as IncomingMessage;
 
 describe('Guard.checkRequest', () => {
     it('accepts the bearer token on the daemon host', () => {
@@ -20,7 +20,9 @@ describe('Guard.checkRequest', () => {
         const origin = 'http://127.0.0.1:4800';
         expect(session).not.toContain(TOKEN);
         expect(guard.checkRequest(request({ host: '127.0.0.1:4800', origin, authorization: `Bearer ${session}` }))).toEqual({ ok: true });
-        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', origin, 'sec-websocket-protocol': `voltran, ${session}` }))).toEqual({ ok: true });
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', origin, 'sec-websocket-protocol': `voltran, ${session}` }))).toEqual({
+            ok: true,
+        });
         expect(guard.issueBrowserSession()).not.toBe(session);
     });
 
@@ -38,10 +40,18 @@ describe('Guard.checkRequest', () => {
             `${session}x`,
         ];
         for (const credential of forged) {
-            expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({ ok: false, status: 401 });
-            expect(guard.checkRequest(request({ host: '127.0.0.1:4800', 'sec-websocket-protocol': `voltran, ${credential}` }))).toMatchObject({ ok: false, status: 401 });
+            expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({
+                ok: false,
+                status: 401,
+            });
+            expect(
+                guard.checkRequest(request({ host: '127.0.0.1:4800', 'sec-websocket-protocol': `voltran, ${credential}` })),
+            ).toMatchObject({ ok: false, status: 401 });
         }
-        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', cookie: `voltran_session=${TOKEN}` }))).toMatchObject({ ok: false, status: 401 });
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', cookie: `voltran_session=${TOKEN}` }))).toMatchObject({
+            ok: false,
+            status: 401,
+        });
     });
 
     it('lets a browser credential lapse unless the window renews it', () => {
@@ -63,24 +73,35 @@ describe('Guard.checkRequest', () => {
         const code = rotating.issueLoginCode();
         rotating.rotate('c'.repeat(64));
         for (const credential of [session, TOKEN]) {
-            expect(rotating.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({ ok: false, status: 401 });
+            expect(rotating.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${credential}` }))).toMatchObject({
+                ok: false,
+                status: 401,
+            });
         }
         expect(rotating.redeemLoginCode(code)).toBe(false);
         expect(rotating.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${'c'.repeat(64)}` }))).toEqual({ ok: true });
     });
 
     it('refuses a rebinding host even with a valid token', () => {
-        expect(guard.checkRequest(request({ host: 'attacker.example:4800', authorization: `Bearer ${TOKEN}` }))).toMatchObject({ ok: false, status: 421 });
+        expect(guard.checkRequest(request({ host: 'attacker.example:4800', authorization: `Bearer ${TOKEN}` }))).toMatchObject({
+            ok: false,
+            status: 421,
+        });
     });
 
     it('refuses cross-origin requests even with a valid credential', () => {
-        const verdict = guard.checkRequest(request({ host: '127.0.0.1:4800', origin: 'https://attacker.example', authorization: `Bearer ${guard.issueBrowserSession()}` }));
+        const verdict = guard.checkRequest(
+            request({ host: '127.0.0.1:4800', origin: 'https://attacker.example', authorization: `Bearer ${guard.issueBrowserSession()}` }),
+        );
         expect(verdict).toMatchObject({ ok: false, status: 403 });
     });
 
     it('refuses missing or wrong credentials', () => {
         expect(guard.checkRequest(request({ host: '127.0.0.1:4800' }))).toMatchObject({ ok: false, status: 401 });
-        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: 'Bearer nope' }))).toMatchObject({ ok: false, status: 401 });
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: 'Bearer nope' }))).toMatchObject({
+            ok: false,
+            status: 401,
+        });
     });
 
     it('lets anonymous routes through only after the host and origin checks', () => {
@@ -95,11 +116,14 @@ describe('Guard.checkRequest', () => {
         expect(guard.checkRequest(devRequest)).toMatchObject({ ok: false });
     });
 
-    it('does not take a credential the dev daemon issued, which lives in the dev origin\'s storage', () => {
+    it("does not take a credential the dev daemon issued, which lives in the dev origin's storage", () => {
         const devGuard = new Guard(loadConfig({ VOLTRAN_HOME: '/tmp/x', VOLTRAN_PORT: '4800', VOLTRAN_DEV: '1' }), TOKEN);
         const devSession = devGuard.issueBrowserSession();
         expect(devGuard.isBrowserSession(devSession)).toBe(true);
-        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${devSession}` }))).toMatchObject({ ok: false, status: 401 });
+        expect(guard.checkRequest(request({ host: '127.0.0.1:4800', authorization: `Bearer ${devSession}` }))).toMatchObject({
+            ok: false,
+            status: 401,
+        });
     });
 });
 

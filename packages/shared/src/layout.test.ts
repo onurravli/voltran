@@ -11,7 +11,10 @@ describe('insertPane', () => {
         expect(insertPane({ type: 'pane', paneId: 'a' }, 'b', 'a', 'vertical')).toEqual({
             type: 'split',
             direction: 'vertical',
-            children: [{ type: 'pane', paneId: 'a' }, { type: 'pane', paneId: 'b' }],
+            children: [
+                { type: 'pane', paneId: 'a' },
+                { type: 'pane', paneId: 'b' },
+            ],
             sizes: [50, 50],
         });
     });
@@ -45,7 +48,15 @@ describe('removePane', () => {
         direction: 'horizontal',
         children: [
             { type: 'pane', paneId: 'a' },
-            { type: 'split', direction: 'vertical', children: [{ type: 'pane', paneId: 'b' }, { type: 'pane', paneId: 'c' }], sizes: [50, 50] },
+            {
+                type: 'split',
+                direction: 'vertical',
+                children: [
+                    { type: 'pane', paneId: 'b' },
+                    { type: 'pane', paneId: 'c' },
+                ],
+                sizes: [50, 50],
+            },
         ],
         sizes: [40, 60],
     };
@@ -54,7 +65,10 @@ describe('removePane', () => {
         expect(removePane(layout, 'c')).toEqual({
             type: 'split',
             direction: 'horizontal',
-            children: [{ type: 'pane', paneId: 'a' }, { type: 'pane', paneId: 'b' }],
+            children: [
+                { type: 'pane', paneId: 'a' },
+                { type: 'pane', paneId: 'b' },
+            ],
             sizes: [40, 60],
         });
     });
@@ -63,7 +77,11 @@ describe('removePane', () => {
         const three: Layout = {
             type: 'split',
             direction: 'horizontal',
-            children: [{ type: 'pane', paneId: 'a' }, { type: 'pane', paneId: 'b' }, { type: 'pane', paneId: 'c' }],
+            children: [
+                { type: 'pane', paneId: 'a' },
+                { type: 'pane', paneId: 'b' },
+                { type: 'pane', paneId: 'c' },
+            ],
             sizes: [50, 25, 25],
         };
         const next = removePane(three, 'a');
@@ -83,7 +101,9 @@ describe('validation helpers', () => {
 
     it('accepts only well-formed layouts', () => {
         expect(isValidLayout({ type: 'pane', paneId: 'a' })).toBe(true);
-        expect(isValidLayout({ type: 'split', direction: 'horizontal', children: [{ type: 'pane', paneId: 'a' }], sizes: [100] })).toBe(false);
+        expect(isValidLayout({ type: 'split', direction: 'horizontal', children: [{ type: 'pane', paneId: 'a' }], sizes: [100] })).toBe(
+            false,
+        );
         expect(isValidLayout({ type: 'split', direction: 'diagonal', children: [], sizes: [] })).toBe(false);
         expect(isValidLayout({ type: 'pane' })).toBe(false);
     });
@@ -97,7 +117,12 @@ describe('validation helpers', () => {
 });
 
 describe('movePane', () => {
-    const row = (...ids: string[]): LayoutSplit => ({ type: 'split', direction: 'horizontal', children: ids.map((paneId) => ({ type: 'pane', paneId })), sizes: ids.map(() => 100 / ids.length) });
+    const row = (...ids: string[]): LayoutSplit => ({
+        type: 'split',
+        direction: 'horizontal',
+        children: ids.map((paneId) => ({ type: 'pane', paneId })),
+        sizes: ids.map(() => 100 / ids.length),
+    });
 
     it('places a pane on the left or right of another pane in the same row', () => {
         expect(paneIds(movePane(row('a', 'b', 'c'), 'c', 'a', 'left'))).toEqual(['c', 'a', 'b']);
@@ -124,14 +149,26 @@ describe('movePane', () => {
             direction: 'horizontal',
             children: [
                 { type: 'pane', paneId: 'a' },
-                { type: 'split', direction: 'vertical', children: [{ type: 'pane', paneId: 'b' }, { type: 'pane', paneId: 'c' }], sizes: [40, 60] },
+                {
+                    type: 'split',
+                    direction: 'vertical',
+                    children: [
+                        { type: 'pane', paneId: 'b' },
+                        { type: 'pane', paneId: 'c' },
+                    ],
+                    sizes: [40, 60],
+                },
             ],
             sizes: [30, 70],
         };
         expect(movePane(nested, 'c', 'a', 'left')).toEqual({
             type: 'split',
             direction: 'horizontal',
-            children: [{ type: 'pane', paneId: 'c' }, { type: 'pane', paneId: 'a' }, { type: 'pane', paneId: 'b' }],
+            children: [
+                { type: 'pane', paneId: 'c' },
+                { type: 'pane', paneId: 'a' },
+                { type: 'pane', paneId: 'b' },
+            ],
             sizes: [15, 15, 70],
         });
     });
@@ -183,6 +220,11 @@ describe('placeLayout', () => {
         expect(paneIds(placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), 'a', 'swap'))).toEqual(['a', 'c', 'b']);
         const appended = placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), null, 'swap');
         expect(appended.type === 'split' && appended.children.length).toBe(3);
-        expect(placeLayout(pane('a'), pane('c'), 'missing', 'left')).toEqual({ type: 'split', direction: 'horizontal', children: [pane('a'), pane('c')], sizes: [50, 50] });
+        expect(placeLayout(pane('a'), pane('c'), 'missing', 'left')).toEqual({
+            type: 'split',
+            direction: 'horizontal',
+            children: [pane('a'), pane('c')],
+            sizes: [50, 50],
+        });
     });
 });

@@ -18,7 +18,9 @@ function bare(color: string): string {
 }
 
 function translucent(color: string, opacity: number): string {
-    return `${color.slice(0, 7)}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
+    return `${color.slice(0, 7)}${Math.round(opacity * 255)
+        .toString(16)
+        .padStart(2, '0')}`;
 }
 
 export function editorTheme(theme: Theme): EditorThemeData {
@@ -61,7 +63,7 @@ export function editorTheme(theme: Theme): EditorThemeData {
             'editorWidget.border': ui['--rivet'],
             'input.background': ui['--bay'],
             'input.foreground': ui['--text'],
-            'focusBorder': ui['--focus'],
+            focusBorder: ui['--focus'],
             'diffEditor.insertedTextBackground': translucent(ui['--live'], 0.24),
             'diffEditor.removedTextBackground': translucent(ui['--fault'], 0.24),
             'diffEditor.insertedLineBackground': translucent(ui['--live'], 0.11),

@@ -50,13 +50,25 @@ export interface GitLabels {
 
 export function gitLabels(status: GitStatus): GitLabels {
     const branch = status.branch ?? status.commit ?? 'no commits yet';
-    const sync = [status.ahead > 0 ? `↑${status.ahead}` : '', status.behind > 0 ? `↓${status.behind}` : ''].filter(Boolean).join(' ') || null;
+    const sync =
+        [status.ahead > 0 ? `↑${status.ahead}` : '', status.behind > 0 ? `↓${status.behind}` : ''].filter(Boolean).join(' ') || null;
     const where = status.branch
-        ? status.upstream ? `On ${status.branch}, tracking ${status.upstream}` : `On ${status.branch}, with no upstream branch`
-        : status.commit ? `Detached at ${status.commit}` : 'No commits yet';
+        ? status.upstream
+            ? `On ${status.branch}, tracking ${status.upstream}`
+            : `On ${status.branch}, with no upstream branch`
+        : status.commit
+          ? `Detached at ${status.commit}`
+          : 'No commits yet';
     const lines = [where];
     if (sync) {
-        lines.push([status.ahead > 0 ? `${plural(status.ahead, 'commit')} to push` : '', status.behind > 0 ? `${plural(status.behind, 'commit')} to pull` : ''].filter(Boolean).join(', '));
+        lines.push(
+            [
+                status.ahead > 0 ? `${plural(status.ahead, 'commit')} to push` : '',
+                status.behind > 0 ? `${plural(status.behind, 'commit')} to pull` : '',
+            ]
+                .filter(Boolean)
+                .join(', '),
+        );
     }
     const parts = [
         status.staged > 0 ? `${status.staged} staged` : '',

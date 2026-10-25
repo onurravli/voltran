@@ -43,11 +43,17 @@ function run(file: string, args: string[], path: string, timeoutMs = 4000): Prom
 }
 
 function firstLine(text: string): string {
-    return withoutControls(text.split('\n')[0] ?? '').trim().slice(0, 80);
+    return withoutControls(text.split('\n')[0] ?? '')
+        .trim()
+        .slice(0, 80);
 }
 
 export function versionAtLeast(version: string, minimum: string): boolean {
-    const parts = (text: string): number[] => text.replace(/^v/, '').split('.').map((part) => Number.parseInt(part, 10) || 0);
+    const parts = (text: string): number[] =>
+        text
+            .replace(/^v/, '')
+            .split('.')
+            .map((part) => Number.parseInt(part, 10) || 0);
     const [have, need] = [parts(version), parts(minimum)];
     for (let index = 0; index < need.length; index++) {
         if ((have[index] ?? 0) !== need[index]) {
@@ -95,9 +101,15 @@ async function terminalsCheck(): Promise<DiagnosticCheck> {
                 done(true);
             });
         });
-        return exited ? check('Terminals', 'ok', 'node-pty starts processes') : check('Terminals', 'fail', 'a test process started but never exited');
+        return exited
+            ? check('Terminals', 'ok', 'node-pty starts processes')
+            : check('Terminals', 'fail', 'a test process started but never exited');
     } catch (error) {
-        return check('Terminals', 'fail', `node-pty cannot start a process: ${firstLine(error instanceof Error ? error.message : String(error))}`);
+        return check(
+            'Terminals',
+            'fail',
+            `node-pty cannot start a process: ${firstLine(error instanceof Error ? error.message : String(error))}`,
+        );
     }
 }
 
@@ -126,7 +138,11 @@ export function daemonCheck(config: Config, daemon: DaemonInfo | null, version: 
         return check('Daemon', 'off', `not running on port ${config.port}`);
     }
     if (daemon.version !== version) {
-        return check('Daemon', 'warn', `running ${daemon.version} (pid ${daemon.pid}) while this copy is ${version}; run \`voltran restart\``);
+        return check(
+            'Daemon',
+            'warn',
+            `running ${daemon.version} (pid ${daemon.pid}) while this copy is ${version}; run \`voltran restart\``,
+        );
     }
     return check('Daemon', 'ok', `running on port ${config.port} (pid ${daemon.pid})`);
 }
@@ -160,7 +176,9 @@ function browserCheck(config: Config): DiagnosticCheck {
             : check('Window', 'off', 'Chrome not found; opens in the default browser');
     }
     const chrome = findChrome();
-    return chrome ? check('Window', 'ok', `opens an app window with ${basename(chrome)}`) : check('Window', 'off', 'Chrome not found; opens in the default browser');
+    return chrome
+        ? check('Window', 'ok', `opens an app window with ${basename(chrome)}`)
+        : check('Window', 'off', 'Chrome not found; opens in the default browser');
 }
 
 function autostartCheck(): DiagnosticCheck {
@@ -177,11 +195,18 @@ export async function diagnose(options: DiagnoseOptions): Promise<Diagnostics> {
     const platform = await platformName();
     const checks = await Promise.all([
         voltranCheck(version, path),
-        check('Node.js', versionAtLeast(node, MIN_NODE) ? 'ok' : 'fail', versionAtLeast(node, MIN_NODE) ? node : `${node}; Voltran needs ${MIN_NODE} or newer`),
+        check(
+            'Node.js',
+            versionAtLeast(node, MIN_NODE) ? 'ok' : 'fail',
+            versionAtLeast(node, MIN_NODE) ? node : `${node}; Voltran needs ${MIN_NODE} or newer`,
+        ),
         check('System', 'ok', platform),
         terminalsCheck(),
-        check('UI', existsSync(join(config.webDist, 'index.html')) ? 'ok' : 'warn',
-            existsSync(join(config.webDist, 'index.html')) ? 'built' : 'not built yet; `voltran up` builds it'),
+        check(
+            'UI',
+            existsSync(join(config.webDist, 'index.html')) ? 'ok' : 'warn',
+            existsSync(join(config.webDist, 'index.html')) ? 'built' : 'not built yet; `voltran up` builds it',
+        ),
         homeCheck(config),
         daemonCheck(config, daemon, version),
         check('Shell', 'ok', shell),

@@ -22,7 +22,18 @@ import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
 import { workspaceStatus } from '../workspaces.ts';
 import { ContextMenuArea, InlineEdit, MoreMenu, type MenuItem } from './Controls.tsx';
-import { BellIcon, BranchIcon, ChevronIcon, FeedbackIcon, FolderIcon, KeyboardIcon, LinkIcon, PlusIcon, SearchIcon, VoltranMark } from './Icons.tsx';
+import {
+    BellIcon,
+    BranchIcon,
+    ChevronIcon,
+    FeedbackIcon,
+    FolderIcon,
+    KeyboardIcon,
+    LinkIcon,
+    PlusIcon,
+    SearchIcon,
+    VoltranMark,
+} from './Icons.tsx';
 import { StatusLamp } from './StatusLamp.tsx';
 
 export function relativeTime(timestamp: number, now: number): string {
@@ -71,7 +82,10 @@ function SubagentList({ session, agents }: { session: Session; agents: { agent: 
         <ul className="subagents" aria-label="Running subagents">
             {agents.map(({ agent, paneId }) => (
                 <li key={agent.id}>
-                    <ContextMenuArea label={agent.description} items={() => [{ label: 'Open in a pane', onSelect: () => open(agent, paneId) }]}>
+                    <ContextMenuArea
+                        label={agent.description}
+                        items={() => [{ label: 'Open in a pane', onSelect: () => open(agent, paneId) }]}
+                    >
                         <button
                             type="button"
                             className="subagent-row"
@@ -131,10 +145,11 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         return Boolean(moving && from && moving.sessionId !== session.id && !session.archived && from.projectId === session.projectId);
     });
     const reorders = useUi((state) => {
-        const moving = state.reordering?.kind === 'session' ? state.app?.sessions.find((entry) => entry.id === state.reordering?.id) : undefined;
+        const moving =
+            state.reordering?.kind === 'session' ? state.app?.sessions.find((entry) => entry.id === state.reordering?.id) : undefined;
         return Boolean(moving && moving.id !== session.id && moving.projectId === session.projectId);
     });
-    const worktreeBranch = useUi((state) => (session.worktree ? state.app?.git[session.cwd]?.branch ?? null : null));
+    const worktreeBranch = useUi((state) => (session.worktree ? (state.app?.git[session.cwd]?.branch ?? null) : null));
     const [over, setOver] = useState(false);
     const [side, setSide] = useState<DropSide | null>(null);
     const [renaming, setRenaming] = useState(false);
@@ -172,7 +187,13 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         <li className="session-item">
             <ContextMenuArea
                 label={session.title}
-                items={() => sessionMenu(session, { rename: () => setRenaming(true), editLink: () => useUi.getState().editSessionLink(session.id) }, 'sidebar')}
+                items={() =>
+                    sessionMenu(
+                        session,
+                        { rename: () => setRenaming(true), editLink: () => useUi.getState().editSessionLink(session.id) },
+                        'sidebar',
+                    )
+                }
             >
                 <button
                     type="button"
@@ -213,8 +234,12 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                         if (reorders && reordering) {
                             event.preventDefault();
                             endDrag();
-                            const siblings = orderedSessions(app, showArchived).filter((entry) => entry.projectId === session.projectId).map((entry) => entry.id);
-                            api.updateSession(reordering.id, { moveBefore: dropBefore(siblings, session.id, sideOf(event)) }).catch(reportError);
+                            const siblings = orderedSessions(app, showArchived)
+                                .filter((entry) => entry.projectId === session.projectId)
+                                .map((entry) => entry.id);
+                            api.updateSession(reordering.id, { moveBefore: dropBefore(siblings, session.id, sideOf(event)) }).catch(
+                                reportError,
+                            );
                             return;
                         }
                         if (!accepts || !moving) {
@@ -230,11 +255,16 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 >
                     <StatusLamp status={status} failed={failed} />
                     <span className="session-row__text">
-                        <span className={`session-row__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}>{session.title}</span>
+                        <span className={`session-row__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}>
+                            {session.title}
+                        </span>
                         {showDetail ? (
                             <span className="session-row__detail">{lead.detail}</span>
                         ) : worktreeBranch ? (
-                            <span className="session-row__detail session-row__branch" title={`Works in its own worktree: ${session.worktree}`}>
+                            <span
+                                className="session-row__detail session-row__branch"
+                                title={`Works in its own worktree: ${session.worktree}`}
+                            >
                                 <BranchIcon size={11} />
                                 <span className="session-row__branch-name">{worktreeBranch}</span>
                             </span>
@@ -320,7 +350,9 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
                     <StatusLamp status={status} />
                     <span className="session-row__text">
                         <span className="session-row__title">{workspace.title}</span>
-                        <span className="session-row__detail">{count === 0 ? 'Drag panes here' : count === 1 ? '1 pane' : `${count} panes`}</span>
+                        <span className="session-row__detail">
+                            {count === 0 ? 'Drag panes here' : count === 1 ? '1 pane' : `${count} panes`}
+                        </span>
                     </span>
                 </button>
             </ContextMenuArea>
@@ -338,12 +370,19 @@ function Workspaces() {
         <section className="workspaces" aria-label="Workspaces">
             <div className="sidebar-section">
                 <span className="workspaces__heading">Workspaces</span>
-                <button type="button" className="icon-button" title="New workspace: panes from any project, side by side" onClick={createWorkspace}>
+                <button
+                    type="button"
+                    className="icon-button"
+                    title="New workspace: panes from any project, side by side"
+                    onClick={createWorkspace}
+                >
                     <PlusIcon size={13} />
                 </button>
             </div>
             <ul className="project__sessions">
-                {workspaces.map((workspace) => <WorkspaceRow key={workspace.id} workspace={workspace} />)}
+                {workspaces.map((workspace) => (
+                    <WorkspaceRow key={workspace.id} workspace={workspace} />
+                ))}
             </ul>
         </section>
     );
@@ -429,13 +468,22 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
                             {gitLabel ? (
                                 <span className="project__git" title={gitLabel.detail}>
                                     <span className="project__git-branch">{gitLabel.branch}</span>
-                                    {gitLabel.changes ? <span className={`git-count${git?.conflicted ? ' git-count--conflict' : ''}`}>{gitLabel.changes}</span> : null}
+                                    {gitLabel.changes ? (
+                                        <span className={`git-count${git?.conflicted ? ' git-count--conflict' : ''}`}>
+                                            {gitLabel.changes}
+                                        </span>
+                                    ) : null}
                                 </span>
                             ) : null}
                         </button>
                     )}
                     <div className="project__actions">
-                        <button type="button" className="icon-button" title={`New session in ${project.name}`} onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
+                        <button
+                            type="button"
+                            className="icon-button"
+                            title={`New session in ${project.name}`}
+                            onClick={() => openDialog({ kind: 'session', projectId: project.id })}
+                        >
                             <PlusIcon size={14} />
                         </button>
                         <MoreMenu small label={`${project.name} actions`} items={menu} />
@@ -448,7 +496,9 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
                 </button>
             ) : (
                 <ul className="project__sessions">
-                    {sessions.map((session) => <SessionRow key={session.id} session={session} panes={panesOf(app, session.id)} />)}
+                    {sessions.map((session) => (
+                        <SessionRow key={session.id} session={session} panes={panesOf(app, session.id)} />
+                    ))}
                 </ul>
             )}
         </section>
@@ -474,7 +524,11 @@ function Inbox() {
                 {queue.map((pane) => (
                     <li key={pane.id}>
                         <ContextMenuArea label={pane.title} items={() => paneMenu(pane)}>
-                            <button type="button" className={`inbox__item inbox__item--${pane.status}`} onClick={() => revealPane(pane.sessionId, pane.id)}>
+                            <button
+                                type="button"
+                                className={`inbox__item inbox__item--${pane.status}`}
+                                onClick={() => revealPane(pane.sessionId, pane.id)}
+                            >
                                 <StatusLamp status={pane.status} size="sm" />
                                 <span className="inbox__text">
                                     <span className="inbox__title">
@@ -509,7 +563,10 @@ function UsageMeters() {
             {rows.map(({ label, name, window }) => {
                 const reset = isReset(window, now);
                 const percent = Math.round(window.usedPercent);
-                const resetsAt = window.resetsAt === null ? '' : `, resets ${new Date(window.resetsAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`;
+                const resetsAt =
+                    window.resetsAt === null
+                        ? ''
+                        : `, resets ${new Date(window.resetsAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`;
                 return (
                     <div key={label} className="usage__row" title={reset ? `${name} has reset` : `${name}: ${percent}% used${resetsAt}`}>
                         <span className="usage__label">{label}</span>
@@ -525,7 +582,9 @@ function UsageMeters() {
                             <span className="usage__fill" style={{ width: `${reset ? 0 : window.usedPercent}%` }} />
                         </span>
                         <span className="usage__percent">{reset ? '' : `${percent}%`}</span>
-                        <span className="usage__reset">{reset ? 'reset' : window.resetsAt === null ? '' : resetCountdown(window.resetsAt, now)}</span>
+                        <span className="usage__reset">
+                            {reset ? 'reset' : window.resetsAt === null ? '' : resetCountdown(window.resetsAt, now)}
+                        </span>
                     </div>
                 );
             })}
@@ -562,10 +621,21 @@ function Footer() {
                         {showArchived ? 'Hide archived' : `Archived (${archivedCount})`}
                     </button>
                 ) : null}
-                <button type="button" className="icon-button sidebar__keys" title={`Keyboard shortcuts (${keys('⌃⌥/')})`} onClick={() => openDialog({ kind: 'shortcuts' })}>
+                <button
+                    type="button"
+                    className="icon-button sidebar__keys"
+                    title={`Keyboard shortcuts (${keys('⌃⌥/')})`}
+                    onClick={() => openDialog({ kind: 'shortcuts' })}
+                >
                     <KeyboardIcon size={15} />
                 </button>
-                <button type="button" className="icon-button" title="Report a problem" aria-label="Report a problem" onClick={reportProblem}>
+                <button
+                    type="button"
+                    className="icon-button"
+                    title="Report a problem"
+                    aria-label="Report a problem"
+                    onClick={reportProblem}
+                >
                     <FeedbackIcon size={15} />
                 </button>
             </div>
@@ -578,8 +648,12 @@ function SidebarResizer() {
     const outward = useUi((state) => (state.sidebarPosition === 'right' ? -1 : 1));
     const setSidebarWidth = useUi((state) => state.setSidebarWidth);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
-    const canClose = useUi((state) => Boolean(state.app?.sessions.some((session) => session.id === state.selectedSessionId)
-        || state.app?.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)));
+    const canClose = useUi((state) =>
+        Boolean(
+            state.app?.sessions.some((session) => session.id === state.selectedSessionId) ||
+                state.app?.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId),
+        ),
+    );
     const drag = useRef<{ x: number; width: number } | null>(null);
     const [dragging, setDragging] = useState(false);
 
@@ -645,7 +719,9 @@ export function Hotkey({ keys: label }: { keys: string }) {
     const parts = label.includes('+') ? label.split('+').filter(Boolean) : [...label];
     return (
         <span className="hotkey" aria-hidden="true">
-            {parts.map((part, index) => <kbd key={index}>{part}</kbd>)}
+            {parts.map((part, index) => (
+                <kbd key={index}>{part}</kbd>
+            ))}
         </span>
     );
 }
@@ -679,14 +755,24 @@ export function Sidebar() {
                 <Hotkey keys={keys('⌘K')} />
             </button>
 
-            <ContextMenuArea label="Sidebar" items={sidebarMenu} render={<nav className="sidebar__projects" aria-label="Projects and sessions" />}>
+            <ContextMenuArea
+                label="Sidebar"
+                items={sidebarMenu}
+                render={<nav className="sidebar__projects" aria-label="Projects and sessions" />}
+            >
                 <Workspaces />
-                {projects.length > 0 ? <div className="sidebar-section"><span>Projects</span></div> : null}
+                {projects.length > 0 ? (
+                    <div className="sidebar-section">
+                        <span>Projects</span>
+                    </div>
+                ) : null}
                 {projects.map((project) => (
                     <ProjectGroup
                         key={project.id}
                         project={project}
-                        sessions={app?.sessions.filter((session) => session.projectId === project.id && (showArchived || !session.archived)) ?? []}
+                        sessions={
+                            app?.sessions.filter((session) => session.projectId === project.id && (showArchived || !session.archived)) ?? []
+                        }
                     />
                 ))}
                 <button type="button" className="add-project" onClick={() => openDialog({ kind: 'project' })}>

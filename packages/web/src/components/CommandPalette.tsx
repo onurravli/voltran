@@ -17,7 +17,15 @@ import {
 import { installApp } from '../install.ts';
 import { revealPane } from '../notify.ts';
 import { destinations, filterItems } from '../palette.ts';
-import { FIND_SHORTCUT, SHORTCUTS, editSettings, openSettingsInApp, reportProblem, togglePalette, visibleFocusedPane } from '../shortcuts.ts';
+import {
+    FIND_SHORTCUT,
+    SHORTCUTS,
+    editSettings,
+    openSettingsInApp,
+    reportProblem,
+    togglePalette,
+    visibleFocusedPane,
+} from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { APPEARANCES, THEMES, schemeOf, themeById, type Appearance, type Scheme, type Theme } from '../themes.ts';
 import { StatusLamp } from './StatusLamp.tsx';
@@ -40,8 +48,15 @@ type FontTarget = 'terminal' | 'ui';
 type Mode = 'commands' | 'terminal-fonts' | 'ui-fonts' | 'appearance' | Scheme;
 
 const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
-    commands: { placeholder: 'Type a command, or a workspace, session or pane name', empty: 'No matching commands, workspaces, sessions or panes' },
-    'terminal-fonts': { title: 'Terminal font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
+    commands: {
+        placeholder: 'Type a command, or a workspace, session or pane name',
+        empty: 'No matching commands, workspaces, sessions or panes',
+    },
+    'terminal-fonts': {
+        title: 'Terminal font family',
+        placeholder: 'Pick a font, or type the name of any installed font',
+        empty: 'No matching fonts',
+    },
     'ui-fonts': { title: 'UI font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
     appearance: { title: 'Appearance', placeholder: 'Follow the system, or always use dark or light', empty: 'No matching appearance' },
     dark: { title: 'Dark theme', placeholder: 'Pick the theme for dark appearance', empty: 'No matching themes' },
@@ -81,7 +96,9 @@ function ThemeSwatch({ theme }: { theme: Theme }) {
     const { background, red, yellow, green, blue, magenta } = theme.terminal;
     return (
         <span className="palette__swatch" style={{ background }} aria-hidden="true">
-            {[red, yellow, green, blue, magenta].map((color, index) => <i key={index} style={{ background: color }} />)}
+            {[red, yellow, green, blue, magenta].map((color, index) => (
+                <i key={index} style={{ background: color }} />
+            ))}
         </span>
     );
 }
@@ -127,12 +144,19 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         const current = target === 'terminal' ? font.family : uiFont.family;
         const choices = target === 'terminal' ? fontChoices(current) : uiFontChoices(current);
         setFamilies(choices);
-        enterList(`${target}-fonts`, choices.findIndex((family) => sameFamily(family, current)));
+        enterList(
+            `${target}-fonts`,
+            choices.findIndex((family) => sameFamily(family, current)),
+        );
     };
 
     const enterAppearance = (): void => enterList('appearance', APPEARANCES.indexOf(appearance));
 
-    const enterThemes = (scheme: Scheme): void => enterList(scheme, themesOf(scheme).findIndex((theme) => theme.id === themeIds[scheme]));
+    const enterThemes = (scheme: Scheme): void =>
+        enterList(
+            scheme,
+            themesOf(scheme).findIndex((theme) => theme.id === themeIds[scheme]),
+        );
 
     const leaveList = (): void => {
         restore(committedFont.current);
@@ -168,76 +192,190 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     let items: Item[];
     if (mode === 'commands') {
-        const places: Item[] = query.trim() ? destinations(app).map((place) => ({
-            id: place.id,
-            label: place.label,
-            keywords: place.keywords,
-            status: place.status,
-            hint: place.keywords,
-            run: () => {
-                if (place.workspaceId) {
-                    useUi.getState().selectWorkspace(place.workspaceId);
-                } else if (place.sessionId && place.paneId) {
-                    revealPane(place.sessionId, place.paneId);
-                } else if (place.sessionId) {
-                    useUi.getState().selectSession(place.sessionId);
-                }
-            },
-        })) : [];
+        const places: Item[] = query.trim()
+            ? destinations(app).map((place) => ({
+                  id: place.id,
+                  label: place.label,
+                  keywords: place.keywords,
+                  status: place.status,
+                  hint: place.keywords,
+                  run: () => {
+                      if (place.workspaceId) {
+                          useUi.getState().selectWorkspace(place.workspaceId);
+                      } else if (place.sessionId && place.paneId) {
+                          revealPane(place.sessionId, place.paneId);
+                      } else if (place.sessionId) {
+                          useUi.getState().selectSession(place.sessionId);
+                      }
+                  },
+              }))
+            : [];
         const findIn = visibleFocusedPane();
-        items = filterItems<Item>([
-            ...places,
-            ...(findIn ? [{ id: 'find', ...FIND_SHORTCUT, run: () => useUi.getState().openFind(findIn) }] : []),
-            { id: 'appearance', label: 'Appearance…', keywords: 'system dark light mode', hint: appearanceLabel(appearance), keepOpen: true, run: enterAppearance },
-            { id: 'theme-dark', label: 'Dark theme…', hint: themeById(themeIds.dark).name, keepOpen: true, run: () => enterThemes('dark') },
-            { id: 'theme-light', label: 'Light theme…', hint: themeById(themeIds.light).name, keepOpen: true, run: () => enterThemes('light') },
-            { id: 'font-family', label: 'Terminal font family…', hint: font.family, keepOpen: true, run: () => enterFonts('terminal') },
-            { id: 'font-bigger', label: 'Terminal font size: bigger', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size + 1) },
-            { id: 'font-smaller', label: 'Terminal font size: smaller', hint: `${font.size}px`, keepOpen: true, run: () => resize(font.size - 1) },
-            { id: 'font-reset', label: 'Terminal font size: reset', hint: `${DEFAULT_FONT.size}px`, keepOpen: true, run: () => resize(DEFAULT_FONT.size) },
-            { id: 'ui-font-family', label: 'UI font family…', keywords: 'interface', hint: uiFontLabel(uiFont.family), keepOpen: true, run: () => enterFonts('ui') },
-            { id: 'ui-font-bigger', label: 'UI font size: bigger', keywords: 'interface', hint: `${uiFont.size}px`, keepOpen: true, run: () => resizeUi(uiFont.size + 1) },
-            { id: 'ui-font-smaller', label: 'UI font size: smaller', keywords: 'interface', hint: `${uiFont.size}px`, keepOpen: true, run: () => resizeUi(uiFont.size - 1) },
-            { id: 'ui-font-reset', label: 'UI font size: reset', keywords: 'interface', hint: `${DEFAULT_UI_FONT.size}px`, keepOpen: true, run: () => resizeUi(DEFAULT_UI_FONT.size) },
-            { id: 'sidebar-side', label: `Move the sidebar to the ${otherSide}`, keywords: 'sidebar position left right', run: () => saveSettings({ sidebar: { position: otherSide } }) },
-            { id: 'settings-file', label: 'Open the settings file', keywords: 'settings.json preferences configuration editor vim', run: editSettings },
-            { id: 'settings-file-app', label: 'Open the settings file in the default app', keywords: 'settings.json preferences configuration editor', run: openSettingsInApp },
-            { id: 'report-problem', label: 'Report a problem…', keywords: 'bug issue feedback doctor diagnostics github', run: reportProblem },
-            { id: 'about', label: 'About Voltran', keywords: 'version author license github', run: () => useUi.getState().openDialog({ kind: 'about' }) },
-            ...(installable ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }] : []),
-            ...SHORTCUTS
-                .filter((shortcut) => shortcut.run !== togglePalette)
-                .map((shortcut) => ({ id: shortcut.code, label: shortcut.label, keys: shortcut.keys, run: shortcut.run })),
-        ], query);
+        items = filterItems<Item>(
+            [
+                ...places,
+                ...(findIn ? [{ id: 'find', ...FIND_SHORTCUT, run: () => useUi.getState().openFind(findIn) }] : []),
+                {
+                    id: 'appearance',
+                    label: 'Appearance…',
+                    keywords: 'system dark light mode',
+                    hint: appearanceLabel(appearance),
+                    keepOpen: true,
+                    run: enterAppearance,
+                },
+                {
+                    id: 'theme-dark',
+                    label: 'Dark theme…',
+                    hint: themeById(themeIds.dark).name,
+                    keepOpen: true,
+                    run: () => enterThemes('dark'),
+                },
+                {
+                    id: 'theme-light',
+                    label: 'Light theme…',
+                    hint: themeById(themeIds.light).name,
+                    keepOpen: true,
+                    run: () => enterThemes('light'),
+                },
+                { id: 'font-family', label: 'Terminal font family…', hint: font.family, keepOpen: true, run: () => enterFonts('terminal') },
+                {
+                    id: 'font-bigger',
+                    label: 'Terminal font size: bigger',
+                    hint: `${font.size}px`,
+                    keepOpen: true,
+                    run: () => resize(font.size + 1),
+                },
+                {
+                    id: 'font-smaller',
+                    label: 'Terminal font size: smaller',
+                    hint: `${font.size}px`,
+                    keepOpen: true,
+                    run: () => resize(font.size - 1),
+                },
+                {
+                    id: 'font-reset',
+                    label: 'Terminal font size: reset',
+                    hint: `${DEFAULT_FONT.size}px`,
+                    keepOpen: true,
+                    run: () => resize(DEFAULT_FONT.size),
+                },
+                {
+                    id: 'ui-font-family',
+                    label: 'UI font family…',
+                    keywords: 'interface',
+                    hint: uiFontLabel(uiFont.family),
+                    keepOpen: true,
+                    run: () => enterFonts('ui'),
+                },
+                {
+                    id: 'ui-font-bigger',
+                    label: 'UI font size: bigger',
+                    keywords: 'interface',
+                    hint: `${uiFont.size}px`,
+                    keepOpen: true,
+                    run: () => resizeUi(uiFont.size + 1),
+                },
+                {
+                    id: 'ui-font-smaller',
+                    label: 'UI font size: smaller',
+                    keywords: 'interface',
+                    hint: `${uiFont.size}px`,
+                    keepOpen: true,
+                    run: () => resizeUi(uiFont.size - 1),
+                },
+                {
+                    id: 'ui-font-reset',
+                    label: 'UI font size: reset',
+                    keywords: 'interface',
+                    hint: `${DEFAULT_UI_FONT.size}px`,
+                    keepOpen: true,
+                    run: () => resizeUi(DEFAULT_UI_FONT.size),
+                },
+                {
+                    id: 'sidebar-side',
+                    label: `Move the sidebar to the ${otherSide}`,
+                    keywords: 'sidebar position left right',
+                    run: () => saveSettings({ sidebar: { position: otherSide } }),
+                },
+                {
+                    id: 'settings-file',
+                    label: 'Open the settings file',
+                    keywords: 'settings.json preferences configuration editor vim',
+                    run: editSettings,
+                },
+                {
+                    id: 'settings-file-app',
+                    label: 'Open the settings file in the default app',
+                    keywords: 'settings.json preferences configuration editor',
+                    run: openSettingsInApp,
+                },
+                {
+                    id: 'report-problem',
+                    label: 'Report a problem…',
+                    keywords: 'bug issue feedback doctor diagnostics github',
+                    run: reportProblem,
+                },
+                {
+                    id: 'about',
+                    label: 'About Voltran',
+                    keywords: 'version author license github',
+                    run: () => useUi.getState().openDialog({ kind: 'about' }),
+                },
+                ...(installable
+                    ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }]
+                    : []),
+                ...SHORTCUTS.filter((shortcut) => shortcut.run !== togglePalette).map((shortcut) => ({
+                    id: shortcut.code,
+                    label: shortcut.label,
+                    keys: shortcut.keys,
+                    run: shortcut.run,
+                })),
+            ],
+            query,
+        );
     } else if (mode === 'appearance') {
-        items = filterItems<Item>(APPEARANCES.map((option) => ({
-            id: `appearance:${option}`,
-            label: appearanceLabel(option),
-            keywords: option === 'system' ? 'auto' : undefined,
-            themeId: themeIds[schemeOf(option, systemScheme)],
-            hint: option === appearance ? 'current' : undefined,
-            run: () => chooseAppearance(option),
-        })), query);
+        items = filterItems<Item>(
+            APPEARANCES.map((option) => ({
+                id: `appearance:${option}`,
+                label: appearanceLabel(option),
+                keywords: option === 'system' ? 'auto' : undefined,
+                themeId: themeIds[schemeOf(option, systemScheme)],
+                hint: option === appearance ? 'current' : undefined,
+                run: () => chooseAppearance(option),
+            })),
+            query,
+        );
     } else if (mode === 'dark' || mode === 'light') {
-        items = filterItems<Item>(themesOf(mode).map((theme) => ({
-            id: `theme:${theme.id}`,
-            label: theme.name,
-            themeId: theme.id,
-            hint: theme.id === themeIds[mode] ? 'current' : undefined,
-            run: () => chooseTheme(theme.id),
-        })), query);
+        items = filterItems<Item>(
+            themesOf(mode).map((theme) => ({
+                id: `theme:${theme.id}`,
+                label: theme.name,
+                themeId: theme.id,
+                hint: theme.id === themeIds[mode] ? 'current' : undefined,
+                run: () => chooseTheme(theme.id),
+            })),
+            query,
+        );
     } else {
         const target: FontTarget = mode === 'terminal-fonts' ? 'terminal' : 'ui';
-        const current = target === 'terminal'
-            ? committedFont.current?.terminal.family ?? font.family
-            : committedFont.current?.ui.family ?? uiFont.family;
-        items = filterItems<Item>(families.map((family) => ({
-            id: `family:${family}`,
-            label: target === 'terminal' ? family : uiFontLabel(family),
-            family,
-            hint: !sameFamily(family, current) ? undefined : family === '' || isFontInstalled(family) ? 'current' : 'current, not installed',
-            run: () => chooseFamily(target, family),
-        })), query);
+        const current =
+            target === 'terminal'
+                ? (committedFont.current?.terminal.family ?? font.family)
+                : (committedFont.current?.ui.family ?? uiFont.family);
+        items = filterItems<Item>(
+            families.map((family) => ({
+                id: `family:${family}`,
+                label: target === 'terminal' ? family : uiFontLabel(family),
+                family,
+                hint: !sameFamily(family, current)
+                    ? undefined
+                    : family === '' || isFontInstalled(family)
+                      ? 'current'
+                      : 'current, not installed',
+                run: () => chooseFamily(target, family),
+            })),
+            query,
+        );
         const custom = cleanFamily(query);
         if (custom && !families.some((family) => sameFamily(family, custom))) {
             items.push({
@@ -321,7 +459,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     return (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
             <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
-                {COPY[mode].title && <div className="palette__crumb">{COPY[mode].title} <span>Esc to go back</span></div>}
+                {COPY[mode].title && (
+                    <div className="palette__crumb">
+                        {COPY[mode].title} <span>Esc to go back</span>
+                    </div>
+                )}
                 <input
                     ref={input}
                     className="palette__input"
@@ -356,16 +498,32 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                             >
                                 {item.themeId && <ThemeSwatch theme={themeById(item.themeId)} />}
                                 {item.status !== undefined && <StatusLamp status={item.status} size="sm" />}
-                                <span className="palette__label" style={item.family === undefined ? undefined : { fontFamily: mode === 'ui-fonts' ? uiFontStack(item.family) : fontStack(item.family) }}>{item.label}</span>
+                                <span
+                                    className="palette__label"
+                                    style={
+                                        item.family === undefined
+                                            ? undefined
+                                            : { fontFamily: mode === 'ui-fonts' ? uiFontStack(item.family) : fontStack(item.family) }
+                                    }
+                                >
+                                    {item.label}
+                                </span>
                                 {item.keys ? <kbd>{item.keys}</kbd> : item.hint && <span className="palette__hint">{item.hint}</span>}
                             </li>
                         ))}
                     </ul>
                 )}
                 <div className="palette__footer" aria-hidden="true">
-                    <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
-                    <span><kbd>↵</kbd> {mode === 'commands' ? 'run' : 'choose'}</span>
-                    <span><kbd>esc</kbd> {COPY[mode].title ? 'back' : 'close'}</span>
+                    <span>
+                        <kbd>↑</kbd>
+                        <kbd>↓</kbd> move
+                    </span>
+                    <span>
+                        <kbd>↵</kbd> {mode === 'commands' ? 'run' : 'choose'}
+                    </span>
+                    <span>
+                        <kbd>esc</kbd> {COPY[mode].title ? 'back' : 'close'}
+                    </span>
                 </div>
             </div>
         </div>

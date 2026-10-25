@@ -55,7 +55,9 @@ describe('workspaces', () => {
         await until(async () => (await workspaceShows()).length === 1, 'the pane in the workspace');
         await waitForText(paneBox(page, 'alpha 1'), 'alpha-2');
 
-        await page.locator('.session-row', { hasText: 'beta session' }).dragTo(paneBox(page, 'alpha 1').locator('.pane__body'), { targetPosition: { x: 20, y: 200 } });
+        await page
+            .locator('.session-row', { hasText: 'beta session' })
+            .dragTo(paneBox(page, 'alpha 1').locator('.pane__body'), { targetPosition: { x: 20, y: 200 } });
         await until(async () => (await workspaceShows()).length === 3, 'the session in the workspace');
         expect(new Set(await workspaceShows())).toEqual(new Set([alpha.panes[0].id, ...beta.panes.map((pane) => pane.id)]));
         await until(async () => (await page.locator('.pane').count()) === 3, 'three panes on screen');
@@ -71,19 +73,28 @@ describe('workspaces', () => {
         const gamma = await voltran.seed('gamma', 2);
         const workspace = await voltran.api<Workspace>('POST', '/api/workspaces', { title: 'Mixed' });
         await voltran.api('PATCH', `/api/workspaces/${workspace.id}`, {
-            layout: { type: 'split', direction: 'horizontal', sizes: [50, 50], children: gamma.panes.map((pane) => ({ type: 'pane', paneId: pane.id })) },
+            layout: {
+                type: 'split',
+                direction: 'horizontal',
+                sizes: [50, 50],
+                children: gamma.panes.map((pane) => ({ type: 'pane', paneId: pane.id })),
+            },
         });
         const page = await voltran.open(context);
         await page.locator('.session-row', { hasText: 'Mixed' }).click();
         await waitForText(paneBox(page, 'gamma 1'), 'e2e$');
 
-        await paneBox(page, 'gamma 1').getByTitle(/^Remove from this workspace/).click();
+        await paneBox(page, 'gamma 1')
+            .getByTitle(/^Remove from this workspace/)
+            .click();
         await until(async () => (await workspaceShows()).length === 1, 'the pane out of the workspace');
         expect((await voltran.state()).panes.find((pane) => pane.id === gamma.panes[0].id)?.pid).not.toBeNull();
         await page.locator('.session-row', { hasText: 'gamma session' }).click();
         expect(await page.locator('.pane').count()).toBe(2);
 
-        await paneBox(page, 'gamma 2').getByTitle(/^Close pane/).click();
+        await paneBox(page, 'gamma 2')
+            .getByTitle(/^Close pane/)
+            .click();
         await page.getByRole('dialog').getByRole('button', { name: 'Close pane' }).click();
         await until(async () => (await workspaceShows()).length === 0, 'the closed pane out of the workspace');
         await page.locator('.session-row', { hasText: 'Mixed' }).click();

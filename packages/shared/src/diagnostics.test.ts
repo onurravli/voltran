@@ -15,12 +15,9 @@ const REPORT: Diagnostics = {
 
 describe('formatDiagnostics', () => {
     it('lines up one check per line behind its mark', () => {
-        expect(formatDiagnostics(REPORT)).toBe([
-            '✓ Voltran    1.0.0',
-            '✗ Terminals  posix_spawnp failed',
-            '– Codex      not installed',
-            '! Daemon     not running',
-        ].join('\n'));
+        expect(formatDiagnostics(REPORT)).toBe(
+            ['✓ Voltran    1.0.0', '✗ Terminals  posix_spawnp failed', '– Codex      not installed', '! Daemon     not running'].join('\n'),
+        );
     });
 });
 

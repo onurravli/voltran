@@ -6,7 +6,10 @@ import { homedir } from 'node:os';
 
 const DEMO = process.env.VOLTRAN_DEMO;
 const [kind, ...args] = process.argv.slice(2);
-const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+const argValue = (name) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : null;
+};
 const scene = argValue('--scene') ?? basename(process.cwd());
 const cwd = process.cwd();
 const home = homedir();
@@ -17,7 +20,6 @@ const E = '\x1b[';
 const rgb = (r, g, b) => (s) => `${E}38;2;${r};${g};${b}m${s}${E}39m`;
 const bgc = (r, g, b) => (s) => `${E}48;2;${r};${g};${b}m${s}${E}49m`;
 const bold = (s) => `${E}1m${s}${E}22m`;
-const dim = (s) => `${E}2m${s}${E}22m`;
 const orange = rgb(215, 119, 87);
 const green = rgb(78, 186, 101);
 const red = rgb(255, 107, 128);
@@ -32,7 +34,9 @@ const cols = () => process.stdout.columns || 100;
 
 const settingsFile = argValue('--settings');
 let hookSettings = null;
-try { hookSettings = settingsFile ? JSON.parse(settingsFile.startsWith('{') ? settingsFile : readFileSync(settingsFile, 'utf8')) : null; } catch {}
+try {
+    hookSettings = settingsFile ? JSON.parse(settingsFile.startsWith('{') ? settingsFile : readFileSync(settingsFile, 'utf8')) : null;
+} catch {}
 function claudeHook(event, payload) {
     const command = hookSettings?.hooks?.[event]?.[0]?.hooks?.[0]?.command;
     if (command) spawnSync('sh', ['-c', command], { input: JSON.stringify(payload) });
@@ -40,17 +44,34 @@ function claudeHook(event, payload) {
 function opencodeHook(event, payload) {
     const { VOLTRAN_URL, VOLTRAN_PANE_ID, VOLTRAN_HOOK_HEADER } = process.env;
     if (!VOLTRAN_URL) return;
-    spawnSync('curl', ['-s', '-m', '2', '-o', '/dev/null', '-X', 'POST', '-H', `@${VOLTRAN_HOOK_HEADER}`,
-        '-H', 'Content-Type: application/json', '--data-binary', JSON.stringify(payload), `${VOLTRAN_URL}/api/hooks/${VOLTRAN_PANE_ID}/${event}`]);
+    spawnSync('curl', [
+        '-s',
+        '-m',
+        '2',
+        '-o',
+        '/dev/null',
+        '-X',
+        'POST',
+        '-H',
+        `@${VOLTRAN_HOOK_HEADER}`,
+        '-H',
+        'Content-Type: application/json',
+        '--data-binary',
+        JSON.stringify(payload),
+        `${VOLTRAN_URL}/api/hooks/${VOLTRAN_PANE_ID}/${event}`,
+    ]);
 }
 
 const fit = (s, width) => {
     let out = '';
     let n = 0;
     for (const part of s.split(/(\x1b\[[0-9;]*m)/)) {
-        if (part.startsWith('\x1b[')) { out += part; continue; }
+        if (part.startsWith('\x1b[')) {
+            out += part;
+            continue;
+        }
         for (const ch of part) {
-            if (n >= width) return out + `${E}0m`;
+            if (n >= width) return `${out}${E}0m`;
             out += ch;
             n++;
         }
@@ -67,7 +88,7 @@ function wrap(text, width, indent = '') {
             lines.push(line.trimEnd());
             line = '';
         }
-        line += word + ' ';
+        line += `${word} `;
     }
     if (line.trim()) lines.push(line.trimEnd());
     return lines;
@@ -83,11 +104,15 @@ function claudeHeader(model) {
 }
 function userPrompt(text) {
     const w = cols();
-    return wrap(text, w - 2).map((line, i) => grey(i === 0 ? `> ${line}` : `  ${line}`)).concat('');
+    return wrap(text, w - 2)
+        .map((line, i) => grey(i === 0 ? `> ${line}` : `  ${line}`))
+        .concat('');
 }
 function said(text) {
     const w = cols();
-    return wrap(text, w - 2).map((line, i) => (i === 0 ? `${'⏺'} ${line}` : `  ${line}`)).concat('');
+    return wrap(text, w - 2)
+        .map((line, i) => (i === 0 ? `${'⏺'} ${line}` : `  ${line}`))
+        .concat('');
 }
 function tool(name, argText, results, dot = green) {
     const out = [`${dot('⏺')} ${bold(name)}(${argText})`];
@@ -135,29 +160,37 @@ SCENES['checkout-api'] = {
     lines() {
         return [
             ...claudeHeader(this.model),
-            ...userPrompt('Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table. Keep the handler idempotent.'),
+            ...userPrompt(
+                'Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table. Keep the handler idempotent.',
+            ),
             ...said("I'll start by looking at how webhook delivery works today, and map every place that could retry an event."),
             ...tool('Search', 'pattern: "Deliver\\(|Process\\(", path: "internal"', [`Found ${bold('7')} files`]),
             ...tool('Read', 'internal/webhooks/handler.go', [`Read ${bold('31')} lines`]),
             ...tool(`${purple('Explore')}`, 'Map every webhook retry path', [grey('Running in the background (↓ to manage)')], purple),
-            ...said("Delivery returns the processor's error and nothing retries it, so a single 5xx loses the event. I'll add the backoff to the handler and park events after 8 attempts."),
-            ...diff('internal/webhooks/handler.go', `Updated ${bold('internal/webhooks/handler.go')} with ${bold('12')} additions and ${bold('3')} removals`, [
-                [27, ' ', 'func (h *Handler) Deliver(ctx context.Context, ev Event) error {'],
-                [28, '-', '\tif err := h.proc.Process(ctx, ev); err != nil {'],
-                [29, '-', '\t\th.log.Error("webhook failed", "event", ev.ID, "err", err)'],
-                [30, '-', '\t\treturn err'],
-                [28, '+', '\terr := h.proc.Process(ctx, ev)'],
-                [29, '+', '\tif err == nil {'],
-                [30, '+', '\t\treturn nil'],
-                [31, '+', '\t}'],
-                [32, '+', '\tif errors.Is(err, ErrUnknownEvent) || ev.Attempts+1 >= MaxAttempts {'],
-                [33, '+', '\t\treturn h.park(ctx, ev, err)'],
-                [34, ' ', '\t}'],
+            ...said(
+                "Delivery returns the processor's error and nothing retries it, so a single 5xx loses the event. I'll add the backoff to the handler and park events after 8 attempts.",
+            ),
+            ...diff(
+                'internal/webhooks/handler.go',
+                `Updated ${bold('internal/webhooks/handler.go')} with ${bold('12')} additions and ${bold('3')} removals`,
+                [
+                    [27, ' ', 'func (h *Handler) Deliver(ctx context.Context, ev Event) error {'],
+                    [28, '-', '\tif err := h.proc.Process(ctx, ev); err != nil {'],
+                    [29, '-', '\t\th.log.Error("webhook failed", "event", ev.ID, "err", err)'],
+                    [30, '-', '\t\treturn err'],
+                    [28, '+', '\terr := h.proc.Process(ctx, ev)'],
+                    [29, '+', '\tif err == nil {'],
+                    [30, '+', '\t\treturn nil'],
+                    [31, '+', '\t}'],
+                    [32, '+', '\tif errors.Is(err, ErrUnknownEvent) || ev.Attempts+1 >= MaxAttempts {'],
+                    [33, '+', '\t\treturn h.park(ctx, ev, err)'],
+                    [34, ' ', '\t}'],
+                ],
+            ),
+            ...tool('Write', 'migrations/0007_webhook_dead_letters.sql', [
+                `Wrote ${bold('7')} lines to ${bold('migrations/0007_webhook_dead_letters.sql')}`,
             ]),
-            ...tool('Write', 'migrations/0007_webhook_dead_letters.sql', [`Wrote ${bold('7')} lines to ${bold('migrations/0007_webhook_dead_letters.sql')}`]),
-            ...tool('Bash', 'go test ./internal/webhooks/... -run Backoff', [
-                'ok      github.com/lumenpay/api/internal/webhooks   0.412s',
-            ]),
+            ...tool('Bash', 'go test ./internal/webhooks/... -run Backoff', ['ok      github.com/lumenpay/api/internal/webhooks   0.412s']),
             `${orange('✽')} ${orange('Wiring the dead-letter store…')} ${grey(`(3m 41s · esc to interrupt)`)}`,
             `  ${grey('⎿')}  ${grey('Next: Add a replay command for parked events')}`,
             '',
@@ -165,16 +198,35 @@ SCENES['checkout-api'] = {
         ];
     },
     transcript(file) {
-        writeFileSync(file, CHECKOUT_TRANSCRIPT().map((l) => JSON.stringify(l)).join('\n') + '\n');
+        writeFileSync(
+            file,
+            `${CHECKOUT_TRANSCRIPT()
+                .map((l) => JSON.stringify(l))
+                .join('\n')}\n`,
+        );
     },
     hooks(ctx) {
         claudeHook('SessionStart', ctx.base);
-        claudeHook('UserPromptSubmit', { ...ctx.base, prompt: 'Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table.' });
+        claudeHook('UserPromptSubmit', {
+            ...ctx.base,
+            prompt: 'Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table.',
+        });
         const agentId = 'a3f9c27e15b84d06';
         writeSubagent(ctx, agentId);
-        claudeHook('PreToolUse', { ...ctx.base, tool_name: 'Agent', tool_use_id: 'toolu_01Explore', tool_input: { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true, prompt: '…' } });
+        claudeHook('PreToolUse', {
+            ...ctx.base,
+            tool_name: 'Agent',
+            tool_use_id: 'toolu_01Explore',
+            tool_input: { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true, prompt: '…' },
+        });
         claudeHook('SubagentStart', { ...ctx.base, agent_id: agentId, agent_type: 'Explore' });
-        claudeHook('PostToolUse', { ...ctx.base, tool_name: 'Agent', tool_use_id: 'toolu_01Explore', tool_input: { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true }, tool_response: { agentId, status: 'async_launched' } });
+        claudeHook('PostToolUse', {
+            ...ctx.base,
+            tool_name: 'Agent',
+            tool_use_id: 'toolu_01Explore',
+            tool_input: { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true },
+            tool_response: { agentId, status: 'async_launched' },
+        });
         claudeHook('PreToolUse', { ...ctx.base, tool_name: 'Edit', tool_input: { file_path: `${shownCwd}/internal/webhooks/handler.go` } });
         if (process.env.VOLTRAN_NOTES) writeFileSync(process.env.VOLTRAN_NOTES, NOTES);
     },
@@ -189,14 +241,20 @@ SCENES['refunds-rate-limit'] = {
             ...tool('Read', 'internal/refunds/refunds.go', [`Read ${bold('24')} lines`]),
             ...tool('Write', 'internal/refunds/ratelimit.go', [`Wrote ${bold('58')} lines to ${bold('internal/refunds/ratelimit.go')}`]),
             ...tool('Bash', 'go test ./internal/refunds/...', ['ok      github.com/lumenpay/api/internal/refunds   0.388s']),
-            ...said('Done. Refunds are now limited to 20 a minute per merchant with a token bucket keyed by merchant id; requests above it get 429 and a Retry-After header in seconds. Tests cover the burst, the refill and the header.'),
+            ...said(
+                'Done. Refunds are now limited to 20 a minute per merchant with a token bucket keyed by merchant id; requests above it get 429 and a Retry-After header in seconds. Tests cover the burst, the refill and the header.',
+            ),
             ...inputBox(grey('? for shortcuts')),
         ];
     },
     hooks(ctx) {
         claudeHook('SessionStart', ctx.base);
         claudeHook('UserPromptSubmit', { ...ctx.base, prompt: 'Add a per-merchant rate limit to POST /v1/refunds' });
-        claudeHook('Stop', { ...ctx.base, last_assistant_message: 'Done. Refunds are now limited to 20 a minute per merchant; requests above it get 429 and a Retry-After header.' });
+        claudeHook('Stop', {
+            ...ctx.base,
+            last_assistant_message:
+                'Done. Refunds are now limited to 20 a minute per merchant; requests above it get 429 and a Retry-After header.',
+        });
     },
 };
 
@@ -208,7 +266,9 @@ SCENES['flaky-invoices'] = {
             ...claudeHeader(this.model),
             ...userPrompt('invoice-table.test.tsx fails about one run in five on CI. Find out why and fix it.'),
             ...tool('Bash', 'pnpm vitest run components/InvoiceTable --repeat 20', [`${red('2 failed')} | ${green('18 passed')}`]),
-            ...said('The test sorts by "Due date" and reads the first row before the sort has re-rendered. I want to run the suite in CI mode to confirm.'),
+            ...said(
+                'The test sorts by "Due date" and reads the first row before the sort has re-rendered. I want to run the suite in CI mode to confirm.',
+            ),
             grey('─'.repeat(w)),
             ` ${bold('Bash command')}`,
             '',
@@ -223,8 +283,15 @@ SCENES['flaky-invoices'] = {
     },
     hooks(ctx) {
         claudeHook('SessionStart', ctx.base);
-        claudeHook('UserPromptSubmit', { ...ctx.base, prompt: 'invoice-table.test.tsx fails about one run in five on CI. Find out why and fix it.' });
-        claudeHook('Notification', { ...ctx.base, notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+        claudeHook('UserPromptSubmit', {
+            ...ctx.base,
+            prompt: 'invoice-table.test.tsx fails about one run in five on CI. Find out why and fix it.',
+        });
+        claudeHook('Notification', {
+            ...ctx.base,
+            notification_type: 'permission_prompt',
+            message: 'Claude needs your permission to use Bash',
+        });
     },
 };
 
@@ -243,37 +310,85 @@ function CHECKOUT_TRANSCRIPT() {
         if (!pending) user([{ type: 'tool_result', tool_use_id: id, content: result }], sec + 2);
     };
     const f = (rel) => `${shownCwd}/${rel}`;
-    user('Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table. Keep the handler idempotent.', 0);
+    user(
+        'Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table. Keep the handler idempotent.',
+        0,
+    );
     say("I'll look at how delivery works today, and have a subagent map every place that could retry an event.", 4);
-    call('Grep', { pattern: 'Deliver\\(|Process\\(', path: 'internal' }, 'internal/webhooks/handler.go\ninternal/webhooks/handler_test.go\ninternal/store/store.go', 6);
+    call(
+        'Grep',
+        { pattern: 'Deliver\\(|Process\\(', path: 'internal' },
+        'internal/webhooks/handler.go\ninternal/webhooks/handler_test.go\ninternal/store/store.go',
+        6,
+    );
     call('Read', { file_path: f('internal/webhooks/handler.go') }, '…', 10);
-    call('Agent', { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true, prompt: 'Find every code path that delivers, retries or drops a Stripe webhook event.' }, 'Async agent launched successfully.', 14);
-    say("Nothing retries a failed delivery: `Deliver` returns the processor's error and the HTTP handler answers 500, so **one 5xx loses the event**. The plan:\n\n1. Retry with exponential backoff — 2s base, doubling, capped at 10m, ±20% jitter\n2. Park an event in `webhook_dead_letters` after 8 attempts\n3. Skip retries for unknown event types and park them at once", 40);
-    call('TodoWrite', { todos: [
-        { content: 'Backoff with jitter, plus tests', status: 'completed' },
-        { content: 'Migration 0007: webhook_dead_letters', status: 'completed' },
-        { content: 'Wire DeadLetterStore into NewHandler', status: 'in_progress' },
-        { content: 'checkout replay-webhooks --since 24h', status: 'pending' },
-    ] }, 'Todos have been modified successfully.', 46);
-    call('Edit', {
-        file_path: f('internal/webhooks/handler.go'),
-        old_string: '    if err := h.process(ev); err != nil {\n        return err\n    }',
-        new_string: '    err := h.process(ev)\n    if err == nil || errors.Is(err, ErrDup) {\n        return nil\n    }\n    if ev.Attempts+1 >= MaxAttempts {\n        return h.park(ctx, ev, err)\n    }\n    return h.retry(ctx, ev, err)',
-    }, '', 70);
-    call('Bash', { command: 'go test ./internal/webhooks/ -run Backoff', description: 'Run the backoff tests' }, 'ok  \tgithub.com/lumenpay/api/internal/webhooks\t0.260s', 120);
+    call(
+        'Agent',
+        {
+            description: 'Map every webhook retry path',
+            subagent_type: 'Explore',
+            run_in_background: true,
+            prompt: 'Find every code path that delivers, retries or drops a Stripe webhook event.',
+        },
+        'Async agent launched successfully.',
+        14,
+    );
+    say(
+        "Nothing retries a failed delivery: `Deliver` returns the processor's error and the HTTP handler answers 500, so **one 5xx loses the event**. The plan:\n\n1. Retry with exponential backoff — 2s base, doubling, capped at 10m, ±20% jitter\n2. Park an event in `webhook_dead_letters` after 8 attempts\n3. Skip retries for unknown event types and park them at once",
+        40,
+    );
+    call(
+        'TodoWrite',
+        {
+            todos: [
+                { content: 'Backoff with jitter, plus tests', status: 'completed' },
+                { content: 'Migration 0007: webhook_dead_letters', status: 'completed' },
+                { content: 'Wire DeadLetterStore into NewHandler', status: 'in_progress' },
+                { content: 'checkout replay-webhooks --since 24h', status: 'pending' },
+            ],
+        },
+        'Todos have been modified successfully.',
+        46,
+    );
+    call(
+        'Edit',
+        {
+            file_path: f('internal/webhooks/handler.go'),
+            old_string: '    if err := h.process(ev); err != nil {\n        return err\n    }',
+            new_string:
+                '    err := h.process(ev)\n    if err == nil || errors.Is(err, ErrDup) {\n        return nil\n    }\n    if ev.Attempts+1 >= MaxAttempts {\n        return h.park(ctx, ev, err)\n    }\n    return h.retry(ctx, ev, err)',
+        },
+        '',
+        70,
+    );
+    call(
+        'Bash',
+        { command: 'go test ./internal/webhooks/ -run Backoff', description: 'Run the backoff tests' },
+        'ok  \tgithub.com/lumenpay/api/internal/webhooks\t0.260s',
+        120,
+    );
     say('Backoff tests pass. Wiring the dead-letter store into `NewHandler` so parked events survive a restart.', 150);
-    call('Edit', {
-        file_path: f('cmd/api/main.go'),
-        old_string: '    h := webhooks.NewHandler(proc, logger)',
-        new_string: '    dead := store.NewDeadLetterStore(db)\n    h := webhooks.NewHandler(proc, dead, logger)',
-    }, '', 210, true);
+    call(
+        'Edit',
+        {
+            file_path: f('cmd/api/main.go'),
+            old_string: '    h := webhooks.NewHandler(proc, logger)',
+            new_string: '    dead := store.NewDeadLetterStore(db)\n    h := webhooks.NewHandler(proc, dead, logger)',
+        },
+        '',
+        210,
+        true,
+    );
     return lines;
 }
 
 function writeSubagent(ctx, agentId) {
     const dir = join(dirname(ctx.base.transcript_path), ctx.base.session_id, 'subagents');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, `agent-${agentId}.meta.json`), JSON.stringify({ description: 'Map every webhook retry path', agentType: 'Explore' }));
+    writeFileSync(
+        join(dir, `agent-${agentId}.meta.json`),
+        JSON.stringify({ description: 'Map every webhook retry path', agentType: 'Explore' }),
+    );
     const file = join(dir, `agent-${agentId}.jsonl`);
     const t0 = Date.now() - 95_000;
     const at = (s) => new Date(t0 + s * 1000).toISOString();
@@ -287,20 +402,41 @@ function writeSubagent(ctx, agentId) {
         asst([{ type: 'tool_use', id: t, name, input }], s);
         user([{ type: 'tool_result', tool_use_id: t, content: result }], s + 2);
     };
-    user('Find every code path that delivers, retries or drops a Stripe webhook event in this repository. For each one, give the file and line, what triggers it, and whether a failure there is retried today. Do not change any files.', 0);
+    user(
+        'Find every code path that delivers, retries or drops a Stripe webhook event in this repository. For each one, give the file and line, what triggers it, and whether a failure there is retried today. Do not change any files.',
+        0,
+    );
     asst([{ type: 'text', text: "I'll trace delivery from the HTTP entry point down to the processor." }], 3);
-    call('Grep', { pattern: 'webhooks\\.|Deliver\\(' }, 'cmd/api/main.go\ninternal/webhooks/handler.go\ninternal/webhooks/handler_test.go', 5);
+    call(
+        'Grep',
+        { pattern: 'webhooks\\.|Deliver\\(' },
+        'cmd/api/main.go\ninternal/webhooks/handler.go\ninternal/webhooks/handler_test.go',
+        5,
+    );
     call('Read', { file_path: `${shownCwd}/cmd/api/main.go` }, '…', 9);
     call('Read', { file_path: `${shownCwd}/internal/webhooks/handler.go` }, '…', 14);
     call('Grep', { pattern: 'Attempts' }, 'internal/webhooks/event.go:9\ninternal/webhooks/handler.go:33', 21);
     call('Glob', { pattern: 'internal/**/*queue*.go' }, 'No files found', 26);
-    call('Bash', { command: 'git log --oneline -- internal/webhooks | head -20' }, '9c1e4a2 webhooks: park events that run out of attempts\n4b7d013 webhooks: add exponential backoff with jitter', 31);
-    asst([{ type: 'text', text: 'There is no queue: events are delivered inline from the HTTP handler, so a retry has to come from Stripe itself or from a worker we add. Checking how the processor reports transient errors next.' }], 40);
+    call(
+        'Bash',
+        { command: 'git log --oneline -- internal/webhooks | head -20' },
+        '9c1e4a2 webhooks: park events that run out of attempts\n4b7d013 webhooks: add exponential backoff with jitter',
+        31,
+    );
+    asst(
+        [
+            {
+                type: 'text',
+                text: 'There is no queue: events are delivered inline from the HTTP handler, so a retry has to come from Stripe itself or from a worker we add. Checking how the processor reports transient errors next.',
+            },
+        ],
+        40,
+    );
     call('Grep', { pattern: 'StatusServiceUnavailable|5\\d\\d' }, 'internal/store/store.go:6', 44);
     call('Read', { file_path: `${shownCwd}/internal/store/store.go` }, '…', 49);
     call('Read', { file_path: `${shownCwd}/internal/webhooks/event.go` }, '…', 53);
     asst([{ type: 'tool_use', id: id(), name: 'Grep', input: { pattern: 'idempotency' } }], 60);
-    writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    writeFileSync(file, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
 }
 
 function opencodeLines() {
@@ -312,7 +448,9 @@ function opencodeLines() {
     const userMsg = (s) => wrap(s, w - 6).map((l) => `  ${accent('┃')} ${l}`);
     return [
         '',
-        ...userMsg('Move app/settings/billing from the pages router to the App Router. Keep the session check, and delete the old page when the new one renders.'),
+        ...userMsg(
+            'Move app/settings/billing from the pages router to the App Router. Keep the session check, and delete the old page when the new one renders.',
+        ),
         `  ${accent('┃')} ${grey('onur (10:52 AM)')}`,
         '',
         `  ${grey('→')} Read ${grey('pages/settings/billing.tsx')}`,
@@ -321,7 +459,10 @@ function opencodeLines() {
         `  ${grey('←')} Write ${grey('app/settings/layout.tsx')}`,
         `  ${grey('✗')} Delete ${grey('pages/settings/billing.tsx')}`,
         '',
-        ...wrap('The billing page now renders as a server component and reads the account with getAccount(), which replaces getServerSideProps. Running the settings tests before I remove the old route for good.', w - 4).map((l) => `  ${l}`),
+        ...wrap(
+            'The billing page now renders as a server component and reads the account with getAccount(), which replaces getServerSideProps. Running the settings tests before I remove the old route for good.',
+            w - 4,
+        ).map((l) => `  ${l}`),
         '',
         `  ${bar('△')} ${bold('Permission required')}`,
         `  ${block(`${grey('$')} pnpm vitest run app/settings --reporter=dot`)}`,
@@ -408,9 +549,13 @@ setTimeout(() => {
         opencodeHook('PromptSubmit', { prompt: 'Move app/settings/billing from the pages router to the App Router' });
         opencodeHook('Permission', { request_id: 'per_7Kq2', action: 'bash', resources: ['pnpm vitest run app/settings --reporter=dot'] });
     } else if (kind === 'codex') {
-        setTimeout(() => setInterval(() => {
-            codexSeconds++;
-            draw();
-        }, 1000), 6500);
+        setTimeout(
+            () =>
+                setInterval(() => {
+                    codexSeconds++;
+                    draw();
+                }, 1000),
+            6500,
+        );
     }
 }, 400);
