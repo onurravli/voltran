@@ -45,7 +45,15 @@ function openAsPane(sessionId: string): void {
         .catch(reportError);
 }
 
-export function ChangesView({ sessionId, pane = false, focusToken = null }: { sessionId: string; pane?: boolean; focusToken?: number | null }) {
+export function ChangesView({
+    sessionId,
+    pane = false,
+    focusToken = null,
+}: {
+    sessionId: string;
+    pane?: boolean;
+    focusToken?: number | null;
+}) {
     const session = useUi((state) => state.app?.sessions.find((entry) => entry.id === sessionId));
     const status = useUi((state) => (session ? state.app?.git[session.cwd] : undefined));
     const openChanges = useUi((state) => state.openChanges);
@@ -85,7 +93,7 @@ export function ChangesView({ sessionId, pane = false, focusToken = null }: { se
                 }
                 setChanges(next);
                 setError(null);
-                setSelected((path) => (path && next.files.some((file) => file.path === path) ? path : next.files[0]?.path ?? null));
+                setSelected((path) => (path && next.files.some((file) => file.path === path) ? path : (next.files[0]?.path ?? null)));
             })
             .catch((reason) => current && setError(message(reason)));
         return () => {
@@ -157,10 +165,20 @@ export function ChangesView({ sessionId, pane = false, focusToken = null }: { se
             {pane ? null : (
                 <header className="changes__bar">
                     <span className="changes__title">Changes</span>
-                    {changes ? <span className="changes__root" title={changes.root}>{shortPath(changes.root)}</span> : null}
+                    {changes ? (
+                        <span className="changes__root" title={changes.root}>
+                            {shortPath(changes.root)}
+                        </span>
+                    ) : null}
                     <span className="changes__count">{count}</span>
                     <span className="changes__hint">↑↓ files · Esc closes</span>
-                    <button type="button" className="icon-button" aria-label="Open in a pane" title="Open in a pane" onClick={() => openAsPane(sessionId)}>
+                    <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Open in a pane"
+                        title="Open in a pane"
+                        onClick={() => openAsPane(sessionId)}
+                    >
                         <SplitRightIcon size={14} />
                     </button>
                     <button type="button" className="icon-button" aria-label="Close" title="Close (Esc)" onClick={() => openChanges(null)}>
@@ -198,15 +216,22 @@ export function ChangesView({ sessionId, pane = false, focusToken = null }: { se
                         {file ? (
                             <div className="changes__file-head">
                                 <span className="changes__path">{file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}</span>
-                                <span className="changes__stage">{STATE_MARKS[file.state].label}, {stageLabel(file)}</span>
+                                <span className="changes__stage">
+                                    {STATE_MARKS[file.state].label}, {stageLabel(file)}
+                                </span>
                                 {shown && stat ? (
                                     <span className="changes__stat">
-                                        <span className="changes__added">+{stat.added}</span> <span className="changes__removed">−{stat.removed}</span>
+                                        <span className="changes__added">+{stat.added}</span>{' '}
+                                        <span className="changes__removed">−{stat.removed}</span>
                                     </span>
                                 ) : null}
                             </div>
                         ) : null}
-                        {contentsError ? <div className="changes__empty">{contentsError}</div> : shown ? <DiffBody contents={shown} onStat={setStat} /> : null}
+                        {contentsError ? (
+                            <div className="changes__empty">{contentsError}</div>
+                        ) : shown ? (
+                            <DiffBody contents={shown} onStat={setStat} />
+                        ) : null}
                     </div>
                 </div>
             )}

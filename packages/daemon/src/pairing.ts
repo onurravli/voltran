@@ -83,26 +83,76 @@ export async function makeCertificates(network: PairingNetwork): Promise<Certifi
     const dir = mkdtempSync(join(tmpdir(), 'voltran-pairing-'));
     try {
         const file = (name: string): string => join(dir, name);
-        const openssl = (...args: string[]): Promise<void> => new Promise((resolveRun, reject) => {
-            execFile('openssl', args, { timeout: 10_000 }, (error) => (error ? reject(error) : resolveRun()));
-        });
+        const openssl = (...args: string[]): Promise<void> =>
+            new Promise((resolveRun, reject) => {
+                execFile('openssl', args, { timeout: 10_000 }, (error) => (error ? reject(error) : resolveRun()));
+            });
         const names = [...(network.dnsName ? [`DNS:${network.dnsName}`] : []), `IP:${network.ip}`];
-        writeFileSync(file('ca.cnf'), [
-            '[req]', 'distinguished_name=dn', 'prompt=no',
-            '[dn]', `CN=Voltran pairing ${new Date().toISOString().slice(0, 16)}`,
-            '[ca]', 'basicConstraints=critical,CA:TRUE,pathlen:0', 'keyUsage=critical,keyCertSign', 'subjectKeyIdentifier=hash',
-            `nameConstraints=critical,${names.map((name) => `permitted;${name.startsWith('IP:') ? `${name}/255.255.255.255` : name}`).join(',')}`,
-        ].join('\n'), { mode: 0o600 });
-        writeFileSync(file('leaf.cnf'), [
-            'basicConstraints=critical,CA:FALSE', 'keyUsage=critical,digitalSignature', 'extendedKeyUsage=serverAuth',
-            `subjectAltName=${names.join(',')}`, 'authorityKeyIdentifier=keyid',
-        ].join('\n'), { mode: 0o600 });
+        writeFileSync(
+            file('ca.cnf'),
+            [
+                '[req]',
+                'distinguished_name=dn',
+                'prompt=no',
+                '[dn]',
+                `CN=Voltran pairing ${new Date().toISOString().slice(0, 16)}`,
+                '[ca]',
+                'basicConstraints=critical,CA:TRUE,pathlen:0',
+                'keyUsage=critical,keyCertSign',
+                'subjectKeyIdentifier=hash',
+                `nameConstraints=critical,${names.map((name) => `permitted;${name.startsWith('IP:') ? `${name}/255.255.255.255` : name}`).join(',')}`,
+            ].join('\n'),
+            { mode: 0o600 },
+        );
+        writeFileSync(
+            file('leaf.cnf'),
+            [
+                'basicConstraints=critical,CA:FALSE',
+                'keyUsage=critical,digitalSignature',
+                'extendedKeyUsage=serverAuth',
+                `subjectAltName=${names.join(',')}`,
+                'authorityKeyIdentifier=keyid',
+            ].join('\n'),
+            { mode: 0o600 },
+        );
         await openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('ca.key'));
-        await openssl('req', '-x509', '-new', '-key', file('ca.key'), '-sha256', '-days', '1', '-config', file('ca.cnf'), '-extensions', 'ca', '-out', file('ca.crt'));
+        await openssl(
+            'req',
+            '-x509',
+            '-new',
+            '-key',
+            file('ca.key'),
+            '-sha256',
+            '-days',
+            '1',
+            '-config',
+            file('ca.cnf'),
+            '-extensions',
+            'ca',
+            '-out',
+            file('ca.crt'),
+        );
         await openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('leaf.key'));
         await openssl('req', '-new', '-key', file('leaf.key'), '-subj', '/CN=Voltran', '-out', file('leaf.csr'));
-        await openssl('x509', '-req', '-in', file('leaf.csr'), '-CA', file('ca.crt'), '-CAkey', file('ca.key'), '-set_serial', `0x${randomBytes(16).toString('hex')}`,
-            '-days', '1', '-sha256', '-extfile', file('leaf.cnf'), '-out', file('leaf.crt'));
+        await openssl(
+            'x509',
+            '-req',
+            '-in',
+            file('leaf.csr'),
+            '-CA',
+            file('ca.crt'),
+            '-CAkey',
+            file('ca.key'),
+            '-set_serial',
+            `0x${randomBytes(16).toString('hex')}`,
+            '-days',
+            '1',
+            '-sha256',
+            '-extfile',
+            file('leaf.cnf'),
+            '-out',
+            file('leaf.crt'),
+        );
         const ca = new X509Certificate(readFileSync(file('ca.crt')));
         return { key: readFileSync(file('leaf.key')), cert: readFileSync(file('leaf.crt')), caDer: ca.raw, fingerprint: ca.fingerprint256 };
     } finally {
@@ -152,9 +202,10 @@ export function deviceName(userAgent: string | undefined): string {
     return /Android/.test(userAgent ?? '') ? 'Android phone' : 'Phone';
 }
 
-const STYLE = 'body{font:17px -apple-system,system-ui,sans-serif;background:#16171a;color:#eaeaec;margin:0;padding:56px 24px}'
-    + 'h1{font-size:28px}button{font:inherit;padding:14px 22px;border-radius:12px;border:0;background:#ebb862;color:#16171a}'
-    + 'b{color:#ebb862}#log{color:#a0a0a8}';
+const STYLE =
+    'body{font:17px -apple-system,system-ui,sans-serif;background:#16171a;color:#eaeaec;margin:0;padding:56px 24px}' +
+    'h1{font-size:28px}button{font:inherit;padding:14px 22px;border-radius:12px;border:0;background:#ebb862;color:#16171a}' +
+    'b{color:#ebb862}#log{color:#a0a0a8}';
 
 const PAIR_SCRIPT = `
 const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
@@ -194,11 +245,15 @@ const page = (body: string, extraHead = '', attributes = ''): string => `<!docty
 <title>Voltran</title><style>${STYLE}</style></head><body${attributes}>${body}</body></html>`;
 
 function pairPage(code: string, key: string): string {
-    return page(`<h1>Voltran</h1>
+    return page(
+        `<h1>Voltran</h1>
 <div id="browser"><p>Tap <b>Share</b>, then <b>Add to Home Screen</b>, and open Voltran from your home screen.</p></div>
 <div id="app" hidden><p>Allow notifications so your computer can tell you when an agent needs you.</p><button id="go" type="button">Enable notifications</button></div>
 <div id="done" hidden><p>Paired. A test notification is on its way.</p><p>Now delete the pairing profile: <b>Settings → General → VPN &amp; Device Management</b>. Notifications keep working without it.</p></div>
-<p id="log"></p><script>${PAIR_SCRIPT}</script>`, `<link rel="manifest" href="/manifest/${code}.webmanifest">`, ` data-code="${code}" data-key="${key}"`);
+<p id="log"></p><script>${PAIR_SCRIPT}</script>`,
+        `<link rel="manifest" href="/manifest/${code}.webmanifest">`,
+        ` data-code="${code}" data-key="${key}"`,
+    );
 }
 
 const DONE_PAGE = page('<h1>Voltran</h1><p>Go back to your computer: an agent is waiting for you.</p>');
@@ -272,7 +327,9 @@ export class Pairing {
     private async open(): Promise<PushPairingView> {
         const network = (this.options.network ?? lanNetwork)();
         if (!network) {
-            throw new Error('This computer has no Wi-Fi or Ethernet address on a private network. Connect it to the same network as your phone.');
+            throw new Error(
+                'This computer has no Wi-Fi or Ethernet address on a private network. Connect it to the same network as your phone.',
+            );
         }
         const stops = this.stops;
         const publicKey = this.options.devices.vapid().publicKey;
@@ -292,7 +349,9 @@ export class Pairing {
         const url = `https://${network.ip}:${port}/p/${code}`;
         try {
             mkdirSync(this.options.folder, { recursive: true, mode: 0o700 });
-            writeFileSync(join(this.options.folder, '1 Voltran pairing.mobileconfig'), pairingProfile(certificates.caDer, expiresAt), { mode: 0o600 });
+            writeFileSync(join(this.options.folder, '1 Voltran pairing.mobileconfig'), pairingProfile(certificates.caDer, expiresAt), {
+                mode: 0o600,
+            });
             writeFileSync(join(this.options.folder, '2 Open Voltran pairing.webloc'), weblocFile(url), { mode: 0o600 });
         } catch (error) {
             server.close();
@@ -362,32 +421,38 @@ export class Pairing {
             });
             res.end(body);
         };
-        if (!active || !active.hosts.has(req.headers.host ?? '')) {
+        if (!active?.hosts.has(req.headers.host ?? '')) {
             reply(421, 'text/plain; charset=utf-8', 'wrong host');
             return;
         }
         const path = (req.url ?? '/').split('?')[0];
-        const match = (pattern: RegExp): string | null => pattern.exec(path)?.[1] ?? null;
-        let code: string | null;
-        if (req.method === 'GET' && (code = match(/^\/p\/([\w-]+)$/)) !== null && this.accepts(active, code)) {
+        const accepted = (pattern: RegExp): boolean => {
+            const code = pattern.exec(path)?.[1];
+            return code !== undefined && this.accepts(active, code);
+        };
+        if (req.method === 'GET' && accepted(/^\/p\/([\w-]+)$/)) {
             reply(200, 'text/html; charset=utf-8', pairPage(active.code, active.publicKey));
-        } else if (req.method === 'GET' && (code = match(/^\/manifest\/([\w-]+)\.webmanifest$/)) !== null && this.accepts(active, code)) {
-            reply(200, 'application/manifest+json', JSON.stringify({
-                name: 'Voltran',
-                start_url: `/p/${active.code}`,
-                scope: '/',
-                display: 'standalone',
-                background_color: '#16171a',
-                theme_color: '#16171a',
-                icons: [{ src: '/icon.png', sizes: '192x192', type: 'image/png' }],
-            }));
+        } else if (req.method === 'GET' && accepted(/^\/manifest\/([\w-]+)\.webmanifest$/)) {
+            reply(
+                200,
+                'application/manifest+json',
+                JSON.stringify({
+                    name: 'Voltran',
+                    start_url: `/p/${active.code}`,
+                    scope: '/',
+                    display: 'standalone',
+                    background_color: '#16171a',
+                    theme_color: '#16171a',
+                    icons: [{ src: '/icon.png', sizes: '192x192', type: 'image/png' }],
+                }),
+            );
         } else if (req.method === 'GET' && path === '/sw.js') {
             reply(200, 'text/javascript; charset=utf-8', SERVICE_WORKER);
         } else if (req.method === 'GET' && path === '/done') {
             reply(200, 'text/html; charset=utf-8', DONE_PAGE);
         } else if (req.method === 'GET' && path === '/icon.png' && this.options.iconFile && existsSync(this.options.iconFile)) {
             reply(200, 'image/png', readFileSync(this.options.iconFile));
-        } else if (req.method === 'POST' && (code = match(/^\/subscribe\/([\w-]+)$/)) !== null && this.accepts(active, code)) {
+        } else if (req.method === 'POST' && accepted(/^\/subscribe\/([\w-]+)$/)) {
             this.subscribe(active, req, (status, text) => reply(status, 'text/plain; charset=utf-8', text));
         } else {
             reply(404, 'text/plain; charset=utf-8', 'not found');

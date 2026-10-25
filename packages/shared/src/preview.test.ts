@@ -10,7 +10,19 @@ describe('previewUrl', () => {
     });
 
     it('refuses every other page and scheme', () => {
-        for (const text of ['example.com', 'localhost.example.com', '127.0.0.2:80', 'http://[::1]:8080', '192.168.1.2:3000', 'file:///etc/passwd', 'javascript:alert(1)', 'ftp://localhost', 'http://user:pw@localhost', 'npm run dev', '']) {
+        for (const text of [
+            'example.com',
+            'localhost.example.com',
+            '127.0.0.2:80',
+            'http://[::1]:8080',
+            '192.168.1.2:3000',
+            'file:///etc/passwd',
+            'javascript:alert(1)',
+            'ftp://localhost',
+            'http://user:pw@localhost',
+            'npm run dev',
+            '',
+        ]) {
             expect(previewUrl(text), text).toBeNull();
         }
     });

@@ -87,7 +87,13 @@ function channels(color: string): number[] {
 export function mix(from: string, to: string, amount: number): string {
     const a = channels(from);
     const b = channels(to);
-    return `#${a.map((value, index) => Math.round(value + (b[index] - value) * amount).toString(16).padStart(2, '0')).join('')}`;
+    return `#${a
+        .map((value, index) =>
+            Math.round(value + (b[index] - value) * amount)
+                .toString(16)
+                .padStart(2, '0'),
+        )
+        .join('')}`;
 }
 
 function luminance(color: string): number {
@@ -183,29 +189,35 @@ export const DEFAULT_THEME_ID = DEFAULT_SETTINGS.theme.dark;
 
 export const DEFAULT_THEME_IDS: Record<Scheme, string> = { ...DEFAULT_SETTINGS.theme };
 
-const VOLTRAN = defineTheme(DEFAULT_THEME_ID, 'Voltran', 'dark', {
-    background: '#111214',
-    foreground: '#d4d5d8',
-    cursor: '#e6e6e8',
-    cursorAccent: '#111214',
-    selectionBackground: '#2a3140',
-    black: '#1b1c1f',
-    red: '#e8776f',
-    green: '#98c98a',
-    yellow: '#e4bd7a',
-    blue: '#7fa6e3',
-    magenta: '#c39ae0',
-    cyan: '#72c0c4',
-    white: '#c8c9cc',
-    brightBlack: '#5c5f66',
-    brightRed: '#f09890',
-    brightGreen: '#b3dca6',
-    brightYellow: '#eed09a',
-    brightBlue: '#a0bfee',
-    brightMagenta: '#d5b5ec',
-    brightCyan: '#93d3d6',
-    brightWhite: '#eeeef0',
-}, { signal: '#ebb862', finished: '#86ade8', working: '#b894e6', live: '#7fc690', fault: '#eb7a70', focus: '#93b4ec' });
+const VOLTRAN = defineTheme(
+    DEFAULT_THEME_ID,
+    'Voltran',
+    'dark',
+    {
+        background: '#111214',
+        foreground: '#d4d5d8',
+        cursor: '#e6e6e8',
+        cursorAccent: '#111214',
+        selectionBackground: '#2a3140',
+        black: '#1b1c1f',
+        red: '#e8776f',
+        green: '#98c98a',
+        yellow: '#e4bd7a',
+        blue: '#7fa6e3',
+        magenta: '#c39ae0',
+        cyan: '#72c0c4',
+        white: '#c8c9cc',
+        brightBlack: '#5c5f66',
+        brightRed: '#f09890',
+        brightGreen: '#b3dca6',
+        brightYellow: '#eed09a',
+        brightBlue: '#a0bfee',
+        brightMagenta: '#d5b5ec',
+        brightCyan: '#93d3d6',
+        brightWhite: '#eeeef0',
+    },
+    { signal: '#ebb862', finished: '#86ade8', working: '#b894e6', live: '#7fc690', fault: '#eb7a70', focus: '#93b4ec' },
+);
 
 export const THEMES: Theme[] = [
     VOLTRAN,
@@ -375,31 +387,37 @@ export const THEMES: Theme[] = [
         brightWhite: '#e0def4',
     }),
     // Solarized's bright colours are its greys, so the lamps and links take its accent colours instead.
-    defineTheme('solarized-dark', 'Solarized Dark', 'dark', {
-        background: '#002b36',
-        foreground: '#839496',
-        cursor: '#93a1a1',
-        cursorAccent: '#002b36',
-        selectionBackground: '#073642',
-        selectionForeground: '#93a1a1',
-        black: '#073642',
-        red: '#dc322f',
-        green: '#859900',
-        yellow: '#b58900',
-        blue: '#268bd2',
-        magenta: '#d33682',
-        cyan: '#2aa198',
-        white: '#eee8d5',
-        // base01: Solarized puts base03 here, which is the background, so grey text would vanish.
-        brightBlack: '#586e75',
-        brightRed: '#cb4b16',
-        brightGreen: '#586e75',
-        brightYellow: '#657b83',
-        brightBlue: '#839496',
-        brightMagenta: '#6c71c4',
-        brightCyan: '#93a1a1',
-        brightWhite: '#fdf6e3',
-    }, { signal: '#b58900', finished: '#268bd2', working: '#6c71c4', live: '#2aa198', fault: '#dc322f', focus: '#268bd2' }),
+    defineTheme(
+        'solarized-dark',
+        'Solarized Dark',
+        'dark',
+        {
+            background: '#002b36',
+            foreground: '#839496',
+            cursor: '#93a1a1',
+            cursorAccent: '#002b36',
+            selectionBackground: '#073642',
+            selectionForeground: '#93a1a1',
+            black: '#073642',
+            red: '#dc322f',
+            green: '#859900',
+            yellow: '#b58900',
+            blue: '#268bd2',
+            magenta: '#d33682',
+            cyan: '#2aa198',
+            white: '#eee8d5',
+            // base01: Solarized puts base03 here, which is the background, so grey text would vanish.
+            brightBlack: '#586e75',
+            brightRed: '#cb4b16',
+            brightGreen: '#586e75',
+            brightYellow: '#657b83',
+            brightBlue: '#839496',
+            brightMagenta: '#6c71c4',
+            brightCyan: '#93a1a1',
+            brightWhite: '#fdf6e3',
+        },
+        { signal: '#b58900', finished: '#268bd2', working: '#6c71c4', live: '#2aa198', fault: '#dc322f', focus: '#268bd2' },
+    ),
     defineTheme('voltran-light', 'Voltran Light', 'light', {
         background: '#fcfcfb',
         foreground: '#26272b',
@@ -473,29 +491,35 @@ export const THEMES: Theme[] = [
         brightWhite: '#fdf6e3',
     }),
     // The signal lamp uses Primer's attention colour: GitHub's ANSI yellow is a dark brown.
-    defineTheme('github-light', 'GitHub Light', 'light', {
-        background: '#ffffff',
-        foreground: '#1f2328',
-        cursor: '#0969da',
-        cursorAccent: '#ffffff',
-        selectionBackground: '#add6ff',
-        black: '#24292f',
-        red: '#cf222e',
-        green: '#116329',
-        yellow: '#4d2d00',
-        blue: '#0969da',
-        magenta: '#8250df',
-        cyan: '#1b7c83',
-        white: '#6e7781',
-        brightBlack: '#57606a',
-        brightRed: '#a40e26',
-        brightGreen: '#1a7f37',
-        brightYellow: '#633c01',
-        brightBlue: '#218bff',
-        brightMagenta: '#a475f9',
-        brightCyan: '#3192aa',
-        brightWhite: '#8c959f',
-    }, { signal: '#9a6700' }),
+    defineTheme(
+        'github-light',
+        'GitHub Light',
+        'light',
+        {
+            background: '#ffffff',
+            foreground: '#1f2328',
+            cursor: '#0969da',
+            cursorAccent: '#ffffff',
+            selectionBackground: '#add6ff',
+            black: '#24292f',
+            red: '#cf222e',
+            green: '#116329',
+            yellow: '#4d2d00',
+            blue: '#0969da',
+            magenta: '#8250df',
+            cyan: '#1b7c83',
+            white: '#6e7781',
+            brightBlack: '#57606a',
+            brightRed: '#a40e26',
+            brightGreen: '#1a7f37',
+            brightYellow: '#633c01',
+            brightBlue: '#218bff',
+            brightMagenta: '#a475f9',
+            brightCyan: '#3192aa',
+            brightWhite: '#8c959f',
+        },
+        { signal: '#9a6700' },
+    ),
 ];
 
 const BY_ID = new Map(THEMES.map((theme) => [theme.id, theme]));

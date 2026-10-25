@@ -59,7 +59,7 @@ export function settingsFileText(settings: Settings): string {
         `        "command": ${JSON.stringify(settings.editor.command)}`,
         '    },',
         '    "git": {',
-        '        // look up the pull request of each session\'s branch with the GitHub CLI (gh)',
+        "        // look up the pull request of each session's branch with the GitHub CLI (gh)",
         `        "pullRequests": ${settings.git.pullRequests}`,
         '    },',
         '    "push": {',
@@ -94,7 +94,10 @@ function parseText(text: string): { raw: unknown; error: string | null } {
         return { raw, error: null };
     }
     const before = text.slice(0, errors[0].offset).split('\n');
-    return { raw: null, error: `not valid JSON: ${printParseErrorCode(errors[0].error)} at line ${before.length}, column ${before[before.length - 1].length + 1}` };
+    return {
+        raw: null,
+        error: `not valid JSON: ${printParseErrorCode(errors[0].error)} at line ${before.length}, column ${before[before.length - 1].length + 1}`,
+    };
 }
 
 // The file is the source of truth: the daemon reloads it whenever it changes on disk and writes a
@@ -189,7 +192,12 @@ export class SettingsFile {
         try {
             text = readFileSync(this.path, 'utf8');
         } catch (error) {
-            return { settings: this.lastValid, problems: [`could not be read: ${error instanceof Error ? error.message : error}`], exists: true, path: this.path };
+            return {
+                settings: this.lastValid,
+                problems: [`could not be read: ${error instanceof Error ? error.message : error}`],
+                exists: true,
+                path: this.path,
+            };
         }
         const { raw, error } = parseText(text);
         if (error) {

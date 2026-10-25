@@ -22,7 +22,8 @@ export function orderedSessions(app: AppState | null, showArchived: boolean): Se
         return [];
     }
     return app.projects.flatMap((project) =>
-        app.sessions.filter((session) => session.projectId === project.id && (showArchived || !session.archived)));
+        app.sessions.filter((session) => session.projectId === project.id && (showArchived || !session.archived)),
+    );
 }
 
 function stepSession(delta: number): void {
@@ -167,7 +168,8 @@ export function toggleZen(): void {
     const target = shown.find((id) => id === focusedPaneId) ?? shown[0];
     maximizedBeforeZen = maximizedPaneId;
     setZen(true, target ?? maximizedPaneId);
-    document.documentElement.requestFullscreen()
+    document.documentElement
+        .requestFullscreen()
         .then(() => keyboardLock()?.lock(['Escape']))
         .catch(() => undefined);
     showToast(`Zen mode. ${keys('⇧Esc')} or ${keys('⌃⌥Z')} to leave`);
@@ -230,7 +232,7 @@ function toggleFocusedConversation(): void {
     const state = useUi.getState();
     const paneId = visibleFocusedPane();
     const pane = state.app?.panes.find((entry) => entry.id === paneId);
-    if (!pane || pane.adapter !== 'claude') {
+    if (pane?.adapter !== 'claude') {
         state.showToast('Focus a Claude Code pane to see its conversation');
         return;
     }
@@ -241,13 +243,23 @@ export const SHORTCUTS: Shortcut[] = [
     { code: 'KeyK', keys: keys('⌘K'), label: 'Open the command palette', run: togglePalette },
     { code: 'KeyJ', keys: keys('⌃⌥J'), label: 'Jump to the next pane that needs you', run: jumpToAttention },
     { code: 'KeyB', keys: keys('⌃⌥B'), label: 'Show or hide the sidebar', run: () => useUi.getState().toggleSidebar() },
-    { code: 'KeyZ', keys: keys('⌃⌥Z'), label: `Zen mode: the focused pane, full screen, nothing else (${keys('⇧Esc')} leaves)`, run: toggleZen },
+    {
+        code: 'KeyZ',
+        keys: keys('⌃⌥Z'),
+        label: `Zen mode: the focused pane, full screen, nothing else (${keys('⇧Esc')} leaves)`,
+        run: toggleZen,
+    },
     { code: 'KeyN', keys: keys('⌃⌥N'), label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
     { code: 'ArrowUp', keys: keys('⌃⌥↑'), label: 'Previous workspace or session', run: () => stepSession(-1) },
     { code: 'ArrowDown', keys: keys('⌃⌥↓'), label: 'Next workspace or session', run: () => stepSession(1) },
     { code: 'ArrowLeft', keys: keys('⌃⌥←'), label: 'Previous pane on screen', run: () => stepPane(-1) },
     { code: 'ArrowRight', keys: keys('⌃⌥→'), label: 'Next pane on screen', run: () => stepPane(1) },
-    { code: 'Backslash', keys: keys('⌃⌥\\'), label: 'Split the focused pane to the right with a shell', run: () => splitFocused('horizontal') },
+    {
+        code: 'Backslash',
+        keys: keys('⌃⌥\\'),
+        label: 'Split the focused pane to the right with a shell',
+        run: () => splitFocused('horizontal'),
+    },
     { code: 'Minus', keys: keys('⌃⌥-'), label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
     {
         code: 'Enter',
@@ -262,7 +274,12 @@ export const SHORTCUTS: Shortcut[] = [
     },
     { code: 'KeyW', keys: keys('⌃⌥W'), label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
     { code: 'KeyE', keys: keys('⌃⌥E'), label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
-    { code: 'KeyC', keys: keys('⌃⌥C'), label: 'Switch the focused Claude Code pane between its conversation and its terminal', run: toggleFocusedConversation },
+    {
+        code: 'KeyC',
+        keys: keys('⌃⌥C'),
+        label: 'Switch the focused Claude Code pane between its conversation and its terminal',
+        run: toggleFocusedConversation,
+    },
     { code: 'KeyG', keys: keys('⌃⌥G'), label: 'Show or hide the git changes of the focused session', run: toggleChanges },
     { code: 'Slash', keys: keys('⌃⌥/'), label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
 ];
@@ -306,8 +323,13 @@ function isZenExitKey(event: KeyboardEvent): boolean {
 }
 
 export function isAppShortcut(event: KeyboardEvent): boolean {
-    return isPaletteKey(event) || isFindKey(event) || isFindStepKey(event) || isZenExitKey(event)
-        || (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code));
+    return (
+        isPaletteKey(event) ||
+        isFindKey(event) ||
+        isFindStepKey(event) ||
+        isZenExitKey(event) ||
+        (event.ctrlKey && event.altKey && !event.metaKey && BY_CODE.has(event.code))
+    );
 }
 
 export function installShortcuts(): () => void {

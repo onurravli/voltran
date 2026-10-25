@@ -27,18 +27,31 @@ const LINES = [
     { type: 'user', timestamp: '2026-10-10T00:00:00.000Z', message: { role: 'user', content: 'Research C++ polymorphism.' } },
     { type: 'attachment', attachment: { type: 'skill_listing' } },
     { type: 'user', isMeta: true, message: { role: 'user', content: '<system-reminder> Report back when done. </system-reminder>' } },
-    { type: 'assistant', message: { role: 'assistant', content: [
-        { type: 'thinking', thinking: 'hidden' },
-        { type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'g++ --version\n', description: 'compiler' } },
-    ] } },
-    { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: [{ type: 'text', text: 'Apple clang 17' }] }] } },
+    {
+        type: 'assistant',
+        message: {
+            role: 'assistant',
+            content: [
+                { type: 'thinking', thinking: 'hidden' },
+                { type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'g++ --version\n', description: 'compiler' } },
+            ],
+        },
+    },
+    {
+        type: 'user',
+        message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'tu1', content: [{ type: 'text', text: 'Apple clang 17' }] }],
+        },
+    },
     { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Virtual functions dispatch at runtime.' }] } },
 ];
 
 describe('subagentTranscriptPath', () => {
-    it('follows Claude\'s layout next to the parent transcript', () => {
-        expect(subagentTranscriptPath(`/home/me/.claude/projects/p/${SESSION}.jsonl`, SESSION, 'a6afb54c3c5df9e20'))
-            .toBe(`/home/me/.claude/projects/p/${SESSION}/subagents/agent-a6afb54c3c5df9e20.jsonl`);
+    it("follows Claude's layout next to the parent transcript", () => {
+        expect(subagentTranscriptPath(`/home/me/.claude/projects/p/${SESSION}.jsonl`, SESSION, 'a6afb54c3c5df9e20')).toBe(
+            `/home/me/.claude/projects/p/${SESSION}/subagents/agent-a6afb54c3c5df9e20.jsonl`,
+        );
     });
 
     it('refuses anything that does not have that exact shape', () => {
@@ -89,7 +102,10 @@ describe('readTranscript', () => {
     it('counts lines it does not understand instead of failing', () => {
         const { parent, subagents } = project();
         const path = subagentTranscriptPath(parent, SESSION, 'a1')!;
-        writeFileSync(join(subagents, 'agent-a1.jsonl'), 'not json\n' + line({ no: 'type' }) + line({ type: 'assistant', message: { content: 7 } }) + line(LINES[5]));
+        writeFileSync(
+            join(subagents, 'agent-a1.jsonl'),
+            `not json\n${line({ no: 'type' })}${line({ type: 'assistant', message: { content: 7 } })}${line(LINES[5])}`,
+        );
         const chunk = readTranscript(path, 0)!;
         expect(chunk.skipped).toBe(3);
         expect(chunk.entries).toHaveLength(1);
@@ -98,7 +114,13 @@ describe('readTranscript', () => {
     it('truncates long tool results', () => {
         const { parent, subagents } = project();
         const path = subagentTranscriptPath(parent, SESSION, 'a1')!;
-        writeFileSync(join(subagents, 'agent-a1.jsonl'), line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't', content: 'x'.repeat(5000), is_error: true }] } }));
+        writeFileSync(
+            join(subagents, 'agent-a1.jsonl'),
+            line({
+                type: 'user',
+                message: { content: [{ type: 'tool_result', tool_use_id: 't', content: 'x'.repeat(5000), is_error: true }] },
+            }),
+        );
         const [entry] = readTranscript(path, 0)!.entries;
         expect(entry).toMatchObject({ kind: 'result', error: true });
         expect(entry.kind === 'result' && entry.text.length).toBe(2000);
@@ -155,7 +177,10 @@ describe('readTranscript', () => {
 describe('readSubagentMeta', () => {
     it('reads the description and type Claude stores beside the transcript', () => {
         const { parent, subagents } = project();
-        writeFileSync(join(subagents, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'Explore', description: 'map the repo', toolUseId: 't1' }));
+        writeFileSync(
+            join(subagents, 'agent-a1.meta.json'),
+            JSON.stringify({ agentType: 'Explore', description: 'map the repo', toolUseId: 't1' }),
+        );
         expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a1')!)).toEqual({ description: 'map the repo', type: 'Explore' });
         expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a2')!)).toBeNull();
     });
@@ -164,8 +189,14 @@ describe('readSubagentMeta', () => {
         const { parent, subagents } = project();
         const run = join(subagents, 'workflows', 'wf_4f777aee-f5e');
         mkdirSync(run, { recursive: true });
-        writeFileSync(join(run, 'agent-a7.meta.json'), JSON.stringify({ agentType: 'developer', description: 'dev:OPT-244553', workflowPhase: 'Develop' }));
-        expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a7')!)).toEqual({ description: 'dev:OPT-244553', type: 'developer' });
+        writeFileSync(
+            join(run, 'agent-a7.meta.json'),
+            JSON.stringify({ agentType: 'developer', description: 'dev:OPT-244553', workflowPhase: 'Develop' }),
+        );
+        expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a7')!)).toEqual({
+            description: 'dev:OPT-244553',
+            type: 'developer',
+        });
     });
 });
 
@@ -174,11 +205,19 @@ describe('parseTranscriptLine', () => {
         const esc = '\u001b[2A\u001b[2K\u001b]8;;https://evil.example\u0007\u009b31m';
         const entries = [
             ...parseTranscriptLine({ type: 'user', message: { content: `go${esc}\nnow` } })!,
-            ...parseTranscriptLine({ type: 'assistant', message: { content: [
-                { type: 'text', text: `done${esc}` },
-                { type: 'tool_use', id: 't', name: `Bash${esc}`, input: { command: `ls${esc}` } },
-            ] } })!,
-            ...parseTranscriptLine({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't', content: `a\tb${esc}\r\nc` }] } })!,
+            ...parseTranscriptLine({
+                type: 'assistant',
+                message: {
+                    content: [
+                        { type: 'text', text: `done${esc}` },
+                        { type: 'tool_use', id: 't', name: `Bash${esc}`, input: { command: `ls${esc}` } },
+                    ],
+                },
+            })!,
+            ...parseTranscriptLine({
+                type: 'user',
+                message: { content: [{ type: 'tool_result', tool_use_id: 't', content: `a\tb${esc}\r\nc` }] },
+            })!,
         ];
         expect(JSON.stringify(entries)).not.toMatch(/\\u00(1b|07|9b)|\\r/);
         expect(entries.map((entry) => ('text' in entry ? entry.text : `${entry.name} ${entry.summary}`))).toEqual([
@@ -199,7 +238,12 @@ describe('parseTranscriptLine', () => {
     });
 
     it('shows the report a subagent hands back as text rather than as a tool call', () => {
-        const [entry] = parseTranscriptLine({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'h', name: 'SubagentHandback', input: { message: '# Fact sheet\nAll checked.' } }] } })!;
+        const [entry] = parseTranscriptLine({
+            type: 'assistant',
+            message: {
+                content: [{ type: 'tool_use', id: 'h', name: 'SubagentHandback', input: { message: '# Fact sheet\nAll checked.' } }],
+            },
+        })!;
         expect(entry).toEqual({ kind: 'text', text: '# Fact sheet\nAll checked.', at: null });
     });
 });

@@ -6,15 +6,7 @@ export type PaneKind = 'agent' | 'shell' | 'process' | 'page';
 
 export type StatusSource = 'hooks' | 'heuristic' | 'process';
 
-export type PaneStatus =
-    | 'suspended'
-    | 'starting'
-    | 'working'
-    | 'needs-input'
-    | 'done'
-    | 'idle'
-    | 'running'
-    | 'exited';
+export type PaneStatus = 'suspended' | 'starting' | 'working' | 'needs-input' | 'done' | 'idle' | 'running' | 'exited';
 
 export type LayoutDirection = 'horizontal' | 'vertical';
 
@@ -356,19 +348,17 @@ export type ServerEvent =
     | ({ type: 'notes'; paneId: string; by: NotesAuthor; holder: string | null } & PaneNotes)
     | { type: 'reveal'; sessionId: string }
     | {
-        type: 'attention';
-        paneId: string;
-        sessionId: string;
-        status: AttentionStatus;
-        title: string;
-        body: string;
-    };
+          type: 'attention';
+          paneId: string;
+          sessionId: string;
+          status: AttentionStatus;
+          title: string;
+          body: string;
+      };
 
 export type PaneServerMessage =
     | { type: 'snapshot'; data: string; cols: number; rows: number }
     | { type: 'resize'; cols: number; rows: number }
     | { type: 'exit'; code: number | null };
 
-export type PaneClientMessage =
-    | { type: 'input'; data: string }
-    | { type: 'resize'; cols: number; rows: number };
+export type PaneClientMessage = { type: 'input'; data: string } | { type: 'resize'; cols: number; rows: number };

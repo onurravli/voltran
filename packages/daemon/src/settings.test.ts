@@ -100,8 +100,13 @@ describe('SettingsFile', () => {
     });
 
     it('writes a template that reads back as the same settings', () => {
-        const settings: Settings = { ...DEFAULT_SETTINGS, ui: { fontFamily: 'Inter', fontSize: 15 }, editor: { command: 'nvim' }, git: { pullRequests: false },
-            push: { enabled: false, events: ['needs-input', 'done'], content: 'titles', delaySeconds: 90 } };
+        const settings: Settings = {
+            ...DEFAULT_SETTINGS,
+            ui: { fontFamily: 'Inter', fontSize: 15 },
+            editor: { command: 'nvim' },
+            git: { pullRequests: false },
+            push: { enabled: false, events: ['needs-input', 'done'], content: 'titles', delaySeconds: 90 },
+        };
         expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({ settings, problems: [] });
     });
 

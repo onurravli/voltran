@@ -10,7 +10,10 @@ describe('commandPane', () => {
 
     it('opens an OpenCode pane for an opencode command and keeps its arguments', () => {
         expect(commandPane('opencode')).toEqual({ adapter: 'opencode' });
-        expect(commandPane('  opencode   --model anthropic/claude-sonnet-4-5  ')).toEqual({ adapter: 'opencode', command: '--model anthropic/claude-sonnet-4-5' });
+        expect(commandPane('  opencode   --model anthropic/claude-sonnet-4-5  ')).toEqual({
+            adapter: 'opencode',
+            command: '--model anthropic/claude-sonnet-4-5',
+        });
     });
 
     it('opens a preview pane for a page on this computer', () => {

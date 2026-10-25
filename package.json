@@ -27,19 +27,27 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
+    "prepare": "node scripts/hooks/install.mjs",
     "up": "node bin/voltran.mjs up",
     "build": "npm run build -w @voltran/web",
     "package": "node scripts/package.mjs",
+    "screenshot": "node scripts/screenshot/run.mjs",
     "dev:daemon": "VOLTRAN_DEV=1 node --watch packages/daemon/src/main.ts",
     "dev:web": "npm run dev -w @voltran/web",
     "test": "vitest run",
     "test:e2e": "npm run build && vitest run -c vitest.e2e.config.ts",
-    "typecheck": "tsc -p packages/daemon && tsc -p packages/web && tsc -p e2e"
+    "typecheck": "tsc -p packages/daemon && tsc -p packages/web && tsc -p e2e",
+    "lint": "biome check --error-on-warnings .",
+    "format": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "^26.6.5",
     "playwright-core": "^1.64.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }

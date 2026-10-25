@@ -45,7 +45,18 @@ import {
     type Settings,
     type WorktreeChoice,
 } from '@voltran/shared';
-import { adapterFor, claudeArgsProblem, claudeConfigDir, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
+import {
+    adapterFor,
+    claudeArgsProblem,
+    claudeConfigDir,
+    isAdapterId,
+    isClaudeHookEvent,
+    isCodexHookEvent,
+    isOpencodeEvent,
+    opencodeArgsProblem,
+    STATUS_LINE_EVENT,
+    voltranSessionId,
+} from './adapters.ts';
 import { ChangesError, SessionChangesReader } from './changes.ts';
 import { readClaudeConversation } from './conversation.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
@@ -182,7 +193,10 @@ export class Hub {
         this.store = options.store;
         this.claudeConfig = claudeConfigDir(options.baseEnv);
         this.adapters = options.adapters;
-        this.worktrees = new Worktrees(options.worktreesDir, options.worktreeRunner ?? worktreeRunner({ ...options.baseEnv, PATH: options.path }));
+        this.worktrees = new Worktrees(
+            options.worktreesDir,
+            options.worktreeRunner ?? worktreeRunner({ ...options.baseEnv, PATH: options.path }),
+        );
         this.pushDevices = new PushDevices(options.pushDir);
         this.push = new PushNotifier({
             devices: this.pushDevices,
@@ -198,7 +212,8 @@ export class Hub {
             onChange: () => this.scheduleBroadcast(),
             onPaired: (device) => {
                 this.scheduleBroadcast();
-                this.push.test(device.id, 'Paired. This is how Voltran tells you an agent needs you.')
+                this.push
+                    .test(device.id, 'Paired. This is how Voltran tells you an agent needs you.')
                     .catch((error: unknown) => console.error('[voltran] could not send a push notification:', error));
             },
             network: options.pairingNetwork,
@@ -233,7 +248,14 @@ export class Hub {
         this.pruneWorkspaces();
         const gitRunner = options.gitRunner ?? commandRunner({ ...options.baseEnv, PATH: options.path });
         this.git = new GitWatcher({
-            folders: () => [...new Set(this.store.listSessions().filter((session) => !session.archived).map((session) => session.cwd))],
+            folders: () => [
+                ...new Set(
+                    this.store
+                        .listSessions()
+                        .filter((session) => !session.archived)
+                        .map((session) => session.cwd),
+                ),
+            ],
             onChange: () => this.scheduleBroadcast(),
             pullRequests: options.pullRequests ?? (() => false),
             run: gitRunner,
@@ -348,9 +370,10 @@ export class Hub {
             id: randomUUID(),
             name: body.name ? requireString(body.name, 'name', MAX_TITLE) : basename(path) || path,
             path,
-            color: typeof body.color === 'string' && /^#[0-9a-f]{6}$/i.test(body.color)
-                ? body.color
-                : PROJECT_COLORS[existing.length % PROJECT_COLORS.length].value,
+            color:
+                typeof body.color === 'string' && /^#[0-9a-f]{6}$/i.test(body.color)
+                    ? body.color
+                    : PROJECT_COLORS[existing.length % PROJECT_COLORS.length].value,
             createdAt: Date.now(),
         };
         this.store.insertProject(project);
@@ -370,9 +393,14 @@ export class Hub {
             }
             patch.color = body.color;
         }
-        const before = body.moveBefore === undefined
-            ? undefined
-            : moveTarget(body.moveBefore, this.store.listProjects().map((project) => project.id), 'another project');
+        const before =
+            body.moveBefore === undefined
+                ? undefined
+                : moveTarget(
+                      body.moveBefore,
+                      this.store.listProjects().map((project) => project.id),
+                      'another project',
+                  );
         this.store.updateProject(id, patch);
         if (before !== undefined) {
             this.store.moveProject(id, before);
@@ -471,9 +499,14 @@ export class Hub {
             }
             patch.layout = body.layout;
         }
-        const before = body.moveBefore === undefined
-            ? undefined
-            : moveTarget(body.moveBefore, this.store.sessionsOfProject(session.projectId).map((entry) => entry.id), 'a session of the same project');
+        const before =
+            body.moveBefore === undefined
+                ? undefined
+                : moveTarget(
+                      body.moveBefore,
+                      this.store.sessionsOfProject(session.projectId).map((entry) => entry.id),
+                      'a session of the same project',
+                  );
         if (body.archived !== undefined) {
             patch.archived = Boolean(body.archived);
             if (patch.archived && !session.archived) {
@@ -515,7 +548,10 @@ export class Hub {
         this.scheduleBroadcast();
         if (removeWorktree && session.worktree) {
             await this.worktrees.remove(project.path, session.worktree).catch((error: unknown) => {
-                throw new HttpError(500, `The session is deleted, but its worktree at ${session.worktree} is not: ${error instanceof Error ? error.message : String(error)}`);
+                throw new HttpError(
+                    500,
+                    `The session is deleted, but its worktree at ${session.worktree} is not: ${error instanceof Error ? error.message : String(error)}`,
+                );
             });
         }
     }
@@ -655,12 +691,18 @@ export class Hub {
         if (!subagent.path) {
             throw new HttpError(404, 'Claude did not report where this subagent writes its transcript.');
         }
-        const existing = this.store.panesOfSession(parent.sessionId).find((pane) => pane.adapter === 'subagent' && pane.command === subagent.path);
+        const existing = this.store
+            .panesOfSession(parent.sessionId)
+            .find((pane) => pane.adapter === 'subagent' && pane.command === subagent.path);
         if (existing) {
             return existing;
         }
         const session = this.mustGetSession(parent.sessionId);
-        const pane = this.insertPaneRecord(session, { adapter: 'subagent', title: subagent.description.slice(0, MAX_TITLE), command: subagent.path });
+        const pane = this.insertPaneRecord(session, {
+            adapter: 'subagent',
+            title: subagent.description.slice(0, MAX_TITLE),
+            command: subagent.path,
+        });
         this.store.updateSession(session.id, { layout: insertPane(session.layout, pane.id, paneId, 'horizontal') });
         this.scheduleBroadcast();
         return pane;
@@ -738,7 +780,14 @@ export class Hub {
             return { source: null, entries: [], next: 0, more: false };
         }
         const start = source === transcript.sessionId && Number.isSafeInteger(from) && from > 0 ? from : 0;
-        return readClaudeConversation(transcript.path, transcript.sessionId, start) ?? { source: transcript.sessionId, entries: [], next: 0, more: false };
+        return (
+            readClaudeConversation(transcript.path, transcript.sessionId, start) ?? {
+                source: transcript.sessionId,
+                entries: [],
+                next: 0,
+                more: false,
+            }
+        );
     }
 
     paneCommands(id: string): SlashCommand[] {
@@ -850,14 +899,23 @@ export class Hub {
     private insertPaneRecord(session: Session, spec: PaneSpec): Pane {
         const adapter = adapterFor(spec.adapter);
         const takesArgs = spec.adapter === 'claude' || spec.adapter === 'opencode';
-        const command = spec.adapter === 'preview'
-            ? this.requirePreviewUrl(spec.command)
-            : spec.adapter === 'command' || spec.adapter === 'subagent' || takesArgs ? spec.command?.trim() || null : null;
+        const command =
+            spec.adapter === 'preview'
+                ? this.requirePreviewUrl(spec.command)
+                : spec.adapter === 'command' || spec.adapter === 'subagent' || takesArgs
+                  ? spec.command?.trim() || null
+                  : null;
         const pane: Pane = {
             id: randomUUID(),
             sessionId: session.id,
             adapter: spec.adapter,
-            title: spec.title?.trim() || (spec.adapter === 'preview' && command ? new URL(command).host : command && !takesArgs ? command.slice(0, 40) : adapter.label),
+            title:
+                spec.title?.trim() ||
+                (spec.adapter === 'preview' && command
+                    ? new URL(command).host
+                    : command && !takesArgs
+                      ? command.slice(0, 40)
+                      : adapter.label),
             command,
             cwd: session.cwd,
             agentSessionId: voltranSessionId(spec.adapter),
@@ -898,12 +956,16 @@ export class Hub {
         }
     }
 
-    private async createWorktree(project: Project, spec: NonNullable<CreateSessionBody['worktree']>): Promise<{ root: string; cwd: string }> {
+    private async createWorktree(
+        project: Project,
+        spec: NonNullable<CreateSessionBody['worktree']>,
+    ): Promise<{ root: string; cwd: string }> {
         if (!spec || typeof spec !== 'object') {
             throw new HttpError(400, 'worktree must be an object with a branch');
         }
         const branch = requireString(spec.branch, 'branch', MAX_TITLE);
-        const base = spec.base === undefined || spec.base === null || spec.base === '' ? undefined : requireString(spec.base, 'base', MAX_TITLE);
+        const base =
+            spec.base === undefined || spec.base === null || spec.base === '' ? undefined : requireString(spec.base, 'base', MAX_TITLE);
         try {
             return await this.worktrees.create(project.path, project.name, branch, base);
         } catch (error) {

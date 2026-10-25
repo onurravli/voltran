@@ -1,5 +1,16 @@
 import { create } from 'zustand';
-import type { AppState, LayoutDirection, PaneView, Session, Settings, SettingsPatch, SettingsState, SidebarPosition, VersionInfo, Workspace } from '@voltran/shared';
+import type {
+    AppState,
+    LayoutDirection,
+    PaneView,
+    Session,
+    Settings,
+    SettingsPatch,
+    SettingsState,
+    SidebarPosition,
+    VersionInfo,
+    Workspace,
+} from '@voltran/shared';
 import { DEFAULT_SETTINGS, SIDEBAR_POSITIONS, applySettingsPatch, needsAttention, paneIds } from '@voltran/shared';
 import { api } from './api.ts';
 import { DEFAULT_FONT, DEFAULT_UI_FONT, parseFont, parseUiFont, type TerminalFont, type UiFont } from './fonts.ts';
@@ -17,13 +28,13 @@ export type Dialog =
     | { kind: 'about' }
     | { kind: 'phones' }
     | {
-        kind: 'confirm';
-        title: string;
-        body: string;
-        action: string;
-        onConfirm: () => void | Promise<void>;
-        alternative?: { action: string; onConfirm: () => void | Promise<void> };
-    };
+          kind: 'confirm';
+          title: string;
+          body: string;
+          action: string;
+          onConfirm: () => void | Promise<void>;
+          alternative?: { action: string; onConfirm: () => void | Promise<void> };
+      };
 
 export interface PaneMenuTarget {
     sessionId: string;
@@ -158,7 +169,8 @@ function readPersisted(): Persisted {
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
                 sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
-                sidebarPosition: SIDEBAR_POSITIONS.find((position) => position === parsed.sidebarPosition) ?? DEFAULT_SETTINGS.sidebar.position,
+                sidebarPosition:
+                    SIDEBAR_POSITIONS.find((position) => position === parsed.sidebarPosition) ?? DEFAULT_SETTINGS.sidebar.position,
                 terminalFont: parseFont(parsed.terminalFont),
                 uiFont: parseUiFont(parsed.uiFont),
                 ...parseThemeChoice(parsed),
@@ -245,13 +257,15 @@ export const useUi = create<UiState>((set, get) => ({
         const sessionExists = selectedSessionId !== null && app.sessions.some((session) => session.id === selectedSessionId);
         const paneIds = new Set(app.panes.map((pane) => pane.id));
         const live = (open: Record<string, boolean>): Record<string, boolean> =>
-            Object.keys(open).some((id) => !paneIds.has(id)) ? Object.fromEntries(Object.entries(open).filter(([id]) => paneIds.has(id))) : open;
+            Object.keys(open).some((id) => !paneIds.has(id))
+                ? Object.fromEntries(Object.entries(open).filter(([id]) => paneIds.has(id)))
+                : open;
         const next = {
             app,
             notesOpen: live(notesOpen),
             conversationOpen: live(conversationOpen),
             selectedWorkspaceId: workspaceExists ? selectedWorkspaceId : null,
-            selectedSessionId: workspaceExists ? null : sessionExists ? selectedSessionId : firstOpenSession(app)?.id ?? null,
+            selectedSessionId: workspaceExists ? null : sessionExists ? selectedSessionId : (firstOpenSession(app)?.id ?? null),
             focusedPaneId: focusedPaneId && paneIds.has(focusedPaneId) ? focusedPaneId : null,
             maximizedPaneId: maximizedPaneId && paneIds.has(maximizedPaneId) ? maximizedPaneId : null,
         };
@@ -265,7 +279,10 @@ export const useUi = create<UiState>((set, get) => ({
             set({ ...next, ...enterView({ ...get(), ...next }) });
             return;
         }
-        const nearest = focusedPaneId && !next.focusedPaneId ? nearestPane(shownPaneIds(get()), focusedPaneId, shownPaneIds({ ...get(), ...next })) : null;
+        const nearest =
+            focusedPaneId && !next.focusedPaneId
+                ? nearestPane(shownPaneIds(get()), focusedPaneId, shownPaneIds({ ...get(), ...next }))
+                : null;
         set(nearest ? { ...next, focusedPaneId: nearest, focusToken: get().focusToken + 1 } : next);
     },
     setVersion: (version) => set({ version }),
@@ -285,7 +302,8 @@ export const useUi = create<UiState>((set, get) => ({
             set({ pendingReveal: id });
         }
     },
-    openChanges: (changesSessionId) => set(changesSessionId ? { changesSessionId } : { changesSessionId, focusToken: get().focusToken + 1 }),
+    openChanges: (changesSessionId) =>
+        set(changesSessionId ? { changesSessionId } : { changesSessionId, focusToken: get().focusToken + 1 }),
     focusPane: (id, enter = true) => {
         const state = get();
         const view = state.selectedWorkspaceId ?? state.selectedSessionId;
@@ -306,9 +324,11 @@ export const useUi = create<UiState>((set, get) => ({
     toggleNotes: (paneId) => {
         markNotesSeen(paneId);
         const { [paneId]: open, ...rest } = get().notesOpen;
-        set(open
-            ? { notesOpen: rest, notesFocus: null }
-            : { notesOpen: { ...rest, [paneId]: true }, notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 } });
+        set(
+            open
+                ? { notesOpen: rest, notesFocus: null }
+                : { notesOpen: { ...rest, [paneId]: true }, notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 } },
+        );
     },
     toggleConversation: (paneId) => {
         const { [paneId]: open, ...rest } = get().conversationOpen;
@@ -336,7 +356,9 @@ export const useUi = create<UiState>((set, get) => ({
             const shown = shownSettings(get());
             if (JSON.stringify(shown) !== JSON.stringify(DEFAULT_SETTINGS)) {
                 set({ settingsFile: state });
-                api.updateSettings(shown).then((saved) => get().applySettings(saved)).catch(reportError);
+                api.updateSettings(shown)
+                    .then((saved) => get().applySettings(saved))
+                    .catch(reportError);
                 return;
             }
         }
@@ -385,11 +407,14 @@ export const useUi = create<UiState>((set, get) => ({
         toastId += 1;
         const id = toastId;
         set({ toast: { id, message, tone } });
-        setTimeout(() => {
-            if (get().toast?.id === id) {
-                set({ toast: null });
-            }
-        }, tone === 'error' ? 6000 : 3000);
+        setTimeout(
+            () => {
+                if (get().toast?.id === id) {
+                    set({ toast: null });
+                }
+            },
+            tone === 'error' ? 6000 : 3000,
+        );
     },
     setInstallable: (installable) => set({ installable }),
 }));
@@ -474,7 +499,8 @@ export function attentionPanes(app: AppState | null): PaneView[] {
     return app.panes
         .filter((pane) => needsAttention(pane.status) && !archived.has(pane.sessionId))
         .sort((a, b) => {
-            const rank = ATTENTION_ORDER[a.status as keyof typeof ATTENTION_ORDER] - ATTENTION_ORDER[b.status as keyof typeof ATTENTION_ORDER];
+            const rank =
+                ATTENTION_ORDER[a.status as keyof typeof ATTENTION_ORDER] - ATTENTION_ORDER[b.status as keyof typeof ATTENTION_ORDER];
             return rank !== 0 ? rank : a.statusAt - b.statusAt;
         });
 }

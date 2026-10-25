@@ -43,18 +43,23 @@ describe('claudeCommands', () => {
         write(join(plugin, 'commands', 'deploy.md'), '---\ndescription: Deploy\n---\n');
         write(join(plugin, 'skills', 'lint', 'SKILL.md'), '---\nname: lint\ndescription: Lint\n---\n');
         write(join(off, 'commands', 'hidden.md'), 'Hidden\n');
-        write(join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({
-            version: 2,
-            plugins: {
-                'tools@market': [{ scope: 'user', installPath: plugin }],
-                'off@market': [{ scope: 'user', installPath: off }],
-            },
-        }));
+        write(
+            join(config, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({
+                version: 2,
+                plugins: {
+                    'tools@market': [{ scope: 'user', installPath: plugin }],
+                    'off@market': [{ scope: 'user', installPath: off }],
+                },
+            }),
+        );
         write(join(config, 'settings.json'), JSON.stringify({ enabledPlugins: { 'tools@market': true, 'off@market': true } }));
         write(join(project, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'off@market': false } }));
 
         const commands = claudeCommands(project, config, home);
-        const custom = commands.filter((command) => command.source !== 'builtin').map(({ name, source, description }) => `${source} /${name} ${description}`);
+        const custom = commands
+            .filter((command) => command.source !== 'builtin')
+            .map(({ name, source, description }) => `${source} /${name} ${description}`);
         expect(custom).toEqual([
             'project /frontend:component Make a component',
             'project /parent From the parent folder',

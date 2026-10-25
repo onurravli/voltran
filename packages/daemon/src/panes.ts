@@ -5,7 +5,18 @@ import * as nodePty from 'node-pty';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
 import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneStatus } from '@voltran/shared';
-import { adapterFor, childEnv, claudeConfigDir, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type CodexHookEvent, type OpencodeEvent } from './adapters.ts';
+import {
+    adapterFor,
+    childEnv,
+    claudeConfigDir,
+    isClaudeHookEvent,
+    isCodexHookEvent,
+    isOpencodeEvent,
+    resolveBinary,
+    type ClaudeHookEvent,
+    type CodexHookEvent,
+    type OpencodeEvent,
+} from './adapters.ts';
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, codexTransition, OpencodeStatus, type StatusChange } from './status.ts';
 import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
@@ -342,7 +353,8 @@ export class PaneManager {
     // The plugin reports subagents' sessions only for their prompts, so any other session it names is
     // one the user opened in the pane, which is the one to resume.
     private opencodeHook(runtime: Runtime, status: OpencodeStatus, event: OpencodeEvent, payload: Record<string, unknown>): void {
-        const sessionId = typeof payload.session_id === 'string' && OPENCODE_SESSION_ID.test(payload.session_id) ? payload.session_id : null;
+        const sessionId =
+            typeof payload.session_id === 'string' && OPENCODE_SESSION_ID.test(payload.session_id) ? payload.session_id : null;
         let recordChanged = false;
         if (sessionId && sessionId !== runtime.pane.agentSessionId) {
             this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: true });
@@ -363,7 +375,7 @@ export class PaneManager {
     // arrives after a daemon restart, the stored session's file.
     transcript(id: string): AgentTranscript | null {
         const runtime = this.runtimes.get(id);
-        if (!runtime || runtime.pane.adapter !== 'claude') {
+        if (runtime?.pane.adapter !== 'claude') {
             return null;
         }
         const sessionId = runtime.pane.agentSessionId;
@@ -471,9 +483,13 @@ export class PaneManager {
         return new ActivityTracker({
             quietMs: this.options.heuristicQuietMs ?? 5000,
             echoWindowMs: ECHO_WINDOW_MS,
-            onChange: (change) => this.setStatus(runtime, runtime.pane.adapter === 'codex' && change.status === 'done' && !change.detail
-                ? { ...change, detail: CODEX_TRUST_HINT }
-                : change),
+            onChange: (change) =>
+                this.setStatus(
+                    runtime,
+                    runtime.pane.adapter === 'codex' && change.status === 'done' && !change.detail
+                        ? { ...change, detail: CODEX_TRUST_HINT }
+                        : change,
+                ),
         });
     }
 
@@ -502,7 +518,14 @@ export class PaneManager {
         const extraEnv: Record<string, string> = {
             ...spec.env,
             ...(notesFile ? { VOLTRAN_NOTES: notesFile } : {}),
-            ...(secret ? { VOLTRAN_PANE_ID: pane.id, VOLTRAN_HOOK_SECRET: secret, VOLTRAN_HOOK_HEADER: this.hookHeader(pane.id, secret)!, VOLTRAN_URL: this.options.url } : {}),
+            ...(secret
+                ? {
+                      VOLTRAN_PANE_ID: pane.id,
+                      VOLTRAN_HOOK_SECRET: secret,
+                      VOLTRAN_HOOK_HEADER: this.hookHeader(pane.id, secret)!,
+                      VOLTRAN_URL: this.options.url,
+                  }
+                : {}),
         };
         runtime.opencode?.reset();
 
@@ -712,8 +735,12 @@ export class PaneManager {
             }
             // Prompts shown before the agent's first hook (folder trust, login, update notices) would
             // otherwise sit under "Starting" forever.
-            if (adapter.statusSource === 'hooks' && runtime.state.status === 'starting'
-                && quietFor > startupPromptMs && now - runtime.state.statusAt > startupPromptMs) {
+            if (
+                adapter.statusSource === 'hooks' &&
+                runtime.state.status === 'starting' &&
+                quietFor > startupPromptMs &&
+                now - runtime.state.statusAt > startupPromptMs
+            ) {
                 this.setStatus(runtime, { status: 'needs-input', detail: 'Waiting at a startup prompt' });
             }
             if (adapter.kind !== 'agent') {

@@ -67,15 +67,17 @@ export function destinations(app: AppState | null): Destination[] {
         paneId: null,
         status: aggregateStatus(panesOf(session.id).map((pane) => pane.status)),
     }));
-    const panes: Destination[] = open.flatMap((session) => panesOf(session.id).map((pane) => ({
-        id: `pane:${pane.id}`,
-        kind: 'pane' as const,
-        label: `${pane.title} · ${session.title}`,
-        keywords: projects.get(session.projectId),
-        workspaceId: null,
-        sessionId: session.id,
-        paneId: pane.id,
-        status: pane.status,
-    })));
+    const panes: Destination[] = open.flatMap((session) =>
+        panesOf(session.id).map((pane) => ({
+            id: `pane:${pane.id}`,
+            kind: 'pane' as const,
+            label: `${pane.title} · ${session.title}`,
+            keywords: projects.get(session.projectId),
+            workspaceId: null,
+            sessionId: session.id,
+            paneId: pane.id,
+            status: pane.status,
+        })),
+    );
     return [...workspaces, ...sessions, ...panes];
 }

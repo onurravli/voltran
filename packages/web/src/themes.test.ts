@@ -157,29 +157,39 @@ describe('parseThemeChoice', () => {
     });
 
     it('keeps a stored appearance and a theme per scheme', () => {
-        expect(parseThemeChoice({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } }))
-            .toEqual({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } });
+        expect(parseThemeChoice({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } })).toEqual({
+            appearance: 'light',
+            themeIds: { dark: 'nord', light: 'solarized-light' },
+        });
     });
 
     it('replaces unknown or mismatched stored themes with the scheme default', () => {
-        expect(parseThemeChoice({ appearance: 'dark', themeIds: { dark: 'github-light', light: 'missing' } }))
-            .toEqual({ appearance: 'dark', themeIds: DEFAULT_THEME_IDS });
+        expect(parseThemeChoice({ appearance: 'dark', themeIds: { dark: 'github-light', light: 'missing' } })).toEqual({
+            appearance: 'dark',
+            themeIds: DEFAULT_THEME_IDS,
+        });
         for (const themeIds of [null, 'nord', ['nord'], 42]) {
             expect(parseThemeChoice({ themeIds }).themeIds).toEqual(DEFAULT_THEME_IDS);
         }
     });
 
     it('keeps a single stored theme, and its scheme as the fixed appearance', () => {
-        expect(parseThemeChoice({ themeId: 'solarized-light' }))
-            .toEqual({ appearance: 'light', themeIds: { dark: DEFAULT_THEME_IDS.dark, light: 'solarized-light' } });
-        expect(parseThemeChoice({ themeId: 'dracula' }))
-            .toEqual({ appearance: 'dark', themeIds: { dark: 'dracula', light: DEFAULT_THEME_IDS.light } });
+        expect(parseThemeChoice({ themeId: 'solarized-light' })).toEqual({
+            appearance: 'light',
+            themeIds: { dark: DEFAULT_THEME_IDS.dark, light: 'solarized-light' },
+        });
+        expect(parseThemeChoice({ themeId: 'dracula' })).toEqual({
+            appearance: 'dark',
+            themeIds: { dark: 'dracula', light: DEFAULT_THEME_IDS.light },
+        });
         expect(parseThemeChoice({ themeId: 'missing' })).toEqual({ appearance: 'system', themeIds: DEFAULT_THEME_IDS });
     });
 
     it('ignores a single stored theme once an appearance is stored', () => {
-        expect(parseThemeChoice({ appearance: 'system', themeIds: { dark: 'nord' }, themeId: 'github-light' }))
-            .toEqual({ appearance: 'system', themeIds: { dark: 'nord', light: DEFAULT_THEME_IDS.light } });
+        expect(parseThemeChoice({ appearance: 'system', themeIds: { dark: 'nord' }, themeId: 'github-light' })).toEqual({
+            appearance: 'system',
+            themeIds: { dark: 'nord', light: DEFAULT_THEME_IDS.light },
+        });
     });
 });
 

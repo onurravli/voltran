@@ -3,13 +3,36 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Pane } from '@voltran/shared';
-import { adapterFor, childEnv, claudeArgsProblem, claudeHookSettings, CODEX_HOOK_EVENTS, codexHookArgs, NOTES_HOOK, OPENCODE_PLUGIN, opencodeArgsProblem, opencodeConfigContent, splitArgs, STATUS_LINE, voltranSessionId } from './adapters.ts';
+import {
+    adapterFor,
+    childEnv,
+    claudeArgsProblem,
+    claudeHookSettings,
+    CODEX_HOOK_EVENTS,
+    codexHookArgs,
+    NOTES_HOOK,
+    OPENCODE_PLUGIN,
+    opencodeArgsProblem,
+    opencodeConfigContent,
+    splitArgs,
+    STATUS_LINE,
+    voltranSessionId,
+} from './adapters.ts';
 
 describe('splitArgs', () => {
     it('splits on whitespace and honours quotes and backslashes without expanding anything', () => {
         expect(splitArgs('')).toEqual([]);
         expect(splitArgs('  --plugin-dir   ./plugins/x  ')).toEqual(['--plugin-dir', './plugins/x']);
-        expect(splitArgs(`--plugin-dir './a b' --name "x \\"y\\"" c\\ d ~/e $HOME ''`)).toEqual(['--plugin-dir', './a b', '--name', 'x "y"', 'c d', '~/e', '$HOME', '']);
+        expect(splitArgs(`--plugin-dir './a b' --name "x \\"y\\"" c\\ d ~/e $HOME ''`)).toEqual([
+            '--plugin-dir',
+            './a b',
+            '--name',
+            'x "y"',
+            'c d',
+            '~/e',
+            '$HOME',
+            '',
+        ]);
         expect(splitArgs(`'a\\b' "c\\d"`)).toEqual(['a\\b', 'c\\d']);
     });
 
@@ -48,13 +71,32 @@ describe('claude adapter', () => {
         ...overrides,
     });
     const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}) =>
-        adapterFor('claude').launch({ pane: pane(overrides), shell: '/bin/zsh', subagentRunning: false, baseEnv, notesFile: null, notesGuide: null });
+        adapterFor('claude').launch({
+            pane: pane(overrides),
+            shell: '/bin/zsh',
+            subagentRunning: false,
+            baseEnv,
+            notesFile: null,
+            notesGuide: null,
+        });
     const settings = expect.stringMatching(/^\{"hooks":/);
 
     it('passes its arguments after the ones Voltran sets, on resume too', () => {
-        expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual(['--settings', settings, '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', '--plugin-dir', './a b']);
+        expect(launch({ command: `--plugin-dir './a b'` }).args).toEqual([
+            '--settings',
+            settings,
+            '--resume',
+            '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+            '--plugin-dir',
+            './a b',
+        ]);
         expect(launch({}).args).toEqual(['--settings', settings, '--resume', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
-        expect(launch({ agentResumable: false }).args).toEqual(['--settings', settings, '--session-id', '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b']);
+        expect(launch({ agentResumable: false }).args).toEqual([
+            '--settings',
+            settings,
+            '--session-id',
+            '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+        ]);
     });
 
     it('never passes a stored session id that is not a Claude session id, so it cannot become a flag', () => {
@@ -62,14 +104,17 @@ describe('claude adapter', () => {
         expect(launch({ agentSessionId: 'abc', agentResumable: false }).args).toEqual(['--settings', settings]);
     });
 
-    it('hands the status line the user\'s own command, from their Claude folder', () => {
+    it("hands the status line the user's own command, from their Claude folder", () => {
         const home = mkdtempSync(join(tmpdir(), 'voltran-claude-home-'));
         try {
             const cwd = join(home, 'project');
             mkdirSync(cwd);
             expect(launch({ cwd }, { HOME: home }).env).toBeUndefined();
             mkdirSync(join(home, '.claude'));
-            writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'bash ~/.claude/line.sh' } }));
+            writeFileSync(
+                join(home, '.claude', 'settings.json'),
+                JSON.stringify({ statusLine: { type: 'command', command: 'bash ~/.claude/line.sh' } }),
+            );
             expect(launch({ cwd }, { HOME: home }).env).toEqual({ VOLTRAN_STATUSLINE: 'bash ~/.claude/line.sh' });
             expect(launch({ cwd }, { HOME: home, CLAUDE_CONFIG_DIR: join(home, 'elsewhere') }).env).toBeUndefined();
         } finally {
@@ -129,7 +174,14 @@ describe('opencode adapter', () => {
         ...overrides,
     });
     const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}, notesFile: string | null = null) =>
-        adapterFor('opencode').launch({ pane: pane(overrides), shell: '/bin/zsh', subagentRunning: false, baseEnv, notesFile, notesGuide: '/n/GUIDE.md' });
+        adapterFor('opencode').launch({
+            pane: pane(overrides),
+            shell: '/bin/zsh',
+            subagentRunning: false,
+            baseEnv,
+            notesFile,
+            notesGuide: '/n/GUIDE.md',
+        });
 
     it('runs its own server on the pane session, with the arguments after the ones Voltran sets', () => {
         expect(launch({}).args).toEqual(['--standalone', '--session', 'ses_abc']);
@@ -141,8 +193,10 @@ describe('opencode adapter', () => {
         expect(JSON.parse(launch({}).env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({ plugins: [OPENCODE_PLUGIN] });
     });
 
-    it('gives OpenCode the notes guide and the pane\'s notes as instructions, after the user\'s own', () => {
-        const config = JSON.parse(launch({}, { OPENCODE_CONFIG_CONTENT: '{"instructions":["mine.md"]}' }, '/n/p/notes.md').env?.OPENCODE_CONFIG_CONTENT ?? '');
+    it("gives OpenCode the notes guide and the pane's notes as instructions, after the user's own", () => {
+        const config = JSON.parse(
+            launch({}, { OPENCODE_CONFIG_CONTENT: '{"instructions":["mine.md"]}' }, '/n/p/notes.md').env?.OPENCODE_CONFIG_CONTENT ?? '',
+        );
         expect(config).toEqual({ instructions: ['mine.md', '/n/GUIDE.md', '/n/p/notes.md'], plugins: [OPENCODE_PLUGIN] });
     });
 });
@@ -160,16 +214,25 @@ describe('claudeHookSettings', () => {
             `sh ${hook} session-start ${guide}; exit 0`,
         ]);
         expect(settings.hooks.UserPromptSubmit[1].hooks[0].command).toBe(`sh ${hook} prompt ${guide}; exit 0`);
-        expect(settings.hooks.PreToolUse[1]).toMatchObject({ matcher: 'Edit|Write', hooks: [{ command: `sh ${hook} pre-tool-use ${guide}; exit 0` }] });
+        expect(settings.hooks.PreToolUse[1]).toMatchObject({
+            matcher: 'Edit|Write',
+            hooks: [{ command: `sh ${hook} pre-tool-use ${guide}; exit 0` }],
+        });
         expect(settings.hooks.Stop).toHaveLength(1);
     });
 
-    it('runs Voltran\'s status line script, quoting its path', () => {
-        expect((settings as unknown as { statusLine: object }).statusLine).toEqual({ type: 'command', command: `sh '${STATUS_LINE.replace(/'/g, `'\\''`)}'` });
+    it("runs Voltran's status line script, quoting its path", () => {
+        expect((settings as unknown as { statusLine: object }).statusLine).toEqual({
+            type: 'command',
+            command: `sh '${STATUS_LINE.replace(/'/g, `'\\''`)}'`,
+        });
     });
 
-    it('lets Claude read and edit its own pane\'s notes without asking, and no other pane\'s', () => {
-        expect(settings.permissions?.allow).toEqual(["Read(//home/o'b/.voltran/notes/pane-1/**)", "Edit(//home/o'b/.voltran/notes/pane-1/**)"]);
+    it("lets Claude read and edit its own pane's notes without asking, and no other pane's", () => {
+        expect(settings.permissions?.allow).toEqual([
+            "Read(//home/o'b/.voltran/notes/pane-1/**)",
+            "Edit(//home/o'b/.voltran/notes/pane-1/**)",
+        ]);
         expect((claudeHookSettings(notesOf('pane-2')) as Settings).permissions?.allow).toEqual([
             "Read(//home/o'b/.voltran/notes/pane-2/**)",
             "Edit(//home/o'b/.voltran/notes/pane-2/**)",
@@ -194,7 +257,10 @@ describe('childEnv', () => {
 
 describe('opencodeConfigContent', () => {
     it('keeps the configuration the user passed and their plugins', () => {
-        expect(JSON.parse(opencodeConfigContent('{"model":"a/b","plugins":["x"]}'))).toEqual({ model: 'a/b', plugins: ['x', OPENCODE_PLUGIN] });
+        expect(JSON.parse(opencodeConfigContent('{"model":"a/b","plugins":["x"]}'))).toEqual({
+            model: 'a/b',
+            plugins: ['x', OPENCODE_PLUGIN],
+        });
     });
 
     it('ignores a value that is not a JSON object', () => {

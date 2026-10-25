@@ -16,7 +16,7 @@ describe('editorTheme', () => {
         }
     });
 
-    it('draws added and removed lines in the theme\'s own status colours', () => {
+    it("draws added and removed lines in the theme's own status colours", () => {
         const [theme] = THEMES;
         const { colors } = editorTheme(theme);
         expect(colors['diffEditor.insertedLineBackground'].slice(0, 7)).toBe(theme.ui['--live']);

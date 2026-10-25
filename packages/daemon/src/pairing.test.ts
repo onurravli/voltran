@@ -19,7 +19,10 @@ afterEach(() => {
 
 const SUBSCRIPTION = {
     endpoint: 'https://web.push.apple.com/abc',
-    keys: { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' },
+    keys: {
+        p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4',
+        auth: 'BTBZMqHH6r4Tts7J_aSIgg',
+    },
 };
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
 
@@ -29,7 +32,15 @@ interface Reply {
     body: string;
 }
 
-async function startPairing(): Promise<{ pairing: Pairing; devices: PushDevices; folder: string; paired: PushDevice[]; port: number; code: string; ca: string }> {
+async function startPairing(): Promise<{
+    pairing: Pairing;
+    devices: PushDevices;
+    folder: string;
+    paired: PushDevice[];
+    port: number;
+    code: string;
+    ca: string;
+}> {
     const dir = mkdtempSync(join(tmpdir(), 'voltran-pairing-test-'));
     cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     const devices = new PushDevices(join(dir, 'push'));
@@ -48,24 +59,46 @@ async function startPairing(): Promise<{ pairing: Pairing; devices: PushDevices;
     const url = new URL(pairing.pairingUrl()!);
     const profile = readFileSync(join(folder, '1 Voltran pairing.mobileconfig'), 'utf8');
     const der = Buffer.from(/<data>([^<]+)<\/data>/.exec(profile)![1], 'base64');
-    return { pairing, devices, folder, paired, port: Number(url.port), code: url.pathname.split('/')[2], ca: new X509Certificate(der).toString() };
+    return {
+        pairing,
+        devices,
+        folder,
+        paired,
+        port: Number(url.port),
+        code: url.pathname.split('/')[2],
+        ca: new X509Certificate(der).toString(),
+    };
 }
 
-function fetchPairing(port: number, ca: string, path: string, options: { method?: string; body?: string; host?: string; userAgent?: string } = {}): Promise<Reply> {
+function fetchPairing(
+    port: number,
+    ca: string,
+    path: string,
+    options: { method?: string; body?: string; host?: string; userAgent?: string } = {},
+): Promise<Reply> {
     return new Promise((resolveReply, reject) => {
-        const req = request({
-            host: '127.0.0.1',
-            port,
-            path,
-            method: options.method ?? 'GET',
-            ca,
-            ...(options.host ? { checkServerIdentity: () => undefined } : {}),
-            headers: { Host: options.host ?? `127.0.0.1:${port}`, 'User-Agent': options.userAgent ?? 'test', ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
-        }, (res) => {
-            let body = '';
-            res.on('data', (chunk) => { body += chunk; });
-            res.on('end', () => resolveReply({ status: res.statusCode ?? 0, headers: res.headers, body }));
-        });
+        const req = request(
+            {
+                host: '127.0.0.1',
+                port,
+                path,
+                method: options.method ?? 'GET',
+                ca,
+                ...(options.host ? { checkServerIdentity: () => undefined } : {}),
+                headers: {
+                    Host: options.host ?? `127.0.0.1:${port}`,
+                    'User-Agent': options.userAgent ?? 'test',
+                    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+                },
+            },
+            (res) => {
+                let body = '';
+                res.on('data', (chunk) => {
+                    body += chunk;
+                });
+                res.on('end', () => resolveReply({ status: res.statusCode ?? 0, headers: res.headers, body }));
+            },
+        );
         req.on('error', reject);
         req.end(options.body);
     });
@@ -73,9 +106,13 @@ function fetchPairing(port: number, ca: string, path: string, options: { method?
 
 describe('makeCertificates', () => {
     it('makes a CA constrained to the one address, and leaves no key behind', async () => {
-        const before = readdirSync(tmpdir()).filter((name) => name.startsWith('voltran-pairing-') && !name.startsWith('voltran-pairing-test-'));
+        const before = readdirSync(tmpdir()).filter(
+            (name) => name.startsWith('voltran-pairing-') && !name.startsWith('voltran-pairing-test-'),
+        );
         const certificates = await makeCertificates({ ip: '192.168.1.20', dnsName: 'studio.local' });
-        const after = readdirSync(tmpdir()).filter((name) => name.startsWith('voltran-pairing-') && !name.startsWith('voltran-pairing-test-'));
+        const after = readdirSync(tmpdir()).filter(
+            (name) => name.startsWith('voltran-pairing-') && !name.startsWith('voltran-pairing-test-'),
+        );
         expect(after).toEqual(before);
 
         const text = execFileSync('openssl', ['x509', '-inform', 'DER', '-noout', '-text'], { input: certificates.caDer }).toString();
@@ -117,22 +154,31 @@ describe('Pairing', () => {
 
     it('takes one subscription, names the device, and refuses the code afterwards', async () => {
         const { port, code, ca, devices, paired, pairing } = await startPairing();
-        const forged = await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify({ ...SUBSCRIPTION, endpoint: 'https://127.0.0.1:4747/api/shutdown' }) });
+        const forged = await fetchPairing(port, ca, `/subscribe/${code}`, {
+            method: 'POST',
+            body: JSON.stringify({ ...SUBSCRIPTION, endpoint: 'https://127.0.0.1:4747/api/shutdown' }),
+        });
         expect(forged.status).toBe(400);
         expect(devices.list()).toHaveLength(0);
 
-        const ok = await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION), userAgent: IPHONE });
+        const ok = await fetchPairing(port, ca, `/subscribe/${code}`, {
+            method: 'POST',
+            body: JSON.stringify(SUBSCRIPTION),
+            userAgent: IPHONE,
+        });
         expect(ok.status).toBe(200);
         expect(paired.map((device) => device.name)).toEqual(['iPhone']);
         expect(devices.list()[0].subscription.endpoint).toBe(SUBSCRIPTION.endpoint);
 
-        expect((await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION) })).status).toBe(404);
+        expect((await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION) })).status).toBe(
+            404,
+        );
         expect((await fetchPairing(port, ca, `/p/${code}`)).status).toBe(404);
         await new Promise((resolveWait) => setTimeout(resolveWait, 2200));
         expect(pairing.view()).toBeNull();
     });
 
-    it('installs the phone\'s service worker without an icon to cache', async () => {
+    it("installs the phone's service worker without an icon to cache", async () => {
         const { port, ca } = await startPairing();
         const worker = await fetchPairing(port, ca, '/sw.js');
         expect(worker.status).toBe(200);
@@ -146,10 +192,17 @@ describe('Pairing', () => {
         };
         const cache = { add, addAll: (paths: string[]) => Promise.all(paths.map(add)) };
         runInNewContext(worker.body, {
-            self: { addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener), skipWaiting: () => undefined },
+            self: {
+                addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener),
+                skipWaiting: () => undefined,
+            },
             caches: { open: async () => cache },
         });
-        listeners.get('install')!({ waitUntil: (promise: Promise<unknown>) => { installed = promise; } });
+        listeners.get('install')!({
+            waitUntil: (promise: Promise<unknown>) => {
+                installed = promise;
+            },
+        });
         await expect(installed).resolves.toBeDefined();
     });
 
@@ -157,7 +210,13 @@ describe('Pairing', () => {
         const dir = mkdtempSync(join(tmpdir(), 'voltran-pairing-test-'));
         cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
         const devices = new PushDevices(join(dir, 'push'));
-        const options = { devices, onChange: () => undefined, onPaired: () => undefined, network: () => ({ ip: '127.0.0.1', dnsName: null }), reveal: () => undefined };
+        const options = {
+            devices,
+            onChange: () => undefined,
+            onPaired: () => undefined,
+            network: () => ({ ip: '127.0.0.1', dnsName: null }),
+            reveal: () => undefined,
+        };
 
         const unwritable = new Pairing({ ...options, folder: join(dir, 'file', 'pairing') });
         writeFileSync(join(dir, 'file'), '');
@@ -179,11 +238,18 @@ describe('Pairing', () => {
         const add = vi.spyOn(devices, 'add').mockImplementationOnce(() => {
             throw new Error('ENOSPC');
         });
-        const failed = await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION), userAgent: IPHONE });
+        const failed = await fetchPairing(port, ca, `/subscribe/${code}`, {
+            method: 'POST',
+            body: JSON.stringify(SUBSCRIPTION),
+            userAgent: IPHONE,
+        });
         expect(failed.status).toBe(500);
         expect(paired).toHaveLength(0);
         add.mockRestore();
-        expect((await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION), userAgent: IPHONE })).status).toBe(200);
+        expect(
+            (await fetchPairing(port, ca, `/subscribe/${code}`, { method: 'POST', body: JSON.stringify(SUBSCRIPTION), userAgent: IPHONE }))
+                .status,
+        ).toBe(200);
         expect(paired).toHaveLength(1);
     });
 
@@ -194,9 +260,13 @@ describe('Pairing', () => {
         expect(second).toEqual(first);
         const url = new URL(pairing.pairingUrl()!);
         pairing.stop();
-        await expect(new Promise((resolveConnect, reject) => {
-            request({ host: '127.0.0.1', port: Number(url.port), path: '/', rejectUnauthorized: false }, resolveConnect).on('error', reject).end();
-        })).rejects.toThrow(/ECONNREFUSED/);
+        await expect(
+            new Promise((resolveConnect, reject) => {
+                request({ host: '127.0.0.1', port: Number(url.port), path: '/', rejectUnauthorized: false }, resolveConnect)
+                    .on('error', reject)
+                    .end();
+            }),
+        ).rejects.toThrow(/ECONNREFUSED/);
     });
 
     it('opens nothing when stopped while it is still starting', async () => {

@@ -39,7 +39,8 @@ interface AdapterDefinition {
     launch(ctx: LaunchContext): LaunchSpec;
 }
 
-export const claudeConfigDir = (env: NodeJS.ProcessEnv): string | null => env.CLAUDE_CONFIG_DIR || (env.HOME ? join(env.HOME, '.claude') : null);
+export const claudeConfigDir = (env: NodeJS.ProcessEnv): string | null =>
+    env.CLAUDE_CONFIG_DIR || (env.HOME ? join(env.HOME, '.claude') : null);
 
 const DEFINITIONS: AdapterDefinition[] = [
     {
@@ -294,9 +295,7 @@ export function findOnPath(binary: string, path: string): string | null {
         try {
             accessSync(candidate, constants.X_OK);
             return candidate;
-        } catch {
-            continue;
-        }
+        } catch {}
     }
     return null;
 }
@@ -333,7 +332,7 @@ export function resolveShellPath(shell: string, fallback: string, timeoutMs = 50
                 return;
             }
             const match = stdout.match(new RegExp(`${START}(.*)${END}`, 's'));
-            resolvePath(match && match[1] ? match[1] : fallback);
+            resolvePath(match?.[1] ? match[1] : fallback);
         });
     });
 }
@@ -449,16 +448,21 @@ export function isCodexHookEvent(value: string): value is CodexHookEvent {
 const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 
 function hookCommand(event: string): string {
-    return `[ -n "$VOLTRAN_PANE_ID" ] && curl -s -m 2 -o /dev/null -X POST `
-        + `-H @"$VOLTRAN_HOOK_HEADER" -H 'Content-Type: application/json' `
-        + `--data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"; exit 0`;
+    return (
+        `[ -n "$VOLTRAN_PANE_ID" ] && curl -s -m 2 -o /dev/null -X POST ` +
+        `-H @"$VOLTRAN_HOOK_HEADER" -H 'Content-Type: application/json' ` +
+        `--data-binary @- "$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"; exit 0`
+    );
 }
 
 // Codex runs a hook only after the user has trusted it once in /hooks, and trust follows the
 // command's hash, so the command is the same for every pane and reads the pane from its environment.
 // The JSON string is also a valid TOML basic string, which is how -c parses the value.
 export function codexHookArgs(): string[] {
-    return CODEX_HOOK_EVENTS.flatMap((event) => ['-c', `hooks.${event}=[{hooks=[{type="command",command=${JSON.stringify(hookCommand(event))}}]}]`]);
+    return CODEX_HOOK_EVENTS.flatMap((event) => [
+        '-c',
+        `hooks.${event}=[{hooks=[{type="command",command=${JSON.stringify(hookCommand(event))}}]}]`,
+    ]);
 }
 
 // Hooks must never slow down or block the agent: short curl timeout, no output, always exit 0.

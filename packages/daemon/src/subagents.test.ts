@@ -76,12 +76,18 @@ describe('SubagentTracker', () => {
         tracker.handle('PreToolUse', agentCall('t1', 'foreground'), 1);
         tracker.handle('SubagentStart', { agent_id: 'f', agent_type: 'general-purpose' }, 1);
         tracker.handle('PostToolUse', agentResult('t2', 'b', 'async_launched', 'background', true), 1);
-        tracker.handle('Stop', { background_tasks: [
-            { id: 'b', type: 'subagent', status: 'running', description: 'background' },
-            { id: 'x', type: 'subagent', status: 'running', description: 'started elsewhere' },
-            { id: 's', type: 'shell', status: 'running', description: 'npm run dev' },
-            { id: 'old', type: 'subagent', status: 'completed', description: 'done already' },
-        ] }, 5);
+        tracker.handle(
+            'Stop',
+            {
+                background_tasks: [
+                    { id: 'b', type: 'subagent', status: 'running', description: 'background' },
+                    { id: 'x', type: 'subagent', status: 'running', description: 'started elsewhere' },
+                    { id: 's', type: 'shell', status: 'running', description: 'npm run dev' },
+                    { id: 'old', type: 'subagent', status: 'completed', description: 'done already' },
+                ],
+            },
+            5,
+        );
         expect(descriptions(tracker)).toEqual(['b:background', 'x:started elsewhere']);
 
         tracker.handle('Stop', { background_tasks: [] }, 6);
@@ -117,7 +123,11 @@ describe('SubagentTracker', () => {
     });
 
     it('prefers the description Claude stores for the agent and remembers its transcript', () => {
-        const tracker = new SubagentTracker((_payload, agentId) => ({ transcriptPath: `/t/agent-${agentId}.jsonl`, description: `stored ${agentId}`, type: 'Explore' }));
+        const tracker = new SubagentTracker((_payload, agentId) => ({
+            transcriptPath: `/t/agent-${agentId}.jsonl`,
+            description: `stored ${agentId}`,
+            type: 'Explore',
+        }));
         tracker.handle('PreToolUse', agentCall('t1', 'guessed', false, 'Explore'), 1);
         tracker.handle('SubagentStart', { agent_id: 'a1', agent_type: 'Explore' }, 2);
         expect(descriptions(tracker)).toEqual(['a1:stored a1']);
@@ -125,12 +135,20 @@ describe('SubagentTracker', () => {
         expect(tracker.transcript('unknown', 3)).toBeNull();
     });
 
-    it('keeps a finished agent\'s transcript reachable for ten minutes', () => {
-        const tracker = new SubagentTracker((_payload, agentId) => ({ transcriptPath: `/t/agent-${agentId}.jsonl`, description: null, type: null }));
+    it("keeps a finished agent's transcript reachable for ten minutes", () => {
+        const tracker = new SubagentTracker((_payload, agentId) => ({
+            transcriptPath: `/t/agent-${agentId}.jsonl`,
+            description: null,
+            type: null,
+        }));
         tracker.handle('SubagentStart', { agent_id: 'a1', agent_type: 'general-purpose' }, 0);
         tracker.handle('SubagentStop', { agent_id: 'a1' }, 1000);
         expect(tracker.list()).toEqual([]);
-        expect(tracker.transcript('a1', 1000 + 9 * 60_000)).toEqual({ path: '/t/agent-a1.jsonl', description: 'general-purpose', finished: true });
+        expect(tracker.transcript('a1', 1000 + 9 * 60_000)).toEqual({
+            path: '/t/agent-a1.jsonl',
+            description: 'general-purpose',
+            finished: true,
+        });
         expect(tracker.transcript('a1', 1000 + 11 * 60_000)).toBeNull();
     });
 

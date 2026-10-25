@@ -48,7 +48,13 @@ export function validSubscription(raw: unknown): PushSubscription | null {
     } catch {
         return null;
     }
-    if (url.protocol !== 'https:' || url.port !== '' || url.username || url.password || !PUSH_HOSTS.some((host) => host.test(url.hostname))) {
+    if (
+        url.protocol !== 'https:' ||
+        url.port !== '' ||
+        url.username ||
+        url.password ||
+        !PUSH_HOSTS.some((host) => host.test(url.hostname))
+    ) {
         return null;
     }
     const p256dh = fromBase64Url(keys.p256dh);
@@ -61,7 +67,11 @@ export function validSubscription(raw: unknown): PushSubscription | null {
 
 // RFC 8291: only the browser that made the subscription can read the payload; the push service
 // carries ciphertext.
-export function encryptPayload(plaintext: string, subscription: PushSubscription, fixed: { privateKey?: Buffer; salt?: Buffer } = {}): Buffer {
+export function encryptPayload(
+    plaintext: string,
+    subscription: PushSubscription,
+    fixed: { privateKey?: Buffer; salt?: Buffer } = {},
+): Buffer {
     const receiverKey = fromBase64Url(subscription.keys.p256dh);
     const authSecret = fromBase64Url(subscription.keys.auth);
     const ecdh = createECDH('prime256v1');
@@ -104,7 +114,9 @@ function vapidJwk(vapid: VapidKeys, withPrivate: boolean): Record<string, string
 // RFC 8292: proves to the push service that this daemon is the one the browser subscribed for.
 export function vapidAuthorization(endpoint: string, vapid: VapidKeys, now = Date.now()): string {
     const header = Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' })).toString('base64url');
-    const claims = Buffer.from(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(now / 1000) + 12 * 3600, sub: VAPID_SUBJECT })).toString('base64url');
+    const claims = Buffer.from(
+        JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(now / 1000) + 12 * 3600, sub: VAPID_SUBJECT }),
+    ).toString('base64url');
     const key = createPrivateKey({ key: vapidJwk(vapid, true), format: 'jwk' });
     const signature = sign('sha256', Buffer.from(`${header}.${claims}`), { key, dsaEncoding: 'ieee-p1363' });
     return `vapid t=${header}.${claims}.${signature.toString('base64url')}, k=${vapid.publicKey}`;

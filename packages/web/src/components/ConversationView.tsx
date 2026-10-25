@@ -1,4 +1,15 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+    memo,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ClipboardEvent as ReactClipboardEvent,
+    type DragEvent as ReactDragEvent,
+    type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { MAX_ATTACHMENT_BYTES, type ConversationEntry, type PaneView, type SlashCommand, type ToolDetail } from '@voltran/shared';
 import { api } from '../api.ts';
 import { formatDuration, groupTurns, lineDiff, type ConversationItem, type Turn } from '../conversation.ts';
@@ -124,6 +135,7 @@ function useConversation(paneId: string, status: string): { entries: Conversatio
 
 const Markdown = memo(function Markdown({ text }: { text: string }) {
     const html = useMemo(() => renderMarkdown(text), [text]);
+    // biome-ignore lint/security/noDangerouslySetInnerHtml: renderMarkdown runs markdown-it with raw HTML off
     return <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
@@ -149,7 +161,9 @@ function ToolBody({ detail }: { detail: ToolDetail }) {
         case 'edit':
             return (
                 <>
-                    {detail.changes.map((change, index) => <Diff key={index} before={change.before} after={change.after} />)}
+                    {detail.changes.map((change, index) => (
+                        <Diff key={index} before={change.before} after={change.after} />
+                    ))}
                 </>
             );
         case 'write':
@@ -174,7 +188,15 @@ function Todos({ todos }: { todos: Extract<ToolDetail, { kind: 'todos' }>['todos
     );
 }
 
-const ToolRow = memo(function ToolRow({ tool, result, running }: { tool: Entry<'tool'>; result: Entry<'result'> | null; running: boolean }) {
+const ToolRow = memo(function ToolRow({
+    tool,
+    result,
+    running,
+}: {
+    tool: Entry<'tool'>;
+    result: Entry<'result'> | null;
+    running: boolean;
+}) {
     const state = result ? (result.error ? 'failed' : 'done') : running ? 'running' : 'unknown';
     const path = tool.detail && (tool.detail.kind === 'edit' || tool.detail.kind === 'write') ? tool.detail.path : null;
     if (tool.detail?.kind === 'todos') {
@@ -194,12 +216,16 @@ const ToolRow = memo(function ToolRow({ tool, result, running }: { tool: Entry<'
             <summary className={`tool__row${hasBody ? '' : ' is-empty'}`}>
                 <span className={`tool__state tool__state--${state}`} aria-hidden="true" />
                 <span className="tool__name">{tool.name}</span>
-                <span className="tool__summary" title={path ?? tool.summary}>{tool.summary}</span>
+                <span className="tool__summary" title={path ?? tool.summary}>
+                    {tool.summary}
+                </span>
             </summary>
             {hasBody ? (
                 <div className="tool__body">
                     {tool.detail ? <ToolBody detail={tool.detail} /> : null}
-                    {result && result.text !== '' ? <pre className={`tool__code tool__result${result.error ? ' is-error' : ''}`}>{result.text}</pre> : null}
+                    {result && result.text !== '' ? (
+                        <pre className={`tool__code tool__result${result.error ? ' is-error' : ''}`}>{result.text}</pre>
+                    ) : null}
                 </div>
             ) : null}
         </details>
@@ -222,7 +248,9 @@ function Item({ item, running }: { item: ConversationItem; running: boolean }) {
         case 'tools':
             return (
                 <div className="tools">
-                    {item.tools.map(({ tool, result }, index) => <ToolRow key={tool.id || index} tool={tool} result={result} running={running} />)}
+                    {item.tools.map(({ tool, result }, index) => (
+                        <ToolRow key={tool.id || index} tool={tool} result={result} running={running} />
+                    ))}
                 </div>
             );
     }
@@ -236,7 +264,9 @@ function TurnView({ turn, live }: { turn: Turn; live: boolean }) {
     const prompt = turn.prompt;
     const stats = [
         turn.model,
-        turn.startedAt !== null && turn.endedAt !== null && turn.endedAt > turn.startedAt ? formatDuration(turn.endedAt - turn.startedAt) : null,
+        turn.startedAt !== null && turn.endedAt !== null && turn.endedAt > turn.startedAt
+            ? formatDuration(turn.endedAt - turn.startedAt)
+            : null,
         turn.endedAt !== null ? clock(turn.endedAt) : null,
     ].filter(Boolean);
     return (
@@ -244,10 +274,14 @@ function TurnView({ turn, live }: { turn: Turn; live: boolean }) {
             {prompt ? (
                 <div className="turn__prompt">
                     {prompt.text}
-                    {prompt.images > 0 ? <span className="turn__images">{prompt.images === 1 ? '1 image' : `${prompt.images} images`}</span> : null}
+                    {prompt.images > 0 ? (
+                        <span className="turn__images">{prompt.images === 1 ? '1 image' : `${prompt.images} images`}</span>
+                    ) : null}
                 </div>
             ) : null}
-            {turn.items.map((item, index) => <Item key={index} item={item} running={live} />)}
+            {turn.items.map((item, index) => (
+                <Item key={index} item={item} running={live} />
+            ))}
             {!live && turn.items.length > 0 && stats.length > 0 ? <div className="turn__stats">{stats.join(' · ')}</div> : null}
         </section>
     );
@@ -274,7 +308,10 @@ function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | n
             return;
         }
         let current = true;
-        api.commands(pane.id).then((list) => current && setCommands(list), () => undefined);
+        api.commands(pane.id).then(
+            (list) => current && setCommands(list),
+            () => undefined,
+        );
         return () => {
             current = false;
         };
@@ -320,9 +357,13 @@ function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | n
                 continue;
             }
             const id = nextAttachmentId++;
-            const set = (fields: Partial<Attachment>): void => updateImages((current) => current.map((image) => (image.id === id ? { ...image, ...fields } : image)));
+            const set = (fields: Partial<Attachment>): void =>
+                updateImages((current) => current.map((image) => (image.id === id ? { ...image, ...fields } : image)));
             updateImages((current) => [...current, { id, preview: '', path: null }]);
-            readPreview(file).then((preview) => set({ preview }), () => undefined);
+            readPreview(file).then(
+                (preview) => set({ preview }),
+                () => undefined,
+            );
             api.attach(pane.id, file)
                 .then(({ path }) => set({ path }))
                 .catch((error: unknown) => {
@@ -432,7 +473,11 @@ function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | n
                         >
                             <span className="slash-menu__name">/{command.name}</span>
                             <span className="slash-menu__description">{command.description}</span>
-                            {command.terminal ? <span className="slash-menu__tag">terminal</span> : command.source !== 'builtin' ? <span className="slash-menu__tag">{command.source}</span> : null}
+                            {command.terminal ? (
+                                <span className="slash-menu__tag">terminal</span>
+                            ) : command.source !== 'builtin' ? (
+                                <span className="slash-menu__tag">{command.source}</span>
+                            ) : null}
                         </div>
                     ))}
                 </div>
@@ -529,7 +574,11 @@ export function ConversationView({ pane, focusToken }: { pane: PaneView; focusTo
             >
                 <div className="conversation__log">
                     {hidden > 0 ? (
-                        <button type="button" className="button button--small button--ghost conversation__earlier" onClick={() => setShown((count) => count + TURNS_PER_PAGE)}>
+                        <button
+                            type="button"
+                            className="button button--small button--ghost conversation__earlier"
+                            onClick={() => setShown((count) => count + TURNS_PER_PAGE)}
+                        >
                             Show {Math.min(hidden, TURNS_PER_PAGE)} earlier {Math.min(hidden, TURNS_PER_PAGE) === 1 ? 'turn' : 'turns'}
                         </button>
                     ) : null}

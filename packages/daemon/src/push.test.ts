@@ -22,11 +22,18 @@ function tempDir(): string {
 
 const subscription = (id: string): PushSubscription => ({
     endpoint: `https://web.push.apple.com/${id}`,
-    keys: { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' },
+    keys: {
+        p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4',
+        auth: 'BTBZMqHH6r4Tts7J_aSIgg',
+    },
 });
 
-const item = (paneId: string, status: AttentionStatus = 'needs-input', sessionTitle = 'Refactor billing', body = 'Claude: Bash wants to run `deploy --token abc`'): PushAttention =>
-    ({ paneId, status, sessionTitle, body });
+const item = (
+    paneId: string,
+    status: AttentionStatus = 'needs-input',
+    sessionTitle = 'Refactor billing',
+    body = 'Claude: Bash wants to run `deploy --token abc`',
+): PushAttention => ({ paneId, status, sessionTitle, body });
 
 describe('PushDevices', () => {
     it('keeps devices and the VAPID key private and survives a restart', () => {
@@ -101,7 +108,10 @@ describe('pushMessage', () => {
     });
 
     it('lists at most four panes', () => {
-        const message = pushMessage(['a', 'b', 'c', 'd', 'e', 'f'].map((id) => item(id)), 'titles');
+        const message = pushMessage(
+            ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => item(id)),
+            'titles',
+        );
         expect(message.body.split('\n')).toHaveLength(5);
         expect(message.body.endsWith('and 2 more')).toBe(true);
     });
@@ -127,7 +137,14 @@ describe('PushNotifier', () => {
             },
         });
         cleanups.push(() => notifier.close());
-        return { devices, notifier, sent, answer: (status: number) => { answer = status; } };
+        return {
+            devices,
+            notifier,
+            sent,
+            answer: (status: number) => {
+                answer = status;
+            },
+        };
     }
 
     it('pushes once the delay passes and the pane still needs input', async () => {
@@ -136,7 +153,9 @@ describe('PushNotifier', () => {
         await vi.advanceTimersByTimeAsync(29_000);
         expect(sent).toHaveLength(0);
         await vi.advanceTimersByTimeAsync(1000);
-        expect(sent).toEqual([{ endpoint: 'https://web.push.apple.com/a', payload: { title: 'Voltran', body: 'A pane needs your input', tag: 'attention' } }]);
+        expect(sent).toEqual([
+            { endpoint: 'https://web.push.apple.com/a', payload: { title: 'Voltran', body: 'A pane needs your input', tag: 'attention' } },
+        ]);
     });
 
     it('stays quiet when the pane was answered or seen in the meantime', async () => {

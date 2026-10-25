@@ -59,7 +59,14 @@ describe('translateKey', () => {
 });
 
 describe('isPrimaryChord', () => {
-    const chord = (modifiers: Modifiers): KeyInput => ({ key: 'k', metaKey: false, altKey: false, ctrlKey: false, shiftKey: false, ...modifiers });
+    const chord = (modifiers: Modifiers): KeyInput => ({
+        key: 'k',
+        metaKey: false,
+        altKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        ...modifiers,
+    });
 
     it('is ⌘ alone on a Mac and Ctrl+Shift elsewhere', () => {
         expect(isPrimaryChord(chord({ metaKey: true }), true)).toBe(true);

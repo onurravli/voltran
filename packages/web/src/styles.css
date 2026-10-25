@@ -60,8 +60,8 @@
     --ease: cubic-bezier(0.2, 0, 0, 1);
     --sidebar-slide: 220ms;
 
-    --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
 
     color-scheme: dark;
     font-family: var(--font-ui);
@@ -72,7 +72,7 @@
     background: var(--bay);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv11', 'ss01';
+    font-feature-settings: "cv11", "ss01";
 }
 
 * {
@@ -168,7 +168,9 @@ kbd {
 
     .sidebar {
         width: var(--sidebar-width);
-        transition: transform var(--sidebar-slide) var(--ease), visibility 0s;
+        transition:
+            transform var(--sidebar-slide) var(--ease),
+            visibility 0s;
     }
 
     .app.app--no-sidebar {
@@ -179,7 +181,9 @@ kbd {
         display: flex;
         visibility: hidden;
         transform: translateX(-100%);
-        transition: transform var(--sidebar-slide) var(--ease), visibility 0s var(--sidebar-slide);
+        transition:
+            transform var(--sidebar-slide) var(--ease),
+            visibility 0s var(--sidebar-slide);
     }
 
     .app--sidebar-right {
@@ -230,7 +234,10 @@ kbd {
     color: var(--text);
     font-weight: 500;
     white-space: nowrap;
-    transition: background 120ms var(--ease), color 120ms var(--ease), box-shadow 120ms var(--ease);
+    transition:
+        background 120ms var(--ease),
+        color 120ms var(--ease),
+        box-shadow 120ms var(--ease);
 }
 
 .button:hover:not(:disabled) {
@@ -301,7 +308,9 @@ kbd {
     border-radius: var(--radius-s);
     background: transparent;
     color: var(--text-faint);
-    transition: background 120ms var(--ease), color 120ms var(--ease);
+    transition:
+        background 120ms var(--ease),
+        color 120ms var(--ease);
 }
 
 .icon-button:hover {
@@ -315,7 +324,7 @@ kbd {
     color: var(--text-muted);
 }
 
-.icon-button[aria-expanded='true'] {
+.icon-button[aria-expanded="true"] {
     background: var(--fill-strong);
     color: var(--text);
 }
@@ -449,7 +458,7 @@ kbd {
 }
 
 .sidebar__resizer::after {
-    content: '';
+    content: "";
     position: absolute;
     top: var(--bar-height);
     bottom: var(--frame-gap);
@@ -510,7 +519,9 @@ kbd {
     box-shadow: inset 0 0 0 1px var(--line-soft);
     color: var(--text-faint);
     text-align: left;
-    transition: background 120ms var(--ease), color 120ms var(--ease);
+    transition:
+        background 120ms var(--ease),
+        color 120ms var(--ease);
 }
 
 .sidebar__search:hover {
@@ -611,7 +622,7 @@ kbd {
 }
 
 .project__toggle::before {
-    content: '';
+    content: "";
     flex: none;
     order: -1;
     width: 8px;
@@ -631,7 +642,9 @@ kbd {
     margin-left: -3px;
     color: var(--text-faint);
     opacity: 0;
-    transition: transform 160ms var(--ease), opacity 120ms var(--ease);
+    transition:
+        transform 160ms var(--ease),
+        opacity 120ms var(--ease);
 }
 
 .project__header:hover .project__chevron,
@@ -916,7 +929,7 @@ kbd {
 
 .session-item:hover > .session-item__expand,
 .session-item__expand:focus-visible,
-.session-item__expand[aria-expanded='true'] {
+.session-item__expand[aria-expanded="true"] {
     opacity: 1;
 }
 
@@ -1071,7 +1084,7 @@ kbd {
 }
 
 .sidebar__quiet::before {
-    content: '';
+    content: "";
     width: 6px;
     height: 6px;
     border-radius: 50%;
@@ -1193,7 +1206,7 @@ kbd {
 }
 
 .session-header--working::before {
-    content: '';
+    content: "";
     position: absolute;
     right: var(--frame-gap);
     bottom: -1px;
@@ -1242,7 +1255,7 @@ kbd {
 }
 
 .session-header__project::before {
-    content: '';
+    content: "";
     width: 8px;
     height: 8px;
     border-radius: 2.5px;
@@ -1630,7 +1643,9 @@ button.git-count:hover {
     border: 0;
     border-radius: var(--radius-s);
     background: var(--hull);
-    box-shadow: inset 0 0 0 1px var(--focus), 0 0 0 3px var(--ring);
+    box-shadow:
+        inset 0 0 0 1px var(--focus),
+        0 0 0 3px var(--ring);
     font-size: calc(12px * var(--ui-scale));
 }
 
@@ -1666,7 +1681,9 @@ button.git-count:hover {
     overflow: hidden;
     border-radius: var(--radius-l);
     background: var(--hull);
-    box-shadow: 0 0 0 1px var(--line), 0 1px 3px rgba(var(--shadow-rgb), 0.14);
+    box-shadow:
+        0 0 0 1px var(--line),
+        0 1px 3px rgba(var(--shadow-rgb), 0.14);
     transition: margin var(--sidebar-slide) var(--ease);
 }
 
@@ -1698,7 +1715,9 @@ button.git-count:hover {
     border: 0;
     border-radius: var(--radius-xs);
     background: var(--hull);
-    box-shadow: inset 0 0 0 1px var(--focus), 0 0 0 3px var(--ring);
+    box-shadow:
+        inset 0 0 0 1px var(--focus),
+        0 0 0 3px var(--ring);
 }
 
 .inline-edit:focus {
@@ -1736,7 +1755,7 @@ button.git-count:hover {
 }
 
 .separator::after {
-    content: '';
+    content: "";
     position: absolute;
     background: var(--line);
     transition: background 120ms var(--ease);
@@ -1757,21 +1776,21 @@ button.git-count:hover {
 }
 
 .separator:hover::after,
-.separator[data-separator='active']::after,
-.separator[data-separator='hover']::after {
+.separator[data-separator="active"]::after,
+.separator[data-separator="hover"]::after {
     background: var(--focus);
 }
 
 .separator--horizontal:hover::after,
-.separator--horizontal[data-separator='active']::after,
-.separator--horizontal[data-separator='hover']::after {
+.separator--horizontal[data-separator="active"]::after,
+.separator--horizontal[data-separator="hover"]::after {
     left: calc(50% - 1px);
     width: 2px;
 }
 
 .separator--vertical:hover::after,
-.separator--vertical[data-separator='active']::after,
-.separator--vertical[data-separator='hover']::after {
+.separator--vertical[data-separator="active"]::after,
+.separator--vertical[data-separator="hover"]::after {
     top: calc(50% - 1px);
     height: 2px;
 }
@@ -1796,7 +1815,9 @@ button.git-count:hover {
     background: var(--hull);
     box-shadow: inset 0 -1px 0 var(--line-soft);
     color: var(--text-muted);
-    transition: background 120ms var(--ease), color 120ms var(--ease);
+    transition:
+        background 120ms var(--ease),
+        color 120ms var(--ease);
 }
 
 .pane.is-focused .pane__header {
@@ -1805,7 +1826,7 @@ button.git-count:hover {
 }
 
 .pane.is-focused .pane__header::after {
-    content: '';
+    content: "";
     position: absolute;
     right: 0;
     bottom: 0;
@@ -1820,7 +1841,7 @@ button.git-count:hover {
 
 .pane--needs-input .pane__header::after,
 .pane--needs-input.is-focused .pane__header::after {
-    content: '';
+    content: "";
     position: absolute;
     right: 0;
     bottom: 0;
@@ -1873,7 +1894,7 @@ button.git-count:hover {
 }
 
 .pane__origin::before {
-    content: '';
+    content: "";
     flex: none;
     width: 7px;
     height: 7px;
@@ -2014,11 +2035,11 @@ button.git-count:hover {
 .pane__header:hover .pane__view-toggle,
 .pane.is-focused .pane__view-toggle,
 .pane__view-toggle:focus-visible,
-.pane__view-toggle[aria-pressed='true'] {
+.pane__view-toggle[aria-pressed="true"] {
     opacity: 1;
 }
 
-.pane__view-toggle[aria-pressed='true'] {
+.pane__view-toggle[aria-pressed="true"] {
     color: var(--text-strong);
     background: var(--fill-strong);
 }
@@ -2034,12 +2055,12 @@ button.git-count:hover {
 .pane.is-focused .pane__notes-toggle,
 .pane__notes-toggle:focus-visible,
 .pane__notes-toggle.has-notes,
-.pane__notes-toggle[aria-expanded='true'] {
+.pane__notes-toggle[aria-expanded="true"] {
     opacity: 1;
 }
 
 .pane__notes-toggle.has-notes::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 4px;
     right: 4px;
@@ -2069,6 +2090,7 @@ button.git-count:hover {
 }
 
 .terminal-host .xterm-viewport {
+    /* biome-ignore lint/complexity/noImportantStyles: xterm sets the viewport's background inline */
     background-color: transparent !important;
 }
 
@@ -2081,7 +2103,7 @@ button.git-count:hover {
     background: #fff;
 }
 
-body:has(.separator[data-separator='active']) .pane__frame {
+body:has(.separator[data-separator="active"]) .pane__frame {
     pointer-events: none;
 }
 
@@ -2158,7 +2180,7 @@ body:has(.separator[data-separator='active']) .pane__frame {
     opacity: 0.35;
 }
 
-.pane__header[draggable='true'] {
+.pane__header[draggable="true"] {
     cursor: grab;
 }
 
@@ -2229,7 +2251,7 @@ body:has(.separator[data-separator='active']) .pane__frame {
 }
 
 .pane__exit::before {
-    content: '';
+    content: "";
     flex: none;
     width: 6px;
     height: 6px;
@@ -2299,7 +2321,7 @@ body:has(.separator[data-separator='active']) .pane__frame {
 }
 
 .conversation__working::before {
-    content: '';
+    content: "";
     flex: none;
     width: 6px;
     height: 6px;
@@ -2705,7 +2727,7 @@ body:has(.separator[data-separator='active']) .pane__frame {
 }
 
 .composer::before {
-    content: '';
+    content: "";
     position: absolute;
     right: 0;
     bottom: calc(100% + 4px);
@@ -2716,11 +2738,15 @@ body:has(.separator[data-separator='active']) .pane__frame {
 }
 
 .composer:focus-within {
-    box-shadow: 0 0 0 1px var(--line-strong), 0 0 0 3px var(--ring);
+    box-shadow:
+        0 0 0 1px var(--line-strong),
+        0 0 0 3px var(--ring);
 }
 
 .composer.is-drop-target {
-    box-shadow: 0 0 0 1px var(--focus), 0 0 0 3px var(--ring);
+    box-shadow:
+        0 0 0 1px var(--focus),
+        0 0 0 3px var(--ring);
 }
 
 .slash-menu {
@@ -2734,7 +2760,9 @@ body:has(.separator[data-separator='active']) .pane__frame {
     overflow-y: auto;
     border-radius: var(--radius-l);
     background: var(--raised);
-    box-shadow: 0 0 0 1px var(--line), 0 8px 24px color-mix(in srgb, var(--shadow) 35%, transparent);
+    box-shadow:
+        0 0 0 1px var(--line),
+        0 8px 24px color-mix(in srgb, var(--shadow) 35%, transparent);
 }
 
 .slash-menu__item {
@@ -3231,15 +3259,31 @@ select.field__input {
     appearance: none;
     padding-right: 32px;
     background-image:
-        linear-gradient(45deg, transparent calc(50% - 0.75px), var(--text-muted) calc(50% - 0.75px), var(--text-muted) calc(50% + 0.75px), transparent calc(50% + 0.75px)),
-        linear-gradient(-45deg, transparent calc(50% - 0.75px), var(--text-muted) calc(50% - 0.75px), var(--text-muted) calc(50% + 0.75px), transparent calc(50% + 0.75px));
-    background-position: right 18px center, right 13px center;
+        linear-gradient(
+            45deg,
+            transparent calc(50% - 0.75px),
+            var(--text-muted) calc(50% - 0.75px),
+            var(--text-muted) calc(50% + 0.75px),
+            transparent calc(50% + 0.75px)
+        ),
+        linear-gradient(
+            -45deg,
+            transparent calc(50% - 0.75px),
+            var(--text-muted) calc(50% - 0.75px),
+            var(--text-muted) calc(50% + 0.75px),
+            transparent calc(50% + 0.75px)
+        );
+    background-position:
+        right 18px center,
+        right 13px center;
     background-size: 5px 5px;
     background-repeat: no-repeat;
 }
 
 .field__input:focus {
-    box-shadow: inset 0 0 0 1px var(--focus), 0 0 0 3px var(--ring);
+    box-shadow:
+        inset 0 0 0 1px var(--focus),
+        0 0 0 3px var(--ring);
     outline: none;
 }
 
@@ -3288,7 +3332,10 @@ select.field__input {
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--line);
     color: var(--text-muted);
-    transition: background 120ms var(--ease), box-shadow 120ms var(--ease), color 120ms var(--ease);
+    transition:
+        background 120ms var(--ease),
+        box-shadow 120ms var(--ease),
+        color 120ms var(--ease);
 }
 
 .chip:not(.is-selected):hover:not(:disabled) {
@@ -3462,7 +3509,7 @@ kbd {
     background: var(--swatch);
 }
 
-.menu__swatch[aria-checked='true'],
+.menu__swatch[aria-checked="true"],
 .menu__swatch[data-checked] {
     outline: 2px solid var(--text);
     outline-offset: 2px;
@@ -3480,7 +3527,7 @@ kbd {
 }
 
 .menu__item--separated::before {
-    content: '';
+    content: "";
     position: absolute;
     top: -5px;
     right: 4px;

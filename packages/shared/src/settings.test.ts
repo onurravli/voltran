@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, MAX_EDITOR_COMMAND_LENGTH, MAX_FONT_FAMILY_LENGTH, MAX_FONT_SIZE, MAX_UI_FONT_SIZE, MIN_UI_FONT_SIZE, applySettingsPatch, parseSettings, parseSettingsPatch, settingsEdits } from './settings.ts';
+import {
+    DEFAULT_SETTINGS,
+    MAX_EDITOR_COMMAND_LENGTH,
+    MAX_FONT_FAMILY_LENGTH,
+    MAX_FONT_SIZE,
+    MAX_UI_FONT_SIZE,
+    MIN_UI_FONT_SIZE,
+    applySettingsPatch,
+    parseSettings,
+    parseSettingsPatch,
+    settingsEdits,
+} from './settings.ts';
 
 describe('parseSettings', () => {
     it('reads every setting from nested sections', () => {
@@ -18,7 +29,10 @@ describe('parseSettings', () => {
 
     it('fills what is missing with the defaults', () => {
         expect(parseSettings({})).toEqual({ settings: DEFAULT_SETTINGS, problems: [] });
-        expect(parseSettings({ terminal: { fontSize: 16 } }).settings).toEqual({ ...DEFAULT_SETTINGS, terminal: { ...DEFAULT_SETTINGS.terminal, fontSize: 16 } });
+        expect(parseSettings({ terminal: { fontSize: 16 } }).settings).toEqual({
+            ...DEFAULT_SETTINGS,
+            terminal: { ...DEFAULT_SETTINGS.terminal, fontSize: 16 },
+        });
     });
 
     it('keeps the default for each invalid value and says why', () => {
@@ -66,7 +80,9 @@ describe('parseSettings', () => {
     });
 
     it('takes push events as a list of attention statuses, each once, and a delay in whole seconds', () => {
-        const { settings, problems } = parseSettings({ push: { events: ['needs-input', 'needs-input'], content: 'everything', delaySeconds: 1.5 } });
+        const { settings, problems } = parseSettings({
+            push: { events: ['needs-input', 'needs-input'], content: 'everything', delaySeconds: 1.5 },
+        });
         expect(settings.push).toEqual(DEFAULT_SETTINGS.push);
         expect(problems).toEqual([
             '"push.events" must be a list of "needs-input", "done" or "exited", each at most once',

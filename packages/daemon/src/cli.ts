@@ -3,9 +3,28 @@ import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, wr
 import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bugReportUrl, formatDiagnostics, type AppState, type CreateSessionBody, type PaneSpec, type Project, type PushPairingView, type PushState } from '@voltran/shared';
+import {
+    bugReportUrl,
+    formatDiagnostics,
+    type AppState,
+    type CreateSessionBody,
+    type PaneSpec,
+    type Project,
+    type PushPairingView,
+    type PushState,
+} from '@voltran/shared';
 import { resolveShellPath } from './adapters.ts';
-import { DEV_WEB_PORT, REPO_ROOT, ensureHome, loadConfig, privateFile, readOrCreateToken, voltranVersion, writeNewToken, type Config } from './config.ts';
+import {
+    DEV_WEB_PORT,
+    REPO_ROOT,
+    ensureHome,
+    loadConfig,
+    privateFile,
+    readOrCreateToken,
+    voltranVersion,
+    writeNewToken,
+    type Config,
+} from './config.ts';
 import { diagnose, type DaemonInfo } from './doctor.ts';
 import { SYSTEMD_UNIT_FILE, SYSTEMD_UNIT_NAME, findChrome, systemdUnit } from './linux.ts';
 import { CHROME, LAUNCH_AGENT_FILE, LAUNCH_AGENT_LABEL, installedChromeApp, launchAgentPlist } from './macos.ts';
@@ -143,7 +162,11 @@ function openWindow(base: string, path: string, preferBrowser: boolean): void {
     }
     const app = preferBrowser ? null : installedChromeApp(base);
     if (app) {
-        const launch = [`--profile-directory=${app.profileDirectory}`, `--app-id=${app.id}`, `--app-launch-url-for-shortcuts-menu-item=${url}`];
+        const launch = [
+            `--profile-directory=${app.profileDirectory}`,
+            `--app-id=${app.id}`,
+            `--app-launch-url-for-shortcuts-menu-item=${url}`,
+        ];
         spawn('open', ['-na', CHROME, '--args', ...launch], { stdio: 'ignore', detached: true }).unref();
         return;
     }
@@ -220,7 +243,9 @@ async function openUi(api: Client, args: string[], started: boolean, sessionId?:
             return;
         }
         if (open > 0) {
-            console.log(`Voltran is already open in ${open === 1 ? 'a window' : `${open} windows`}. Use \`voltran up --new\` to open another.`);
+            console.log(
+                `Voltran is already open in ${open === 1 ? 'a window' : `${open} windows`}. Use \`voltran up --new\` to open another.`,
+            );
             return;
         }
     }
@@ -326,9 +351,11 @@ function autostart(args: string[]): void {
         rmSync(LAUNCH_AGENT_FILE, { force: true });
         console.log('Voltran no longer starts when you log in. The daemon keeps running until `voltran down`.');
     } else {
-        console.log(existsSync(LAUNCH_AGENT_FILE)
-            ? 'Voltran starts when you log in. Turn it off with `voltran autostart off`.'
-            : 'Voltran does not start when you log in. Turn it on with `voltran autostart on`.');
+        console.log(
+            existsSync(LAUNCH_AGENT_FILE)
+                ? 'Voltran starts when you log in. Turn it off with `voltran autostart off`.'
+                : 'Voltran does not start when you log in. Turn it on with `voltran autostart on`.',
+        );
     }
 }
 
@@ -352,9 +379,11 @@ function autostartLinux(args: string[]): void {
         systemctl(['daemon-reload']);
         console.log('Voltran no longer starts when you log in. The daemon keeps running until `voltran down`.');
     } else {
-        console.log(existsSync(SYSTEMD_UNIT_FILE)
-            ? 'Voltran starts when you log in. Turn it off with `voltran autostart off`.'
-            : 'Voltran does not start when you log in. Turn it on with `voltran autostart on`.');
+        console.log(
+            existsSync(SYSTEMD_UNIT_FILE)
+                ? 'Voltran starts when you log in. Turn it off with `voltran autostart off`.'
+                : 'Voltran does not start when you log in. Turn it on with `voltran autostart on`.',
+        );
     }
 }
 
@@ -409,7 +438,10 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
     const positional: string[] = [];
     for (let index = 0; index < args.length; index++) {
         const arg = args[index];
-        const [flag, inline] = arg.startsWith('--') && arg.includes('=') ? [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)] : [arg, undefined];
+        const [flag, inline] =
+            arg.startsWith('--') && arg.includes('=')
+                ? [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)]
+                : [arg, undefined];
         const value = (): string => {
             const next = inline ?? args[++index];
             if (next === undefined || next === '') {
@@ -436,7 +468,7 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
             if (adapter === 'changes' && rest) {
                 throw new Error('a changes pane takes no arguments');
             }
-            result.panes.push(rest ? { adapter, command: rest } as PaneSpec : { adapter } as PaneSpec);
+            result.panes.push(rest ? ({ adapter, command: rest } as PaneSpec) : ({ adapter } as PaneSpec));
         } else if (flag === '--title') {
             result.title = value();
         } else if (flag === '--worktree') {
@@ -508,7 +540,9 @@ async function notify(args: string[]): Promise<void> {
         process.exit(1);
     }
     if (args[0] !== undefined && args[0] !== 'pair' && args[0] !== 'test') {
-        console.error(`voltran notify: unknown command "${args[0]}". Use \`voltran notify\`, \`voltran notify pair\` or \`voltran notify test\`.`);
+        console.error(
+            `voltran notify: unknown command "${args[0]}". Use \`voltran notify\`, \`voltran notify pair\` or \`voltran notify test\`.`,
+        );
         process.exit(1);
     }
     try {
@@ -552,8 +586,11 @@ async function notify(args: string[]): Promise<void> {
 async function daemonInfo(config: Config): Promise<DaemonInfo | null> {
     try {
         const token = readFileSync(config.tokenFile, 'utf8').trim();
-        const response = await fetch(`${config.url}/api/health`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });
-        const health = await response.json() as { pid: number; version: string };
+        const response = await fetch(`${config.url}/api/health`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(2000),
+        });
+        const health = (await response.json()) as { pid: number; version: string };
         return response.ok ? { pid: health.pid, version: health.version } : null;
     } catch {
         return null;

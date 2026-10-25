@@ -59,7 +59,16 @@ export class PushDevices {
                 const entry = value as Partial<PushDevice>;
                 const subscription = validSubscription(entry.subscription);
                 return subscription && typeof entry.id === 'string' && typeof entry.name === 'string' && typeof entry.pairedAt === 'number'
-                    ? [{ id: entry.id, name: entry.name, pairedAt: entry.pairedAt, lastSentAt: typeof entry.lastSentAt === 'number' ? entry.lastSentAt : null, lastError: typeof entry.lastError === 'string' ? entry.lastError : null, subscription }]
+                    ? [
+                          {
+                              id: entry.id,
+                              name: entry.name,
+                              pairedAt: entry.pairedAt,
+                              lastSentAt: typeof entry.lastSentAt === 'number' ? entry.lastSentAt : null,
+                              lastError: typeof entry.lastError === 'string' ? entry.lastError : null,
+                              subscription,
+                          },
+                      ]
                     : [];
             });
         } catch {
@@ -246,23 +255,39 @@ export class PushNotifier {
         try {
             const vapid = this.options.devices.vapid();
             const listed = this.options.devices.list();
-            await Promise.all(devices.filter((device) => listed.includes(device)).map(async (device) => {
-                let status: number;
-                try {
-                    ({ status } = await this.send(device.subscription, message, vapid));
-                } catch (error) {
-                    const reason = withoutControls(error instanceof Error ? (error.cause instanceof Error ? error.cause.message : error.message) : String(error));
-                    this.options.devices.record(device.id, { lastSentAt: device.lastSentAt, lastError: `Could not reach the push service: ${reason.slice(0, MAX_ERROR)}` });
-                    return;
-                }
-                if (status === 404 || status === 410) {
-                    this.options.devices.remove(device.id);
-                } else if (status >= 200 && status < 300) {
-                    this.options.devices.record(device.id, { lastSentAt: this.now(), lastError: null });
-                } else {
-                    this.options.devices.record(device.id, { lastSentAt: device.lastSentAt, lastError: `The push service answered ${status}` });
-                }
-            }));
+            await Promise.all(
+                devices
+                    .filter((device) => listed.includes(device))
+                    .map(async (device) => {
+                        let status: number;
+                        try {
+                            ({ status } = await this.send(device.subscription, message, vapid));
+                        } catch (error) {
+                            const reason = withoutControls(
+                                error instanceof Error
+                                    ? error.cause instanceof Error
+                                        ? error.cause.message
+                                        : error.message
+                                    : String(error),
+                            );
+                            this.options.devices.record(device.id, {
+                                lastSentAt: device.lastSentAt,
+                                lastError: `Could not reach the push service: ${reason.slice(0, MAX_ERROR)}`,
+                            });
+                            return;
+                        }
+                        if (status === 404 || status === 410) {
+                            this.options.devices.remove(device.id);
+                        } else if (status >= 200 && status < 300) {
+                            this.options.devices.record(device.id, { lastSentAt: this.now(), lastError: null });
+                        } else {
+                            this.options.devices.record(device.id, {
+                                lastSentAt: device.lastSentAt,
+                                lastError: `The push service answered ${status}`,
+                            });
+                        }
+                    }),
+            );
         } finally {
             this.options.onChange();
         }

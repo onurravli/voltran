@@ -1,6 +1,13 @@
 import { createDecipheriv, createECDH, hkdfSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { encryptPayload, generateVapidKeys, vapidAuthorization, validSubscription, verifyVapidAuthorization, type PushSubscription } from './webpush.ts';
+import {
+    encryptPayload,
+    generateVapidKeys,
+    vapidAuthorization,
+    validSubscription,
+    verifyVapidAuthorization,
+    type PushSubscription,
+} from './webpush.ts';
 
 // RFC 8291, section 5 and appendix A.
 const RFC = {
@@ -13,7 +20,10 @@ const RFC = {
 
 const subscription: PushSubscription = {
     endpoint: 'https://web.push.apple.com/QGuQyavXutnMH8RfkA',
-    keys: { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' },
+    keys: {
+        p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4',
+        auth: 'BTBZMqHH6r4Tts7J_aSIgg',
+    },
 };
 
 function decrypt(body: Buffer, receiverPrivate: string, sub: PushSubscription): string {
@@ -60,7 +70,11 @@ describe('VAPID', () => {
         const header = vapidAuthorization(subscription.endpoint, keys, 1_700_000_000_000);
         expect(header).toMatch(new RegExp(`^vapid t=[\\w-]+\\.[\\w-]+\\.[\\w-]+, k=${keys.publicKey}$`));
         const claims = JSON.parse(Buffer.from(header.split('.')[1], 'base64url').toString('utf8'));
-        expect(claims).toEqual({ aud: 'https://web.push.apple.com', exp: 1_700_000_000 + 12 * 3600, sub: 'https://github.com/onurravli/voltran' });
+        expect(claims).toEqual({
+            aud: 'https://web.push.apple.com',
+            exp: 1_700_000_000 + 12 * 3600,
+            sub: 'https://github.com/onurravli/voltran',
+        });
         expect(verifyVapidAuthorization(header, keys)).toBe(true);
         expect(verifyVapidAuthorization(header, generateVapidKeys())).toBe(false);
     });
@@ -68,7 +82,11 @@ describe('VAPID', () => {
 
 describe('validSubscription', () => {
     it('accepts the push services browsers use', () => {
-        for (const endpoint of ['https://web.push.apple.com/x', 'https://fcm.googleapis.com/fcm/send/x', 'https://updates.push.services.mozilla.com/wpush/v2/x']) {
+        for (const endpoint of [
+            'https://web.push.apple.com/x',
+            'https://fcm.googleapis.com/fcm/send/x',
+            'https://updates.push.services.mozilla.com/wpush/v2/x',
+        ]) {
             expect(validSubscription({ ...subscription, endpoint })?.endpoint).toBe(endpoint);
         }
     });

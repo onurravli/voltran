@@ -21,13 +21,14 @@ const CHROME_PATHS = [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ];
 
-const freePort = (): Promise<number> => new Promise((resolvePort) => {
-    const probe = createServer();
-    probe.listen(0, '127.0.0.1', () => {
-        const { port } = probe.address() as AddressInfo;
-        probe.close(() => resolvePort(port));
+const freePort = (): Promise<number> =>
+    new Promise((resolvePort) => {
+        const probe = createServer();
+        probe.listen(0, '127.0.0.1', () => {
+            const { port } = probe.address() as AddressInfo;
+            probe.close(() => resolvePort(port));
+        });
     });
-});
 
 export async function until(condition: () => Promise<boolean> | boolean, what: string, timeoutMs = 10_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
@@ -97,12 +98,16 @@ export class Voltran {
             output += chunk.toString();
         });
         this.child = child;
-        await until(() => {
-            if (child.exitCode !== null) {
-                throw new Error(`the daemon exited with ${child.exitCode}:\n${output}`);
-            }
-            return output.includes('daemon listening');
-        }, 'the daemon to listen', 20_000);
+        await until(
+            () => {
+                if (child.exitCode !== null) {
+                    throw new Error(`the daemon exited with ${child.exitCode}:\n${output}`);
+                }
+                return output.includes('daemon listening');
+            },
+            'the daemon to listen',
+            20_000,
+        );
         this.token = readFileSync(join(this.home, 'token'), 'utf8').trim();
     }
 
@@ -190,10 +195,14 @@ export async function screenText(pane: Locator): Promise<string> {
 }
 
 export async function waitForText(pane: Locator, text: string | RegExp, timeoutMs = 10_000): Promise<void> {
-    await until(async () => {
-        const screen = await screenText(pane);
-        return typeof text === 'string' ? screen.includes(text) : text.test(screen);
-    }, `${String(text)} on screen`, timeoutMs);
+    await until(
+        async () => {
+            const screen = await screenText(pane);
+            return typeof text === 'string' ? screen.includes(text) : text.test(screen);
+        },
+        `${String(text)} on screen`,
+        timeoutMs,
+    );
 }
 
 export async function typeInto(pane: Locator, text: string): Promise<void> {

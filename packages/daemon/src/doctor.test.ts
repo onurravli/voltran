@@ -57,7 +57,11 @@ describe('daemonCheck', () => {
     it('says whether the daemon runs, and asks for a restart when it runs other code', () => {
         const config = scratchConfig();
         expect(daemonCheck(config, null, '1.0.0').status).toBe('off');
-        expect(daemonCheck(config, { pid: 42, version: '1.0.0' }, '1.0.0')).toEqual({ name: 'Daemon', status: 'ok', detail: 'running on port 4801 (pid 42)' });
+        expect(daemonCheck(config, { pid: 42, version: '1.0.0' }, '1.0.0')).toEqual({
+            name: 'Daemon',
+            status: 'ok',
+            detail: 'running on port 4801 (pid 42)',
+        });
         const stale = daemonCheck(config, { pid: 42, version: '0.1.0' }, '1.0.0');
         expect(stale.status).toBe('warn');
         expect(stale.detail).toContain('voltran restart');

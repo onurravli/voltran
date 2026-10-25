@@ -172,7 +172,9 @@ describe('PaneManager', () => {
 
         expect(client.stream.slice(1)).toEqual(['\x1b[1;100H*\r\n', { type: 'resize', cols: 40, rows: 10 }, 'after']);
         const lines = await new Promise<string[]>((resolve) => {
-            runtime.term.write('', () => resolve([0, 1, 2, 3].map((y) => runtime.term.buffer.active.getLine(y)?.translateToString(true) ?? '')));
+            runtime.term.write('', () =>
+                resolve([0, 1, 2, 3].map((y) => runtime.term.buffer.active.getLine(y)?.translateToString(true) ?? '')),
+            );
         });
         expect(lines).toEqual(['', '', `${' '.repeat(19)}*`, 'after']);
     });
@@ -203,7 +205,9 @@ describe('PaneManager', () => {
 
         expect(manager.hook(pane.id, 'wrong-secret!!!!', 'Stop', {})).toBe(false);
 
-        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' })).toBe(true);
+        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' })).toBe(
+            true,
+        );
         expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', agentResumable: false });
         manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '--dangerously-skip-permissions' });
         expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' });
@@ -256,7 +260,12 @@ describe('PaneManager', () => {
         const claude = makePane({ adapter: 'claude', command: null });
         manager.add(claude);
         (manager as unknown as Internals).runtimes.get(claude.id)!.hookSecret = 'per-spawn-secret';
-        manager.hook(claude.id, 'per-spawn-secret', 'SubagentStart', { agent_id: 'a1', agent_type: 'general-purpose', transcript_path: parentTranscript, session_id: sessionId });
+        manager.hook(claude.id, 'per-spawn-secret', 'SubagentStart', {
+            agent_id: 'a1',
+            agent_type: 'general-purpose',
+            transcript_path: parentTranscript,
+            session_id: sessionId,
+        });
         expect(manager.subagent(claude.id, 'a1')).toMatchObject({ path: transcript, finished: false });
 
         const viewer = makePane({ adapter: 'subagent', command: transcript });
@@ -266,7 +275,10 @@ describe('PaneManager', () => {
         manager.resize(viewer.id, 80, 24);
         await until(() => client.output.includes('Find the Jokers.'));
 
-        appendFileSync(transcript, `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'WebSearch', input: { query: 'jokers cast' } }] } })}\n`);
+        appendFileSync(
+            transcript,
+            `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'WebSearch', input: { query: 'jokers cast' } }] } })}\n`,
+        );
         await until(() => client.output.includes('WebSearch'));
 
         manager.hook(claude.id, 'per-spawn-secret', 'SubagentStop', { agent_id: 'a1' });
@@ -358,7 +370,10 @@ describe('PaneManager', () => {
         const client = new FakeClient();
         second.manager.attach(pane.id, client);
         await until(() => client.texts.length > 0);
-        const lines = client.snapshot().replace(/\x1b\[[0-9;]*m/g, '').split('\r\n');
+        const lines = client
+            .snapshot()
+            .replace(/\x1b\[[0-9;]*m/g, '')
+            .split('\r\n');
         expect(lines.slice(0, 4)).toEqual(['first line', 'second line', 'third line', '$ ']);
         expect(lines[4]).toContain('restored');
     });
@@ -375,7 +390,10 @@ describe('PaneManager', () => {
         const { manager } = setup(undefined, { startupPromptMs: 150 });
         const pane = makePane({ adapter: 'claude', command: null, agentSessionId: randomUUID() });
         manager.add(pane);
-        const internals = manager as unknown as { maintain(): void; runtimes: Map<string, { pty: unknown; lastOutputAt: number; state: { status: string; statusAt: number } }> };
+        const internals = manager as unknown as {
+            maintain(): void;
+            runtimes: Map<string, { pty: unknown; lastOutputAt: number; state: { status: string; statusAt: number } }>;
+        };
         const runtime = internals.runtimes.get(pane.id)!;
         runtime.pty = { process: 'claude' };
         runtime.state.status = 'starting';
@@ -395,7 +413,10 @@ describe('PaneManager', () => {
         runtime.hookSecret = 'per-spawn-secret';
         runtime.pty = { process: 'claude', write: () => undefined };
 
-        manager.hook(pane.id, 'per-spawn-secret', 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which branch?' }] } });
+        manager.hook(pane.id, 'per-spawn-secret', 'PreToolUse', {
+            tool_name: 'AskUserQuestion',
+            tool_input: { questions: [{ question: 'Which branch?' }] },
+        });
         expect(view(manager, pane.id)).toMatchObject({ status: 'needs-input', detail: 'Which branch?' });
         manager.input(pane.id, '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07');
         expect(view(manager, pane.id).status).toBe('needs-input');
@@ -447,14 +468,38 @@ describe('PaneManager', () => {
 
 describe('isTyped', () => {
     it('ignores what xterm.js answers to a program on its own', () => {
-        for (const reply of ['\x1b[I', '\x1b[O', '\x1b[?1;2c', '\x1b[>0;276;0c', '\x1b[0n', '\x1b[24;80R', '\x1b[?2026;2$y', '\x1b[8;24;80t',
-            '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\', '\x1b]10;rgb:ffff/ffff/ffff\x07', '\x1bP>|xterm.js(5.5.0)\x1b\\', '\x1b[?0u', '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07']) {
+        for (const reply of [
+            '\x1b[I',
+            '\x1b[O',
+            '\x1b[?1;2c',
+            '\x1b[>0;276;0c',
+            '\x1b[0n',
+            '\x1b[24;80R',
+            '\x1b[?2026;2$y',
+            '\x1b[8;24;80t',
+            '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\',
+            '\x1b]10;rgb:ffff/ffff/ffff\x07',
+            '\x1bP>|xterm.js(5.5.0)\x1b\\',
+            '\x1b[?0u',
+            '\x1b[?1;2c\x1b]11;rgb:0/0/0\x07',
+        ]) {
             expect(isTyped(reply), JSON.stringify(reply)).toBe(false);
         }
     });
 
     it('counts keys, pastes and clicks', () => {
-        for (const input of ['a', '\r', '\x03', '\x1b', '\x1b[A', '\x1bOP', '\x1b[15~', '\x1b[200~text\x1b[201~', '\x1b[<0;10;5M', '\x1b[I\r']) {
+        for (const input of [
+            'a',
+            '\r',
+            '\x03',
+            '\x1b',
+            '\x1b[A',
+            '\x1bOP',
+            '\x1b[15~',
+            '\x1b[200~text\x1b[201~',
+            '\x1b[<0;10;5M',
+            '\x1b[I\r',
+        ]) {
             expect(isTyped(input), JSON.stringify(input)).toBe(true);
         }
     });

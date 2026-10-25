@@ -18,7 +18,11 @@ afterEach(() => {
 const SECRET = 'pane-secret';
 
 // Stands in for the daemon, which reads the notes for the hook; this one reads the file as it is.
-async function setup(): Promise<{ notes: string; changed: string; run: (mode: string, input?: string, env?: Record<string, string>) => Promise<string> }> {
+async function setup(): Promise<{
+    notes: string;
+    changed: string;
+    run: (mode: string, input?: string, env?: Record<string, string>) => Promise<string>;
+}> {
     const dir = mkdtempSync(join(tmpdir(), 'voltran-notes-hook-'));
     const folder = join(dir, 'pane-1');
     mkdirSync(folder);
@@ -42,20 +46,21 @@ async function setup(): Promise<{ notes: string; changed: string; run: (mode: st
         rmSync(dir, { recursive: true, force: true });
     });
     const paneEnv = { VOLTRAN_NOTES: notes, VOLTRAN_PANE_ID: 'pane-1', VOLTRAN_HOOK_HEADER: header, VOLTRAN_URL: url };
-    const run = (mode: string, input = '{}', env: Record<string, string> = paneEnv): Promise<string> => new Promise((resolveRun, reject) => {
-        const child = spawn('sh', [NOTES_HOOK, mode, guide], { env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ...env } });
-        let stdout = '';
-        child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
-            stdout += chunk;
+    const run = (mode: string, input = '{}', env: Record<string, string> = paneEnv): Promise<string> =>
+        new Promise((resolveRun, reject) => {
+            const child = spawn('sh', [NOTES_HOOK, mode, guide], { env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ...env } });
+            let stdout = '';
+            child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+                stdout += chunk;
+            });
+            child.on('error', reject);
+            child.on('close', (code) => {
+                expect(code).toBe(0);
+                resolveRun(stdout);
+            });
+            child.stdin.on('error', () => undefined);
+            child.stdin.end(input);
         });
-        child.on('error', reject);
-        child.on('close', (code) => {
-            expect(code).toBe(0);
-            resolveRun(stdout);
-        });
-        child.stdin.on('error', () => undefined);
-        child.stdin.end(input);
-    });
     return { notes, changed: `${folder}.changed`, run };
 }
 
@@ -80,12 +85,17 @@ describe('notes hook', () => {
     it('takes the notes from Voltran, never from the file, and says so when Voltran does not answer', async () => {
         const { notes, run } = await setup();
         writeFileSync(notes, 'in the file\n');
-        const output = await run('session-start', '{}', { VOLTRAN_NOTES: notes, VOLTRAN_PANE_ID: 'pane-1', VOLTRAN_HOOK_HEADER: '/nonexistent', VOLTRAN_URL: 'http://127.0.0.1:9' });
+        const output = await run('session-start', '{}', {
+            VOLTRAN_NOTES: notes,
+            VOLTRAN_PANE_ID: 'pane-1',
+            VOLTRAN_HOOK_HEADER: '/nonexistent',
+            VOLTRAN_URL: 'http://127.0.0.1:9',
+        });
         expect(output).toContain('(not shown: Voltran did not answer. Read the file instead.)');
         expect(output).not.toContain('in the file');
     });
 
-    it('stays under Claude\'s limit for hook output by cutting long notes', async () => {
+    it("stays under Claude's limit for hook output by cutting long notes", async () => {
         const { notes, run } = await setup();
         writeFileSync(notes, 'a'.repeat(9000));
         const output = await run('session-start');
@@ -99,7 +109,9 @@ describe('notes hook', () => {
         writeFileSync(notes, 'v1\n');
         expect(await run('prompt')).toBe('');
         writeFileSync(changed, '');
-        expect(await run('prompt')).toBe(`The user changed the pane notes since you last saw them.\n\n${NOTES_GUIDE}\nNotes file: ${notes}\n\nv1\n`);
+        expect(await run('prompt')).toBe(
+            `The user changed the pane notes since you last saw them.\n\n${NOTES_GUIDE}\nNotes file: ${notes}\n\nv1\n`,
+        );
         expect(existsSync(changed)).toBe(false);
         expect(await run('prompt')).toBe('');
     });

@@ -17,7 +17,9 @@ export interface ChromeApp {
 
 function readPlist(file: string): Record<string, unknown> | null {
     try {
-        return JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', file], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+        return JSON.parse(
+            execFileSync('plutil', ['-convert', 'json', '-o', '-', file], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }),
+        );
     } catch {
         return null;
     }
@@ -67,7 +69,9 @@ function appShimProfile(userDataDir: string, id: string): string | null {
 function profileList(shim: unknown, key: string): string[] {
     const list = typeof shim === 'object' && shim !== null ? (shim as Record<string, unknown>)[key] : undefined;
     return Array.isArray(list)
-        ? list.filter((name): name is string => typeof name === 'string' && name !== SHARED_SHIM_PROFILE && name !== '' && basename(name) === name)
+        ? list.filter(
+              (name): name is string => typeof name === 'string' && name !== SHARED_SHIM_PROFILE && name !== '' && basename(name) === name,
+          )
         : [];
 }
 

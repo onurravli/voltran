@@ -126,7 +126,8 @@ export function DiffEditor({ contents, onStat }: { contents: FileContents; onSta
         const original = contents.original ?? '';
         const modified = contents.modified ?? '';
         const model = widget.getModel();
-        const uri = (side: string) => monaco.Uri.from({ scheme: `voltran-${side}`, authority: String(id.current), path: `/${contents.path}` });
+        const uri = (side: string) =>
+            monaco.Uri.from({ scheme: `voltran-${side}`, authority: String(id.current), path: `/${contents.path}` });
         if (model && model.modified.uri.toString() === uri('modified').toString()) {
             if (model.original.getValue() !== original || model.modified.getValue() !== modified) {
                 const view = widget.saveViewState();

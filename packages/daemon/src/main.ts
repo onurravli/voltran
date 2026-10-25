@@ -123,7 +123,8 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         openFile: options.openFile ?? openInEditor,
         onShutdown: shutdown,
         onRestart: restart,
-        diagnose: () => diagnose({ config, shell: options.shell, path: options.path, daemon: { pid: process.pid, version: voltranVersion() } }),
+        diagnose: () =>
+            diagnose({ config, shell: options.shell, path: options.path, daemon: { pid: process.pid, version: voltranVersion() } }),
     });
     return { config, token, hub, server, shutdown };
 }
@@ -165,8 +166,7 @@ export async function startDaemon(): Promise<void> {
     process.on('SIGHUP', daemon.shutdown);
 }
 
-const invokedDirectly = process.argv[1] !== undefined
-    && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+const invokedDirectly = process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 
 if (invokedDirectly) {
     startDaemon().catch((error: unknown) => {

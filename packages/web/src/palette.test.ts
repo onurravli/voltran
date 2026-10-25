@@ -46,7 +46,8 @@ const session = (id: string, title: string, archived = false): Session => ({
     updatedAt: 0,
 });
 
-const pane = (id: string, sessionId: string, title: string, status: PaneView['status']): PaneView => ({ id, sessionId, title, status } as PaneView);
+const pane = (id: string, sessionId: string, title: string, status: PaneView['status']): PaneView =>
+    ({ id, sessionId, title, status }) as PaneView;
 
 const app = {
     projects: [{ id: 'project', name: 'checkout', path: '/tmp', color: '#7aa2f7', createdAt: 0 }],
@@ -75,9 +76,18 @@ describe('destinations', () => {
     });
 
     it('lists workspaces first and opens them by id', () => {
-        const withWorkspace = { ...app, workspaces: [{ id: 'w', title: 'Release', layout: { type: 'pane', paneId: 'a' }, createdAt: 0, updatedAt: 0 }] } as AppState;
+        const withWorkspace = {
+            ...app,
+            workspaces: [{ id: 'w', title: 'Release', layout: { type: 'pane', paneId: 'a' }, createdAt: 0, updatedAt: 0 }],
+        } as AppState;
         const [first] = destinations(withWorkspace);
-        expect([first.kind, first.label, first.workspaceId, first.sessionId, first.status]).toEqual(['workspace', 'Release', 'w', null, 'needs-input']);
+        expect([first.kind, first.label, first.workspaceId, first.sessionId, first.status]).toEqual([
+            'workspace',
+            'Release',
+            'w',
+            null,
+            'needs-input',
+        ]);
     });
 
     it('lists nothing before the state arrives', () => {
@@ -86,8 +96,16 @@ describe('destinations', () => {
 
     it('ranks a session above its panes, and keyword-only matches last', () => {
         const items = [{ label: 'Start a new session' }, ...destinations(app)];
-        expect(filterItems(items, 'fix').map((item) => item.label)).toEqual(['Fix flaky total', 'Claude · Fix flaky total', 'tests · Fix flaky total']);
-        expect(filterItems(items, 'checkout').map((item) => item.label)).toEqual(['Fix flaky total', 'Claude · Fix flaky total', 'tests · Fix flaky total']);
+        expect(filterItems(items, 'fix').map((item) => item.label)).toEqual([
+            'Fix flaky total',
+            'Claude · Fix flaky total',
+            'tests · Fix flaky total',
+        ]);
+        expect(filterItems(items, 'checkout').map((item) => item.label)).toEqual([
+            'Fix flaky total',
+            'Claude · Fix flaky total',
+            'tests · Fix flaky total',
+        ]);
         expect(filterItems(items, 'checkout tests').map((item) => item.label)).toEqual(['tests · Fix flaky total']);
     });
 });

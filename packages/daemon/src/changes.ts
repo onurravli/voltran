@@ -20,7 +20,7 @@ export function parseChangedFiles(output: string): ChangedFile[] {
             const [x, y] = [fields[1][0], fields[1][1]];
             const renamed = record.startsWith('2 ');
             const path = fields.slice(renamed ? 9 : 8).join(' ');
-            const oldPath = renamed ? records[++index] ?? null : null;
+            const oldPath = renamed ? (records[++index] ?? null) : null;
             const state = renamed ? 'renamed' : x === 'A' || y === 'A' ? 'added' : x === 'D' || y === 'D' ? 'deleted' : 'modified';
             files.push({ path, oldPath, state, staged: x !== '.', unstaged: y !== '.' });
         } else if (record.startsWith('u ')) {
@@ -105,7 +105,9 @@ export class SessionChangesReader {
     private async status(cwd: string): Promise<{ root: string; files: ChangedFile[] }> {
         const root = await this.root(cwd);
         const guards = await this.guards(root);
-        const files = parseChangedFiles(await this.git([...guards, 'status', '--porcelain=v2', '-z', '--untracked-files=all', ...SUBMODULE_ARGS], root));
+        const files = parseChangedFiles(
+            await this.git([...guards, 'status', '--porcelain=v2', '-z', '--untracked-files=all', ...SUBMODULE_ARGS], root),
+        );
         return { root, files };
     }
 

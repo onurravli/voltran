@@ -77,14 +77,16 @@ export async function signInFromUrl(): Promise<string | null> {
         return null;
     }
     // On failure the window stays signed out and says how to sign in.
-    await storeSession(fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) }));
+    await storeSession(
+        fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) }),
+    );
     return params.get('session');
 }
 
 async function storeSession(response: Promise<Response>): Promise<void> {
     try {
         const reply = await response;
-        const body = reply.ok ? (await reply.json()) as { session?: unknown } : null;
+        const body = reply.ok ? ((await reply.json()) as { session?: unknown }) : null;
         if (typeof body?.session === 'string') {
             localStorage.setItem(SESSION_KEY, body.session);
         }
@@ -130,7 +132,8 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
         }
     }
     if (!response.ok) {
-        const message = parsed && typeof parsed === 'object' && 'error' in parsed ? String(parsed.error) : `Request failed (${response.status})`;
+        const message =
+            parsed && typeof parsed === 'object' && 'error' in parsed ? String(parsed.error) : `Request failed (${response.status})`;
         throw new ApiError(response.status, message);
     }
     return parsed as T;
@@ -143,7 +146,8 @@ export const api = {
     projectGit: (id: string) => request<ProjectGit>('GET', `/api/projects/${id}/git`),
     createSession: (body: CreateSessionBody) => request<Session>('POST', '/api/sessions', body),
     updateSession: (id: string, body: UpdateSessionBody) => request<Session>('PATCH', `/api/sessions/${id}`, body),
-    deleteSession: (id: string, worktree?: WorktreeChoice) => request<void>('DELETE', `/api/sessions/${id}${worktree ? `?worktree=${worktree}` : ''}`),
+    deleteSession: (id: string, worktree?: WorktreeChoice) =>
+        request<void>('DELETE', `/api/sessions/${id}${worktree ? `?worktree=${worktree}` : ''}`),
     createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/api/workspaces', body),
     updateWorkspace: (id: string, body: UpdateWorkspaceBody) => request<Workspace>('PATCH', `/api/workspaces/${id}`, body),
     deleteWorkspace: (id: string) => request<void>('DELETE', `/api/workspaces/${id}`),
@@ -155,7 +159,8 @@ export const api = {
     killPane: (id: string) => request<void>('POST', `/api/panes/${id}/kill`),
     seenPane: (id: string) => request<void>('POST', `/api/panes/${id}/seen`),
     commands: (paneId: string) => request<SlashCommand[]>('GET', `/api/panes/${encodeURIComponent(paneId)}/commands`),
-    attach: (paneId: string, image: Blob) => request<{ path: string }>('POST', `/api/panes/${encodeURIComponent(paneId)}/attachments`, image),
+    attach: (paneId: string, image: Blob) =>
+        request<{ path: string }>('POST', `/api/panes/${encodeURIComponent(paneId)}/attachments`, image),
     paneNotes: (id: string) => request<PaneNotes>('GET', `/api/panes/${id}/notes`),
     saveNotes: (id: string, body: SaveNotesBody, keepalive = false) => request<PaneNotes>('PUT', `/api/panes/${id}/notes`, body, keepalive),
     lockNotes: (id: string, body: NotesLockBody) => request<NotesMeta>('POST', `/api/panes/${id}/notes/lock`, body),
@@ -170,9 +175,13 @@ export const api = {
     health: () => request<{ version: string }>('GET', '/api/health'),
     diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
-    contents: (sessionId: string, path: string) => request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
+    contents: (sessionId: string, path: string) =>
+        request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
     conversation: (paneId: string, source: string | null, from: number) =>
-        request<ConversationChunk>('GET', `/api/panes/${encodeURIComponent(paneId)}/conversation?${new URLSearchParams({ source: source ?? '', from: String(from) })}`),
+        request<ConversationChunk>(
+            'GET',
+            `/api/panes/${encodeURIComponent(paneId)}/conversation?${new URLSearchParams({ source: source ?? '', from: String(from) })}`,
+        ),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };

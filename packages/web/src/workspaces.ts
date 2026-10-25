@@ -3,14 +3,17 @@ import { MAX_WORKSPACE_PANES, aggregateStatus, movePane, paneIds, placeLayout, r
 
 export type Dragged = { kind: 'pane'; paneId: string } | { kind: 'session'; sessionId: string };
 
-export type DropResult =
-    | { kind: 'unchanged' }
-    | { kind: 'full' }
-    | { kind: 'changed'; layout: Layout | null };
+export type DropResult = { kind: 'unchanged' } | { kind: 'full' } | { kind: 'changed'; layout: Layout | null };
 
 // A pane already in the workspace moves within it; anything else joins it, a session with every pane
 // it has that the workspace does not show yet, in the session's own arrangement.
-export function dropOnWorkspace(app: AppState, layout: Layout | null, dragged: Dragged, targetId: string | null, edge: DropEdge): DropResult {
+export function dropOnWorkspace(
+    app: AppState,
+    layout: Layout | null,
+    dragged: Dragged,
+    targetId: string | null,
+    edge: DropEdge,
+): DropResult {
     const present = new Set(paneIds(layout));
     let placed: Layout | null = null;
     if (dragged.kind === 'pane') {
@@ -24,7 +27,9 @@ export function dropOnWorkspace(app: AppState, layout: Layout | null, dragged: D
     } else {
         const session = app.sessions.find((entry) => entry.id === dragged.sessionId);
         const sessionLayout = session?.layout ?? null;
-        placed = paneIds(sessionLayout).filter((paneId) => present.has(paneId)).reduce<Layout | null>((rest, paneId) => removePane(rest, paneId), sessionLayout);
+        placed = paneIds(sessionLayout)
+            .filter((paneId) => present.has(paneId))
+            .reduce<Layout | null>((rest, paneId) => removePane(rest, paneId), sessionLayout);
     }
     if (!placed) {
         return { kind: 'unchanged' };

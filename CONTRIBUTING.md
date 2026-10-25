@@ -19,6 +19,18 @@ You need macOS or Linux and Node.js 22.18 or newer; on Windows, work inside WSL2
 npm install
 ```
 
+`npm install` also points `core.hooksPath` at `.githooks`, unless it is already set to something
+else. The hooks need nothing beyond Node:
+
+- `pre-commit` refuses trailing whitespace, conflict markers and a file without a final newline in
+  what you stage, runs Biome on the staged files, and runs `npm run typecheck` when the commit
+  touches TypeScript, JavaScript, a `tsconfig` or a `package.json`.
+- `commit-msg` checks the message against the rules under
+  [Commits and pull requests](#commits-and-pull-requests).
+- `pre-push` runs `npm run typecheck` and `npm test`.
+
+`git commit --no-verify` and `git push --no-verify` skip them when you need to.
+
 The daemon you use day to day listens on port 4747 and keeps its data in `~/.voltran`. Run a
 development copy with a folder and a port of its own, the same two values in every command, so
 neither touches your real sessions:
@@ -36,6 +48,7 @@ an agent writes the code.
 ## Checks
 
 ```bash
+npm run lint         # Biome: formatting and lint rules; npm run format fixes most of what it finds
 npm run typecheck
 npm test
 npm run test:e2e     # builds the UI and drives it in headless Chrome
@@ -43,7 +56,7 @@ npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # on
 npm run build        # the UI the daemon serves
 ```
 
-CI runs the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and the browser tests on
+CI runs the lint, the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and the browser tests on
 Ubuntu and macOS with Node 24; every run must pass.
 
 - Tests run in Node, so web logic that needs a test goes in a module without DOM access, such as
@@ -61,9 +74,15 @@ Ubuntu and macOS with Node 24; every run must pass.
 
 ## Code style
 
-There is no linter or formatter; match the code around your change:
+[Biome](https://biomejs.dev/) formats and lints the code with the settings in `biome.json`;
+`npm run format` rewrites your files to match, and the editor integration can do it on save. Beyond
+what it checks, match the code around your change:
 
-- 4-space indent, single quotes, and every file ends with a newline.
+- 4-space indent, single quotes, at most 140 columns, and every file ends with a newline.
+- A rule that does not fit one place gets a `biome-ignore` comment that says why, rather than being
+  turned off for everyone.
+- A commit that only reformats goes into `.git-blame-ignore-revs`, which GitHub's blame view skips;
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs` makes `git blame` skip it too.
 - No comments, except for a constraint the code cannot show. The reasoning goes in the commit
   message or the pull request.
 - Node runs the daemon's TypeScript directly, so only syntax it can strip is allowed: no enums,
@@ -78,6 +97,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 `fix:`, `docs:`, `ci:` or `chore:`, with a scope when the change stays in one part (`fix(web):`,
 `fix(daemon):`, `feat(cli):`). The subject says what changes for the user, such as
 `feat: show the account's usage limits in the sidebar`; the body says why, when that is not obvious.
+
+- The types are `feat`, `fix`, `perf`, `refactor`, `style`, `test`, `docs`, `build`, `ci`, `chore`,
+  `revert` and `release`; a `!` after the type or scope (`feat!:`) marks a breaking change.
+- A scope is lowercase letters, digits and dashes. The first line is at most 100 characters and does
+  not end with a period, and a blank line separates it from the body.
+- Git's own merge, revert, `fixup!` and `squash!` messages pass as they are.
+- The `commit-msg` hook checks each commit, and the `commits` workflow checks a pull request's commits
+  and its title, which becomes the commit message when the pull request is squashed.
 
 - Keep a pull request to one change. A behaviour change updates the README, and a change to how
   things work updates CLAUDE.md; both can go in a `docs:` commit of their own.

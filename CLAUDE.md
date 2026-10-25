@@ -10,19 +10,26 @@ behaviour.
 
 ```bash
 npm install                      # postinstall makes node-pty's spawn-helper executable (else "posix_spawnp failed")
+                                 # prepare sets core.hooksPath to .githooks (pre-commit, commit-msg, pre-push)
 npm test                         # vitest, all packages
 npm run test:e2e                 # builds the UI, then the browser tests in e2e/ (headless Chrome)
 npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # one file / one test
 npm run typecheck                # tsc for daemon, web and e2e (each includes shared)
+npm run lint                     # Biome: formatting and lint rules (biome.json); npm run format fixes most
 npm run build                    # builds packages/web/dist, which the daemon serves
 npm run package                  # the npm package in build/npm (compiled JS, built UI)
+npm run screenshot               # stages a demo daemon with fake agents and rewrites docs/screenshot.png (dark and light, split diagonally)
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
 npm run dev:web                  # Vite on :4774, proxies /api and /ws to the daemon
 node bin/voltran.mjs up|down|status|add|new|autostart   # the CLI, same as `voltran` after npm link
 ```
 
-There is no linter or formatter; match the surrounding code (4-space indent, single quotes, no
-comments except for a constraint the code cannot show, every file ends with a newline).
+Biome formats and lints the code (`biome.json`: 4-space indent, single quotes, 140 columns; the
+recommended rules minus those that fight deliberate patterns, such as control characters in terminal
+regexes). Beyond that, match the surrounding code: no comments except for a constraint the code
+cannot show (a `biome-ignore` names its reason), every file ends with a newline. Commit
+messages are Conventional Commits: `scripts/hooks/commit-message.mjs` holds the rules, which the
+`commit-msg` hook and `.github/workflows/commits.yml` apply.
 
 ## TypeScript without a build step
 
@@ -252,7 +259,7 @@ opens it with `--app-id` plus `--app-launch-url-for-shortcuts-menu-item=<login U
 finding Chrome for `--app=` and the systemd user unit for `autostart`, a oneshot with
 `KillMode=process` because `up` exits once the daemon it started is listening. In the web app, keyboard
 labels are written with Mac glyphs and go through `keys()` (`keyLabel` in `keymap.ts`); off a Mac, ⌘
-shortcuts are Ctrl+Shift (`isPrimaryChord`) and find steps with F3. CI runs typecheck and tests on
+shortcuts are Ctrl+Shift (`isPrimaryChord`) and find steps with F3. CI runs lint, typecheck and tests on
 Ubuntu and macOS (`.github/workflows/test.yml`).
 
 ## Testing

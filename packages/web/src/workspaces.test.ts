@@ -3,11 +3,33 @@ import { MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type PaneView
 import { dropOnWorkspace, nextWorkspaceTitle, workspaceStatus } from './workspaces.ts';
 
 const leaf = (paneId: string): Layout => ({ type: 'pane', paneId });
-const row = (...ids: string[]): Layout => ({ type: 'split', direction: 'horizontal', children: ids.map(leaf), sizes: ids.map(() => 100 / ids.length) });
-const column = (...ids: string[]): Layout => ({ type: 'split', direction: 'vertical', children: ids.map(leaf), sizes: ids.map(() => 100 / ids.length) });
+const row = (...ids: string[]): Layout => ({
+    type: 'split',
+    direction: 'horizontal',
+    children: ids.map(leaf),
+    sizes: ids.map(() => 100 / ids.length),
+});
+const column = (...ids: string[]): Layout => ({
+    type: 'split',
+    direction: 'vertical',
+    children: ids.map(leaf),
+    sizes: ids.map(() => 100 / ids.length),
+});
 
-const session = (id: string, layout: Layout | null): Session => ({ id, projectId: 'p', title: id, titleSource: 'user', link: null, cwd: '/tmp', worktree: null, layout, archived: false, createdAt: 0, updatedAt: 0 });
-const pane = (id: string, sessionId: string, status: PaneView['status'] = 'idle'): PaneView => ({ id, sessionId, status } as PaneView);
+const session = (id: string, layout: Layout | null): Session => ({
+    id,
+    projectId: 'p',
+    title: id,
+    titleSource: 'user',
+    link: null,
+    cwd: '/tmp',
+    worktree: null,
+    layout,
+    archived: false,
+    createdAt: 0,
+    updatedAt: 0,
+});
+const pane = (id: string, sessionId: string, status: PaneView['status'] = 'idle'): PaneView => ({ id, sessionId, status }) as PaneView;
 const workspace = (layout: Layout | null, title = 'w'): Workspace => ({ id: 'w', title, layout, createdAt: 0, updatedAt: 0 });
 
 const app = {
@@ -24,7 +46,10 @@ const app = {
 describe('dropOnWorkspace', () => {
     it('starts an empty workspace with the dropped pane or session', () => {
         expect(dropOnWorkspace(app, null, { kind: 'pane', paneId: 'b1' }, null, 'swap')).toEqual({ kind: 'changed', layout: leaf('b1') });
-        expect(dropOnWorkspace(app, null, { kind: 'session', sessionId: 'c' }, null, 'swap')).toEqual({ kind: 'changed', layout: column('c1', 'c2', 'c3') });
+        expect(dropOnWorkspace(app, null, { kind: 'session', sessionId: 'c' }, null, 'swap')).toEqual({
+            kind: 'changed',
+            layout: column('c1', 'c2', 'c3'),
+        });
     });
 
     it('places a pane from another project on the edge it was dropped on', () => {
@@ -39,11 +64,16 @@ describe('dropOnWorkspace', () => {
             layout: {
                 type: 'split',
                 direction: 'horizontal',
-                children: [{ type: 'split', direction: 'vertical', children: [leaf('a1'), column('c1', 'c3')], sizes: [50, 50] }, leaf('c2')],
+                children: [
+                    { type: 'split', direction: 'vertical', children: [leaf('a1'), column('c1', 'c3')], sizes: [50, 50] },
+                    leaf('c2'),
+                ],
                 sizes: [50, 50],
             },
         });
-        expect(dropOnWorkspace(app, row('c1', 'c2', 'c3'), { kind: 'session', sessionId: 'c' }, 'c1', 'left')).toEqual({ kind: 'unchanged' });
+        expect(dropOnWorkspace(app, row('c1', 'c2', 'c3'), { kind: 'session', sessionId: 'c' }, 'c1', 'left')).toEqual({
+            kind: 'unchanged',
+        });
     });
 
     it('moves a pane the workspace already shows instead of adding it twice', () => {
