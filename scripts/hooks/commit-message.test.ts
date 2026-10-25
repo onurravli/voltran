@@ -4,7 +4,7 @@ import { checkCommitMessage } from './commit-message.mjs';
 describe('checkCommitMessage', () => {
     it('accepts the forms the history uses', () => {
         for (const message of [
-            'feat: show the account\'s usage limits in the sidebar',
+            "feat: show the account's usage limits in the sidebar",
             'fix(web): move the keyboard into the pane you switch to',
             'chore(deps-dev): bump vitest from 4.1.11 to 5.0.5 (#7)',
             'release: 1.1.0',
@@ -14,14 +14,15 @@ describe('checkCommitMessage', () => {
         }
     });
 
-    it('lets git\'s own messages through', () => {
-        for (const message of ['Merge branch \'main\' into feature', 'Revert "feat: x"', 'fixup! fix: y', 'squash! feat: z']) {
+    it("lets git's own messages through", () => {
+        for (const message of ["Merge branch 'main' into feature", 'Revert "feat: x"', 'fixup! fix: y', 'squash! feat: z']) {
             expect(checkCommitMessage(message)).toEqual([]);
         }
     });
 
     it('ignores comments, the scissors line and what follows it', () => {
-        const message = 'fix: keep the token private\n\n# Please enter the commit message\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x\n';
+        const message =
+            'fix: keep the token private\n\n# Please enter the commit message\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x\n';
         expect(checkCommitMessage(message)).toEqual([]);
     });
 

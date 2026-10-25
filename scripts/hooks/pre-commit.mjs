@@ -19,7 +19,16 @@ if (check.status !== 0) {
     console.error(check.stdout.trimEnd());
 }
 
-const diff = git(['diff', '--cached', '--no-color', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/', '-U0']).stdout.split('\n');
+const diff = git([
+    'diff',
+    '--cached',
+    '--no-color',
+    '--no-ext-diff',
+    '--no-textconv',
+    '--src-prefix=a/',
+    '--dst-prefix=b/',
+    '-U0',
+]).stdout.split('\n');
 const missingNewline = [];
 let file = null;
 let link = false;
@@ -41,6 +50,19 @@ if (missingNewline.length > 0) {
     for (const name of missingNewline) {
         console.error(`  ${name}`);
     }
+}
+
+const biome = spawnSync(
+    'node_modules/.bin/biome',
+    ['check', '--staged', '--error-on-warnings', '--no-errors-on-unmatched', '--files-ignore-unknown=true'],
+    { stdio: 'inherit' },
+);
+if (biome.error) {
+    failed = true;
+    console.error('Biome is missing; run npm install.');
+} else if (biome.status !== 0) {
+    failed = true;
+    console.error('Biome found formatting or lint problems; npm run format fixes most of them.');
 }
 
 const staged = git(['diff', '--cached', '--name-only', '--diff-filter=ACMRD', '-z']).stdout.split('\0').filter(Boolean);

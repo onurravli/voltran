@@ -23,8 +23,8 @@ npm install
 else. The hooks need nothing beyond Node:
 
 - `pre-commit` refuses trailing whitespace, conflict markers and a file without a final newline in
-  what you stage, and runs `npm run typecheck` when the commit touches TypeScript, JavaScript, a
-  `tsconfig` or a `package.json`.
+  what you stage, runs Biome on the staged files, and runs `npm run typecheck` when the commit
+  touches TypeScript, JavaScript, a `tsconfig` or a `package.json`.
 - `commit-msg` checks the message against the rules under
   [Commits and pull requests](#commits-and-pull-requests).
 - `pre-push` runs `npm run typecheck` and `npm test`.
@@ -48,6 +48,7 @@ an agent writes the code.
 ## Checks
 
 ```bash
+npm run lint         # Biome: formatting and lint rules; npm run format fixes most of what it finds
 npm run typecheck
 npm test
 npm run test:e2e     # builds the UI and drives it in headless Chrome
@@ -55,7 +56,7 @@ npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # on
 npm run build        # the UI the daemon serves
 ```
 
-CI runs the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and the browser tests on
+CI runs the lint, the typecheck and the tests on Ubuntu and macOS with Node 22 and 24, and the browser tests on
 Ubuntu and macOS with Node 24; every run must pass.
 
 - Tests run in Node, so web logic that needs a test goes in a module without DOM access, such as
@@ -73,9 +74,13 @@ Ubuntu and macOS with Node 24; every run must pass.
 
 ## Code style
 
-There is no linter or formatter; match the code around your change:
+[Biome](https://biomejs.dev/) formats and lints the code with the settings in `biome.json`;
+`npm run format` rewrites your files to match, and the editor integration can do it on save. Beyond
+what it checks, match the code around your change:
 
-- 4-space indent, single quotes, and every file ends with a newline.
+- 4-space indent, single quotes, at most 140 columns, and every file ends with a newline.
+- A rule that does not fit one place gets a `biome-ignore` comment that says why, rather than being
+  turned off for everyone.
 - No comments, except for a constraint the code cannot show. The reasoning goes in the commit
   message or the pull request.
 - Node runs the daemon's TypeScript directly, so only syntax it can strip is allowed: no enums,

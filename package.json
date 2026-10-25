@@ -36,9 +36,12 @@
     "dev:web": "npm run dev -w @voltran/web",
     "test": "vitest run",
     "test:e2e": "npm run build && vitest run -c vitest.e2e.config.ts",
-    "typecheck": "tsc -p packages/daemon && tsc -p packages/web && tsc -p e2e"
+    "typecheck": "tsc -p packages/daemon && tsc -p packages/web && tsc -p e2e",
+    "lint": "biome check --error-on-warnings .",
+    "format": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "^26.6.5",
     "playwright-core": "^1.64.1",
     "typescript": "^7.0.2",
