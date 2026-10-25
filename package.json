@@ -27,6 +27,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
+    "prepare": "node scripts/hooks/install.mjs",
     "up": "node bin/voltran.mjs up",
     "build": "npm run build -w @voltran/web",
     "package": "node scripts/package.mjs",

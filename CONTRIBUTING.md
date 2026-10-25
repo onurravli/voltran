@@ -19,6 +19,18 @@ You need macOS or Linux and Node.js 22.18 or newer; on Windows, work inside WSL2
 npm install
 ```
 
+`npm install` also points `core.hooksPath` at `.githooks`, unless it is already set to something
+else. The hooks need nothing beyond Node:
+
+- `pre-commit` refuses trailing whitespace, conflict markers and a file without a final newline in
+  what you stage, and runs `npm run typecheck` when the commit touches TypeScript, JavaScript, a
+  `tsconfig` or a `package.json`.
+- `commit-msg` checks the message against the rules under
+  [Commits and pull requests](#commits-and-pull-requests).
+- `pre-push` runs `npm run typecheck` and `npm test`.
+
+`git commit --no-verify` and `git push --no-verify` skip them when you need to.
+
 The daemon you use day to day listens on port 4747 and keeps its data in `~/.voltran`. Run a
 development copy with a folder and a port of its own, the same two values in every command, so
 neither touches your real sessions:
@@ -78,6 +90,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 `fix:`, `docs:`, `ci:` or `chore:`, with a scope when the change stays in one part (`fix(web):`,
 `fix(daemon):`, `feat(cli):`). The subject says what changes for the user, such as
 `feat: show the account's usage limits in the sidebar`; the body says why, when that is not obvious.
+
+- The types are `feat`, `fix`, `perf`, `refactor`, `style`, `test`, `docs`, `build`, `ci`, `chore`,
+  `revert` and `release`; a `!` after the type or scope (`feat!:`) marks a breaking change.
+- A scope is lowercase letters, digits and dashes. The first line is at most 100 characters and does
+  not end with a period, and a blank line separates it from the body.
+- Git's own merge, revert, `fixup!` and `squash!` messages pass as they are.
+- The `commit-msg` hook checks each commit, and the `commits` workflow checks a pull request's commits
+  and its title, which becomes the commit message when the pull request is squashed.
 
 - Keep a pull request to one change. A behaviour change updates the README, and a change to how
   things work updates CLAUDE.md; both can go in a `docs:` commit of their own.

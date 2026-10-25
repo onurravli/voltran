@@ -10,6 +10,7 @@ behaviour.
 
 ```bash
 npm install                      # postinstall makes node-pty's spawn-helper executable (else "posix_spawnp failed")
+                                 # prepare sets core.hooksPath to .githooks (pre-commit, commit-msg, pre-push)
 npm test                         # vitest, all packages
 npm run test:e2e                 # builds the UI, then the browser tests in e2e/ (headless Chrome)
 npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # one file / one test
@@ -23,7 +24,9 @@ node bin/voltran.mjs up|down|status|add|new|autostart   # the CLI, same as `volt
 ```
 
 There is no linter or formatter; match the surrounding code (4-space indent, single quotes, no
-comments except for a constraint the code cannot show, every file ends with a newline).
+comments except for a constraint the code cannot show, every file ends with a newline). Commit
+messages are Conventional Commits: `scripts/hooks/commit-message.mjs` holds the rules, which the
+`commit-msg` hook and `.github/workflows/commits.yml` apply.
 
 ## TypeScript without a build step
 
