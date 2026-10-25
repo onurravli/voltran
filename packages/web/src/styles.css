@@ -2545,7 +2545,7 @@ body:has(.separator[data-separator='active']) .pane__frame {
 
 .tool__row {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
     min-width: 0;
     padding: 3px 0;
@@ -2569,6 +2569,7 @@ body:has(.separator[data-separator='active']) .pane__frame {
 
 .tool__state {
     flex: none;
+    align-self: center;
     width: 6px;
     height: 6px;
     border-radius: 50%;
