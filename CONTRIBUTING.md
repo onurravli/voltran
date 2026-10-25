@@ -81,6 +81,8 @@ what it checks, match the code around your change:
 - 4-space indent, single quotes, at most 140 columns, and every file ends with a newline.
 - A rule that does not fit one place gets a `biome-ignore` comment that says why, rather than being
   turned off for everyone.
+- A commit that only reformats goes into `.git-blame-ignore-revs`, which GitHub's blame view skips;
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs` makes `git blame` skip it too.
 - No comments, except for a constraint the code cannot show. The reasoning goes in the commit
   message or the pull request.
 - Node runs the daemon's TypeScript directly, so only syntax it can strip is allowed: no enums,
