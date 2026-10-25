@@ -18,6 +18,8 @@ const MIN_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 5000;
 const RESIZE_DEBOUNCE_MS = 60;
 const RECONNECT_NOTICE_MS = 1000;
+const SUBMIT_DELAY_MS = 120;
+const IMAGE_ATTACH_TIMEOUT_MS = 5000;
 
 export class TerminalSession {
     readonly paneId: string;
@@ -138,6 +140,61 @@ export class TerminalSession {
     onFocus(listener: () => void): () => void {
         this.focusListeners.add(listener);
         return () => this.focusListeners.delete(listener);
+    }
+
+    // The text goes in the way a paste does, so an agent keeps its line breaks as text, and Enter
+    // follows on its own: inside the same write an agent can take it as part of the paste. Claude Code
+    // takes a paste that is only an image's path as that image, but reads the file after later input
+    // has landed, so each image waits until its `[Image #n]` is in the input box. The output stream
+    // alone cannot tell: earlier prompts and replies redrawn on screen carry the same text.
+    submit(text: string, images: string[] = []): boolean {
+        if (this.socket?.readyState !== WebSocket.OPEN) {
+            return false;
+        }
+        void (async () => {
+            const before = this.inputImages();
+            for (const [index, path] of images.entries()) {
+                this.term.paste(path);
+                await this.until(() => this.inputImages() > before + index, IMAGE_ATTACH_TIMEOUT_MS);
+            }
+            if (text) {
+                this.term.paste(images.length > 0 ? ` ${text}` : text);
+            }
+            setTimeout(() => this.send({ type: 'input', data: '\r' }), SUBMIT_DELAY_MS);
+        })();
+        return true;
+    }
+
+    // Claude Code's input box starts at the last line that begins with its prompt and ends at the rule
+    // under it.
+    private inputImages(): number {
+        const buffer = this.term.buffer.active;
+        const lines: string[] = [];
+        for (let row = buffer.length - 1; row >= 0; row -= 1) {
+            const line = buffer.getLine(row)?.translateToString(true) ?? '';
+            lines.unshift(line);
+            if (line.startsWith('❯')) {
+                break;
+            }
+        }
+        const end = lines.findIndex((line) => line.startsWith('─'));
+        return (lines.slice(0, end < 0 ? undefined : end).join('\n').match(/\[Image #\d+\]/g) ?? []).length;
+    }
+
+    private until(condition: () => boolean, timeoutMs: number): Promise<void> {
+        return new Promise((resolve) => {
+            const done = (): void => {
+                clearTimeout(timer);
+                subscription.dispose();
+                resolve();
+            };
+            const subscription = this.term.onWriteParsed(() => {
+                if (condition()) {
+                    done();
+                }
+            });
+            const timer = setTimeout(done, timeoutMs);
+        });
     }
 
     dispose(): void {

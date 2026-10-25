@@ -145,6 +145,43 @@ export interface TranscriptChunk {
     skipped: number;
 }
 
+export type TodoState = 'pending' | 'in_progress' | 'completed';
+
+export type ToolDetail =
+    | { kind: 'command'; command: string }
+    | { kind: 'edit'; path: string; changes: { before: string; after: string }[] }
+    | { kind: 'write'; path: string; content: string }
+    | { kind: 'todos'; todos: { text: string; state: TodoState }[] }
+    | { kind: 'input'; text: string };
+
+// What the conversation view shows, whichever agent wrote it: each agent's reader in the daemon turns
+// its own records into these.
+export type ConversationEntry =
+    | { kind: 'prompt'; text: string; images: number; at: number | null }
+    | { kind: 'text'; text: string; model: string | null; at: number | null }
+    | { kind: 'thinking'; text: string; at: number | null }
+    | { kind: 'tool'; id: string; name: string; summary: string; detail: ToolDetail | null; at: number | null }
+    | { kind: 'result'; toolUseId: string; text: string; error: boolean; at: number | null }
+    | { kind: 'notice'; text: string; tone: 'info' | 'error'; at: number | null };
+
+// `source` names the conversation the entries come from (the agent's own session id), and `next` is
+// where the following read continues; a client that sends another source starts over.
+export interface ConversationChunk {
+    source: string | null;
+    entries: ConversationEntry[];
+    next: number;
+    more: boolean;
+}
+
+// A command the composer offers after `/`. `terminal` marks one that answers in a picker or panel
+// drawn in the terminal rather than in the conversation.
+export interface SlashCommand {
+    name: string;
+    description: string;
+    source: 'builtin' | 'user' | 'project' | 'plugin';
+    terminal: boolean;
+}
+
 export interface PaneRuntimeState {
     status: PaneStatus;
     statusAt: number;

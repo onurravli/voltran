@@ -13,6 +13,7 @@ import {
     type AdapterInfo,
     type AppState,
     type AttentionStatus,
+    type ConversationChunk,
     type CreatePaneBody,
     type CreateProjectBody,
     type CreateSessionBody,
@@ -30,6 +31,7 @@ import {
     type ServerEvent,
     type Session,
     type SessionChanges,
+    type SlashCommand,
     type UpdatePaneBody,
     type UpdateProjectBody,
     type UpdateSessionBody,
@@ -39,10 +41,13 @@ import {
     type ProjectGit,
     type WorktreeChoice,
 } from '@voltran/shared';
-import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
+import { adapterFor, claudeArgsProblem, claudeConfigDir, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
 import { ChangesError, SessionChangesReader } from './changes.ts';
+import { readClaudeConversation } from './conversation.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
+import { AttachmentRefused, AttachmentStore } from './attachments.ts';
+import { claudeCommands } from './commands.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
 import { PaneManager } from './panes.ts';
 import { mergeUsage } from './statusline.ts';
@@ -63,6 +68,7 @@ export interface HubOptions {
     adapters: AdapterInfo[];
     scrollbackDir: string;
     notesDir: string;
+    attachmentsDir: string;
     hooksDir: string;
     url: string;
     shell: string;
@@ -145,6 +151,8 @@ export class Hub {
     private readonly git: GitWatcher;
     private readonly changes: SessionChangesReader;
     private readonly notes: NotesStore;
+    private readonly attachments: AttachmentStore;
+    private readonly claudeConfig: string | null;
     private readonly worktrees: Worktrees;
     private readonly store: Store;
     private readonly adapters: AdapterInfo[];
@@ -157,6 +165,7 @@ export class Hub {
 
     constructor(options: HubOptions) {
         this.store = options.store;
+        this.claudeConfig = claudeConfigDir(options.baseEnv);
         this.adapters = options.adapters;
         this.worktrees = new Worktrees(options.worktreesDir, options.worktreeRunner ?? worktreeRunner({ ...options.baseEnv, PATH: options.path }));
         this.notes = new NotesStore({
@@ -181,6 +190,8 @@ export class Hub {
             this.panes.load(pane);
         }
         this.notes.load(this.store.listPanes().map((pane) => pane.id));
+        this.attachments = new AttachmentStore(options.attachmentsDir);
+        this.attachments.load(this.store.listPanes().map((pane) => pane.id));
         this.notes.watch();
         this.pruneWorkspaces();
         const gitRunner = options.gitRunner ?? commandRunner({ ...options.baseEnv, PATH: options.path });
@@ -497,6 +508,7 @@ export class Hub {
         this.closeOnCleanExit.delete(id);
         this.panes.remove(id);
         this.notes.remove(id);
+        this.attachments.remove(id);
         this.store.deletePane(id);
         if (session) {
             this.store.updateSession(session.id, { layout: removePane(session.layout, id) });
@@ -635,6 +647,37 @@ export class Hub {
                 this.nameSession(paneId, event, payload, false);
             }, TITLE_RETRY_MS);
             this.namingTimers.add(timer);
+        }
+    }
+
+    // A client that still shows the same conversation continues from where it stopped reading.
+    paneConversation(id: string, source: string | null, from: number): ConversationChunk {
+        const pane = this.mustGetPane(id);
+        if (pane.adapter !== 'claude') {
+            throw new HttpError(400, 'Only Claude Code panes show a conversation so far.');
+        }
+        const transcript = this.panes.transcript(id);
+        if (!transcript) {
+            return { source: null, entries: [], next: 0, more: false };
+        }
+        const start = source === transcript.sessionId && Number.isSafeInteger(from) && from > 0 ? from : 0;
+        return readClaudeConversation(transcript.path, transcript.sessionId, start) ?? { source: transcript.sessionId, entries: [], next: 0, more: false };
+    }
+
+    paneCommands(id: string): SlashCommand[] {
+        const pane = this.mustGetPane(id);
+        return pane.adapter === 'claude' ? claudeCommands(pane.cwd, this.claudeConfig) : [];
+    }
+
+    attach(id: string, bytes: Buffer): { path: string } {
+        this.mustGetPane(id);
+        try {
+            return { path: this.attachments.save(id, bytes) };
+        } catch (error) {
+            if (error instanceof AttachmentRefused) {
+                throw new HttpError(415, error.message);
+            }
+            throw error;
         }
     }
 
@@ -799,6 +842,7 @@ export class Hub {
             this.closeOnCleanExit.delete(pane.id);
             this.panes.remove(pane.id);
             this.notes.remove(pane.id);
+            this.attachments.remove(pane.id);
         }
     }
 

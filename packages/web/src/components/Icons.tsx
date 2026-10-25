@@ -39,6 +39,7 @@ export const KeyboardIcon = (props: IconProps) => <Icon {...props}><rect x="1.5"
 export const FeedbackIcon = (props: IconProps) => <Icon {...props}><path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z" /><path d="M8 5.5V8M8 9.5h.01" /></Icon>;
 export const FolderIcon = (props: IconProps) => <Icon {...props}><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" /></Icon>;
 export const BranchIcon = (props: IconProps) => <Icon {...props}><circle cx="5" cy="3.5" r="1.5" /><circle cx="5" cy="12.5" r="1.5" /><circle cx="11" cy="5.5" r="1.5" /><path d="M5 5v6M11 7c0 2.5-6 1.5-6 4" /></Icon>;
+export const ConversationIcon = (props: IconProps) => <Icon {...props}><path d="M3.5 3h9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H8l-3 2.5V11H3.5A1.5 1.5 0 0 1 2 9.5v-5A1.5 1.5 0 0 1 3.5 3Z" /><path d="M5 6h6M5 8.25h3.5" /></Icon>;
 export const NotesIcon = (props: IconProps) => <Icon {...props}><path d="M4 2.5h5.5L12 5v8.5H4z" /><path d="M6 7.5h4M6 10h4" /></Icon>;
 export const StopIcon = (props: IconProps) => <Icon {...props}><rect x="4" y="4" width="8" height="8" rx="1.5" /></Icon>;
 export const SearchIcon = (props: IconProps) => <Icon {...props}><circle cx="7" cy="7" r="4.25" /><path d="m10.2 10.2 3.3 3.3" /></Icon>;

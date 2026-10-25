@@ -1,4 +1,5 @@
 import type {
+    ConversationChunk,
     CreatePaneBody,
     CreateProjectBody,
     CreateSessionBody,
@@ -18,6 +19,7 @@ import type {
     SessionChanges,
     SettingsPatch,
     SettingsState,
+    SlashCommand,
     UpdatePaneBody,
     UpdateProjectBody,
     UpdateSessionBody,
@@ -104,8 +106,8 @@ export function keepSessionFresh(): void {
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
     const init: RequestInit = {
         method,
-        headers: { ...authHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: { ...authHeaders(), ...(body === undefined || body instanceof Blob ? {} : { 'Content-Type': 'application/json' }) },
+        body: body === undefined || body instanceof Blob ? body : JSON.stringify(body),
         keepalive,
     };
 
@@ -150,6 +152,8 @@ export const api = {
     restartPane: (id: string) => request<void>('POST', `/api/panes/${id}/restart`),
     killPane: (id: string) => request<void>('POST', `/api/panes/${id}/kill`),
     seenPane: (id: string) => request<void>('POST', `/api/panes/${id}/seen`),
+    commands: (paneId: string) => request<SlashCommand[]>('GET', `/api/panes/${encodeURIComponent(paneId)}/commands`),
+    attach: (paneId: string, image: Blob) => request<{ path: string }>('POST', `/api/panes/${encodeURIComponent(paneId)}/attachments`, image),
     paneNotes: (id: string) => request<PaneNotes>('GET', `/api/panes/${id}/notes`),
     saveNotes: (id: string, body: SaveNotesBody, keepalive = false) => request<PaneNotes>('PUT', `/api/panes/${id}/notes`, body, keepalive),
     lockNotes: (id: string, body: NotesLockBody) => request<NotesMeta>('POST', `/api/panes/${id}/notes/lock`, body),
@@ -161,6 +165,8 @@ export const api = {
     diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
     contents: (sessionId: string, path: string) => request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
+    conversation: (paneId: string, source: string | null, from: number) =>
+        request<ConversationChunk>('GET', `/api/panes/${encodeURIComponent(paneId)}/conversation?${new URLSearchParams({ source: source ?? '', from: String(from) })}`),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };

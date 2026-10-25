@@ -14,6 +14,7 @@ export interface Config {
     logFile: string;
     scrollbackDir: string;
     notesDir: string;
+    attachmentsDir: string;
     worktreesDir: string;
     hooksDir: string;
     settingsFile: string;
@@ -59,6 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         logFile: join(home, 'daemon.log'),
         scrollbackDir: join(home, 'scrollback'),
         notesDir: join(home, 'notes'),
+        attachmentsDir: join(home, 'attachments'),
         worktreesDir: join(home, 'worktrees'),
         hooksDir: join(home, 'hooks'),
         settingsFile: join(home, 'settings.json'),
@@ -80,7 +82,7 @@ export function ensureHome(config: Config): void {
         throw new Error(`${config.home} belongs to another user; Voltran will not keep its data there`);
     }
     chmodSync(config.home, 0o700);
-    for (const dir of [config.scrollbackDir, config.notesDir]) {
+    for (const dir of [config.scrollbackDir, config.notesDir, config.attachmentsDir]) {
         mkdirSync(dir, { recursive: true, mode: 0o700 });
         chmodSync(dir, 0o700);
     }

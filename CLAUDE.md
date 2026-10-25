@@ -125,6 +125,30 @@ reads look the file up there by agent id; the derived path stays the subagent's 
 `subagent-render.ts`; the daemon sends it `SIGUSR2` when the subagent stops. Claude's transcript
 format is internal and may change.
 
+**Conversation view.** A pane can show its conversation as messages over its terminal, which stays
+mounted underneath so it keeps its size and process. `ConversationEntry` (`shared/src/types.ts`) is
+the agent-agnostic shape; each agent needs a reader in the daemon that produces it. Claude's is
+`daemon/src/conversation.ts` (`parseClaudeLine`, `readClaudeConversation`), which reads the transcript
+the pane's hooks last named (`PaneManager.transcript`, which looks the session's file up under
+`<config>/projects/*/` after a daemon restart). `GET /api/panes/:id/conversation?source=&from=` returns
+entries from a byte offset; a client whose `source` (the agent's session id) differs starts over.
+The web view (`components/ConversationView.tsx`) polls while the pane works and on each status
+change; `web/src/conversation.ts` groups turns and diffs edits, and `markdown.ts` renders with
+markdown-it, raw HTML and images off, and highlights fences that name a language with highlight.js
+in `--syntax-*` colours taken from the terminal palette. The composer sends through
+`TerminalSession.submit`: a paste, then Enter on its own. An image pasted or dropped there goes to
+`POST /api/panes/:id/attachments` (`daemon/src/attachments.ts`), which keeps it as
+`~/.voltran/attachments/<pane>/<random>.<ext>`, named by its magic bytes and deleted with the pane; `submit`
+pastes each path on its own and waits until the input box (the last `❯` line) shows one more
+`[Image #n]` before the next paste, because Claude reads the file after later input has landed and the
+output stream also carries that text from earlier prompts. Typing `/` opens a command menu (`web/src/slash.ts`) from
+`GET /api/panes/:id/commands` (`daemon/src/commands.ts`): Claude Code cannot list its commands for
+another program, so `BUILTIN` copies its menu (update it with new Claude Code releases) and the rest is
+read the way Claude finds it: `commands/**/*.md` and `skills/<name>/SKILL.md` in each `.claude` from
+the pane's folder up to home, in the config folder (plus `skills/synced/<id>/<name>`) and in each
+enabled plugin of `plugins/installed_plugins.json` as `plugin:name`. A command marked `terminal`
+answers in a picker or panel, so sending it switches the pane to its terminal.
+
 **Notes.** `daemon/src/notes.ts` (`NotesStore`) keeps each pane's notes in
 `~/.voltran/notes/<pane>/notes.md`, one folder per pane so a lock can make the folder read-only as
 well: a write through a temp file and a rename replaces a read-only file. The drawer
