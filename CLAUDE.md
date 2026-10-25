@@ -16,6 +16,7 @@ npx vitest run packages/daemon/src/panes.test.ts -t "persists scrollback"   # on
 npm run typecheck                # tsc for daemon, web and e2e (each includes shared)
 npm run build                    # builds packages/web/dist, which the daemon serves
 npm run package                  # the npm package in build/npm (compiled JS, built UI)
+npm run screenshot               # stages a demo daemon with fake agents and rewrites docs/screenshot.png (dark and light, split diagonally)
 npm run dev:daemon               # daemon with --watch, allows the Vite origin
 npm run dev:web                  # Vite on :4774, proxies /api and /ws to the daemon
 node bin/voltran.mjs up|down|status|add|new|autostart   # the CLI, same as `voltran` after npm link

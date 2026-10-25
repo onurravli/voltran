@@ -30,6 +30,7 @@
     "up": "node bin/voltran.mjs up",
     "build": "npm run build -w @voltran/web",
     "package": "node scripts/package.mjs",
+    "screenshot": "node scripts/screenshot/run.mjs",
     "dev:daemon": "VOLTRAN_DEV=1 node --watch packages/daemon/src/main.ts",
     "dev:web": "npm run dev -w @voltran/web",
     "test": "vitest run",
