@@ -105,7 +105,13 @@ function FindBar({ paneId }: { paneId: string }) {
     };
 
     const count = results?.resultCount ?? 0;
-    const status = !query ? '' : count === 0 ? 'No matches' : results && results.resultIndex >= 0 ? `${results.resultIndex + 1} of ${count}` : `${count} matches`;
+    const status = !query
+        ? ''
+        : count === 0
+          ? 'No matches'
+          : results && results.resultIndex >= 0
+            ? `${results.resultIndex + 1} of ${count}`
+            : `${count} matches`;
 
     return (
         <div className="find" role="search">
@@ -127,11 +133,27 @@ function FindBar({ paneId }: { paneId: string }) {
                     }
                 }}
             />
-            <span className="find__count" aria-live="polite">{status}</span>
-            <button type="button" className="icon-button" aria-label={`Previous match (${FIND_STEP_KEYS.previous})`} title={`Previous match (${FIND_STEP_KEYS.previous})`} disabled={count === 0} onClick={() => move('previous')}>
+            <span className="find__count" aria-live="polite">
+                {status}
+            </span>
+            <button
+                type="button"
+                className="icon-button"
+                aria-label={`Previous match (${FIND_STEP_KEYS.previous})`}
+                title={`Previous match (${FIND_STEP_KEYS.previous})`}
+                disabled={count === 0}
+                onClick={() => move('previous')}
+            >
                 <ChevronUpIcon size={14} />
             </button>
-            <button type="button" className="icon-button" aria-label={`Next match (${FIND_STEP_KEYS.next})`} title={`Next match (${FIND_STEP_KEYS.next})`} disabled={count === 0} onClick={() => move('next')}>
+            <button
+                type="button"
+                className="icon-button"
+                aria-label={`Next match (${FIND_STEP_KEYS.next})`}
+                title={`Next match (${FIND_STEP_KEYS.next})`}
+                disabled={count === 0}
+                onClick={() => move('next')}
+            >
                 <ChevronDownIcon size={14} />
             </button>
             <button type="button" className="icon-button" aria-label="Close (Esc)" title="Close (Esc)" onClick={close}>
@@ -204,9 +226,11 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const inWorkspace = host.kind === 'workspace';
     const hosted = paneIds(host.layout);
     const joining = inWorkspace && (draggingSession !== null || (dragging !== null && !hosted.includes(dragging)));
-    const canDrop = !maximized && (inWorkspace
-        ? (dragging !== null && dragging !== pane.id) || draggingSession !== null
-        : dragging !== null && dragging !== pane.id && !archived && hosted.includes(dragging));
+    const canDrop =
+        !maximized &&
+        (inWorkspace
+            ? (dragging !== null && dragging !== pane.id) || draggingSession !== null
+            : dragging !== null && dragging !== pane.id && !archived && hosted.includes(dragging));
 
     useEffect(() => {
         if (!canDrop) {
@@ -264,7 +288,13 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
 
     const split = (event: ReactMouseEvent<HTMLButtonElement>, direction: 'horizontal' | 'vertical'): void => {
         const rect = event.currentTarget.getBoundingClientRect();
-        openPaneMenu({ sessionId: pane.sessionId, splitFrom: pane.id, direction, workspaceId: inWorkspace ? host.id : undefined, anchor: { x: rect.right, y: rect.bottom + 4 } });
+        openPaneMenu({
+            sessionId: pane.sessionId,
+            splitFrom: pane.id,
+            direction,
+            workspaceId: inWorkspace ? host.id : undefined,
+            anchor: { x: rect.right, y: rect.bottom + 4 },
+        });
     };
 
     const running = pane.pid !== null;
@@ -299,7 +329,10 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const close = (): void => (inWorkspace ? removeFromWorkspace(host.id, pane.id) : closePane(pane));
 
     return (
-        <div className={`pane${focused ? ' is-focused' : ''}${dragging === pane.id ? ' is-dragging' : ''} pane--${pane.status}`} onMouseDown={() => useUi.getState().focusPane(pane.id, false)}>
+        <div
+            className={`pane${focused ? ' is-focused' : ''}${dragging === pane.id ? ' is-dragging' : ''} pane--${pane.status}`}
+            onMouseDown={() => useUi.getState().focusPane(pane.id, false)}
+        >
             <div
                 className="pane__header"
                 draggable={!maximized}
@@ -349,7 +382,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 ) : changes ? (
                     <span className="pane__summary">{changesSummary(git)}</span>
                 ) : (
-                    <span className="pane__summary" title={pane.detail ?? undefined}>{paneSummary(pane, adapter?.kind)}</span>
+                    <span className="pane__summary" title={pane.detail ?? undefined}>
+                        {paneSummary(pane, adapter?.kind)}
+                    </span>
                 )}
                 {hasConversation ? (
                     <button
@@ -380,11 +415,21 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <button type="button" className="icon-button" title="Split down" onClick={(event) => split(event, 'vertical')}>
                         <SplitDownIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title={maximized ? `Restore (${keys('⌃⌥↩')})` : `Maximize (${keys('⌃⌥↩')})`} onClick={() => toggleMaximize(pane.id)}>
+                    <button
+                        type="button"
+                        className="icon-button"
+                        title={maximized ? `Restore (${keys('⌃⌥↩')})` : `Maximize (${keys('⌃⌥↩')})`}
+                        onClick={() => toggleMaximize(pane.id)}
+                    >
                         {maximized ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
                     </button>
                     {running ? (
-                        <button type="button" className="icon-button" title="Stop process" onClick={() => api.killPane(pane.id).catch(reportError)}>
+                        <button
+                            type="button"
+                            className="icon-button"
+                            title="Stop process"
+                            onClick={() => api.killPane(pane.id).catch(reportError)}
+                        >
                             <StopIcon size={14} />
                         </button>
                     ) : null}
@@ -394,7 +439,13 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                                 <RestartIcon size={14} />
                             </button>
                             {preview !== null ? (
-                                <a className="icon-button" href={preview} target="_blank" rel="noreferrer noopener" title="Open in a browser tab">
+                                <a
+                                    className="icon-button"
+                                    href={preview}
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                    title="Open in a browser tab"
+                                >
                                     <OpenIcon size={14} />
                                 </a>
                             ) : null}
@@ -409,7 +460,12 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                             <RestartIcon size={14} />
                         </button>
                     )}
-                    <button type="button" className="icon-button" title={inWorkspace ? `Remove from this workspace (${keys('⌃⌥W')})` : `Close pane (${keys('⌃⌥W')})`} onClick={close}>
+                    <button
+                        type="button"
+                        className="icon-button"
+                        title={inWorkspace ? `Remove from this workspace (${keys('⌃⌥W')})` : `Close pane (${keys('⌃⌥W')})`}
+                        onClick={close}
+                    >
                         <CloseIcon size={14} />
                     </button>
                 </div>
@@ -437,7 +493,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <div className="pane__terminal" ref={containerRef} />
                 )}
                 {conversation ? <ConversationView pane={pane} focusToken={focusToken} /> : null}
-                {notesOpen ? <NotesDrawer pane={pane} agent={adapter?.kind === 'agent' ? adapter.label : null} hint={notesHint(adapter)} /> : null}
+                {notesOpen ? (
+                    <NotesDrawer pane={pane} agent={adapter?.kind === 'agent' ? adapter.label : null} hint={notesHint(adapter)} />
+                ) : null}
                 {finding && !archived && !conversation ? <FindBar paneId={pane.id} /> : null}
                 {canDrop ? (
                     <div
@@ -461,7 +519,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 {link === 'gone' ? <div className="pane__chip">This pane was removed</div> : null}
                 {pane.status === 'exited' && !archived ? (
                     <div className={`pane__exit${failed ? ' is-failed' : ''}`}>
-                        <span>{pane.exitCode === null ? (pane.detail ?? 'The process did not start.') : `Exited with code ${pane.exitCode}.`}</span>
+                        <span>
+                            {pane.exitCode === null ? (pane.detail ?? 'The process did not start.') : `Exited with code ${pane.exitCode}.`}
+                        </span>
                         <button type="button" className="button button--small" onClick={() => api.restartPane(pane.id).catch(reportError)}>
                             {adapter?.resumable ? 'Restart and resume' : 'Restart'}
                         </button>
@@ -488,7 +548,13 @@ export function setSizesAt(layout: Layout, path: number[], sizes: number[]): Lay
 
 const childKey = (node: Layout): string => (node.type === 'pane' ? node.paneId : `split:${paneIds(node).join(',')}`);
 
-export function LayoutNode({ node, path, host, panes, onSizes }: {
+export function LayoutNode({
+    node,
+    path,
+    host,
+    panes,
+    onSizes,
+}: {
     node: Layout;
     path: number[];
     host: PaneHost;
@@ -511,7 +577,10 @@ export function LayoutNode({ node, path, host, panes, onSizes }: {
             defaultLayout={defaultLayout}
             onLayoutChanged={(layout, meta) => {
                 if (meta.isUserInteraction) {
-                    onSizes(path, ids.map((id) => layout[id] ?? 0));
+                    onSizes(
+                        path,
+                        ids.map((id) => layout[id] ?? 0),
+                    );
                 }
             }}
         >
@@ -563,9 +632,9 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     const sidebarHidden = useUi((state) => state.sidebarHidden);
     const toggleSidebar = useUi((state) => state.toggleSidebar);
     const projectWorking = useUi((state) => {
-        const sessionIds = new Set(state.app?.sessions
-            .filter((entry) => entry.projectId === session.projectId && !entry.archived)
-            .map((entry) => entry.id));
+        const sessionIds = new Set(
+            state.app?.sessions.filter((entry) => entry.projectId === session.projectId && !entry.archived).map((entry) => entry.id),
+        );
         return state.app?.panes.some((pane) => pane.status === 'working' && sessionIds.has(pane.sessionId)) ?? false;
     });
     const git = useUi((state) => state.app?.git[session.cwd]);
@@ -582,7 +651,8 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     };
 
     const copyPath = (): void => {
-        navigator.clipboard.writeText(session.cwd)
+        navigator.clipboard
+            .writeText(session.cwd)
             .then(() => useUi.getState().showToast('Copied the folder path'))
             .catch(reportError);
     };
@@ -601,7 +671,10 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     }, [linkRequested]);
 
     return (
-        <header className={`session-header${projectWorking ? ' session-header--working' : ''}`} style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}>
+        <header
+            className={`session-header${projectWorking ? ' session-header--working' : ''}`}
+            style={{ '--project-color': project?.color ?? '#7aa2f7' } as React.CSSProperties}
+        >
             <button
                 type="button"
                 className="icon-button icon-button--bar"
@@ -613,8 +686,12 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                 <SidebarIcon size={16} />
             </button>
             <div className="session-header__crumb">
-                <span className="session-header__project" title={project?.path}>{project?.name}</span>
-                <span className="session-header__slash" aria-hidden="true">/</span>
+                <span className="session-header__project" title={project?.path}>
+                    {project?.name}
+                </span>
+                <span className="session-header__slash" aria-hidden="true">
+                    /
+                </span>
                 <InlineEdit
                     className={`session-header__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}
                     label="Session name"
@@ -662,7 +739,10 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                 >
                     <PlusIcon size={13} /> Add pane
                 </button>
-                <MoreMenu label="Session actions" items={() => sessionMenu(session, { rename: () => setRenaming(true), editLink }, 'header')} />
+                <MoreMenu
+                    label="Session actions"
+                    items={() => sessionMenu(session, { rename: () => setRenaming(true), editLink }, 'header')}
+                />
             </div>
         </header>
     );
@@ -689,7 +769,11 @@ export function SessionView({ session }: { session: Session }) {
             {session.archived ? (
                 <div className="session__banner">
                     This session is archived and its processes are stopped.
-                    <button type="button" className="button button--small" onClick={() => api.updateSession(session.id, { archived: false }).catch(reportError)}>
+                    <button
+                        type="button"
+                        className="button button--small"
+                        onClick={() => api.updateSession(session.id, { archived: false }).catch(reportError)}
+                    >
                         Restore session
                     </button>
                 </div>

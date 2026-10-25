@@ -5,7 +5,15 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Duplex } from 'node:stream';
 import { extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import { MAX_ATTACHMENT_BYTES, PREVIEW_FRAME_SOURCES, parseSettingsPatch, type Diagnostics, type EditSettingsBody, type PaneClientMessage, type ServerEvent } from '@voltran/shared';
+import {
+    MAX_ATTACHMENT_BYTES,
+    PREVIEW_FRAME_SOURCES,
+    parseSettingsPatch,
+    type Diagnostics,
+    type EditSettingsBody,
+    type PaneClientMessage,
+    type ServerEvent,
+} from '@voltran/shared';
 import { voltranVersion, writeNewToken, type Config } from './config.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
@@ -202,13 +210,17 @@ export function createVoltranServer(options: ServerOptions): Server {
     });
     route('POST', '/api/settings/edit', async (req, res) => {
         const body = await readJson<EditSettingsBody | null>(req);
-        const pane = hub.createPane(String(body?.sessionId), {
-            adapter: 'command',
-            title: 'settings.json',
-            command: editorCommand(settings.state().settings.editor.command, settings.path, options.env),
-            splitFrom: typeof body?.splitFrom === 'string' ? body.splitFrom : undefined,
-            direction: 'horizontal',
-        }, { closeOnCleanExit: true });
+        const pane = hub.createPane(
+            String(body?.sessionId),
+            {
+                adapter: 'command',
+                title: 'settings.json',
+                command: editorCommand(settings.state().settings.editor.command, settings.path, options.env),
+                splitFrom: typeof body?.splitFrom === 'string' ? body.splitFrom : undefined,
+                direction: 'horizontal',
+            },
+            { closeOnCleanExit: true },
+        );
         settings.create();
         sendJson(res, 201, pane);
     });
@@ -232,7 +244,9 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, 200, { ok: true });
     });
     route('GET', '/api/sessions/:id/changes', async (_req, res, [id]) => sendJson(res, 200, await hub.sessionChanges(id)));
-    route('GET', '/api/sessions/:id/contents', async (req, res, [id]) => sendJson(res, 200, await hub.sessionFileContents(id, requestUrl(req).searchParams.get('path') ?? '')));
+    route('GET', '/api/sessions/:id/contents', async (req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionFileContents(id, requestUrl(req).searchParams.get('path') ?? '')),
+    );
     route('POST', '/api/sessions/:id/reveal', (_req, res, [id]) => {
         hub.revealSession(id);
         sendJson(res, 200, { ok: true });
@@ -270,7 +284,9 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, 200, hub.paneConversation(id, params.get('source'), Number(params.get('from') ?? 0)));
     });
     route('GET', '/api/panes/:id/commands', (_req, res, [id]) => sendJson(res, 200, hub.paneCommands(id)));
-    route('POST', '/api/panes/:id/attachments', async (req, res, [id]) => sendJson(res, 201, hub.attach(id, await readBytes(req, MAX_ATTACHMENT_BYTES))));
+    route('POST', '/api/panes/:id/attachments', async (req, res, [id]) =>
+        sendJson(res, 201, hub.attach(id, await readBytes(req, MAX_ATTACHMENT_BYTES))),
+    );
     route('GET', '/api/panes/:id/notes', (_req, res, [id]) => sendJson(res, 200, hub.paneNotes(id)));
     route('PUT', '/api/panes/:id/notes', async (req, res, [id]) => sendJson(res, 200, hub.saveNotes(id, await readJson(req))));
     route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) => sendJson(res, 200, hub.lockNotes(id, await readJson(req))));

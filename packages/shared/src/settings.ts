@@ -30,7 +30,17 @@ export interface SettingsState {
 
 export const APPEARANCES: readonly Appearance[] = ['system', 'dark', 'light'];
 export const SIDEBAR_POSITIONS: readonly SidebarPosition[] = ['left', 'right'];
-export const DARK_THEME_IDS: readonly string[] = ['voltran', 'tokyo-night', 'catppuccin-mocha', 'dracula', 'nord', 'gruvbox-dark', 'one-dark', 'rose-pine', 'solarized-dark'];
+export const DARK_THEME_IDS: readonly string[] = [
+    'voltran',
+    'tokyo-night',
+    'catppuccin-mocha',
+    'dracula',
+    'nord',
+    'gruvbox-dark',
+    'one-dark',
+    'rose-pine',
+    'solarized-dark',
+];
 export const LIGHT_THEME_IDS: readonly string[] = ['voltran-light', 'catppuccin-latte', 'solarized-light', 'github-light'];
 export const MIN_FONT_SIZE = 9;
 export const MAX_FONT_SIZE = 28;
@@ -56,13 +66,17 @@ const quoted = (options: readonly string[]): string => {
     return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
 };
 
-const oneOf = (options: readonly string[]): Check => (value) =>
-    typeof value === 'string' && options.includes(value) ? null : `must be ${quoted(options)}`;
+const oneOf =
+    (options: readonly string[]): Check =>
+    (value) =>
+        typeof value === 'string' && options.includes(value) ? null : `must be ${quoted(options)}`;
 
-const fontSize = (min: number, max: number): Check => (value) =>
-    typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
-        ? null
-        : `must be a whole number from ${min} to ${max}`;
+const fontSize =
+    (min: number, max: number): Check =>
+    (value) =>
+        typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
+            ? null
+            : `must be a whole number from ${min} to ${max}`;
 
 const fontFamily: Check = (value) =>
     typeof value === 'string' && value.trim() !== '' && value.length <= MAX_FONT_FAMILY_LENGTH
@@ -96,8 +110,7 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['git', 'pullRequests'], check: flag },
 ];
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-    value !== null && typeof value === 'object' && !Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // Every value read from the file or sent by a client goes through these checks; nothing else
 // decides whether a setting is valid.
@@ -130,7 +143,7 @@ function readPatch(raw: unknown): { patch: SettingsPatch; problems: string[] } {
         if (name !== undefined && !isObject(section)) {
             continue;
         }
-        const holder = name === undefined ? raw : section as Record<string, unknown>;
+        const holder = name === undefined ? raw : (section as Record<string, unknown>);
         const field = name ?? key;
         if (!(field in holder)) {
             continue;

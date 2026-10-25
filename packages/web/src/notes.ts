@@ -140,21 +140,24 @@ export class NotesEditor {
     }
 
     private acquire(): Promise<boolean> {
-        this.acquiring ??= this.api.lock(this.paneId, { holder: this.holder, version: this.version }).then(
-            () => {
-                this.holding = true;
-                this.renewedAt = Date.now();
-                this.scheduleSave();
-                return true;
-            },
-            (error) => {
-                this.refused(error);
-                return false;
-            },
-        ).finally(() => {
-            this.acquiring = null;
-            this.notify();
-        });
+        this.acquiring ??= this.api
+            .lock(this.paneId, { holder: this.holder, version: this.version })
+            .then(
+                () => {
+                    this.holding = true;
+                    this.renewedAt = Date.now();
+                    this.scheduleSave();
+                    return true;
+                },
+                (error) => {
+                    this.refused(error);
+                    return false;
+                },
+            )
+            .finally(() => {
+                this.acquiring = null;
+                this.notify();
+            });
         return this.acquiring;
     }
 
@@ -233,7 +236,10 @@ export class NotesEditor {
             this.conflict = message(error);
         }
         this.notify();
-        this.api.read(this.paneId).then((latest) => this.applyRemote(latest, null), () => undefined);
+        this.api.read(this.paneId).then(
+            (latest) => this.applyRemote(latest, null),
+            () => undefined,
+        );
     }
 
     private clearTimer(which: 'save' | 'release'): void {

@@ -23,7 +23,9 @@ describe('renderMarkdown', () => {
     });
 
     it('opens links in a new tab and refuses script addresses', () => {
-        expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com" target="_blank" rel="noreferrer noopener">docs</a></p>\n');
+        expect(renderMarkdown('[docs](https://example.com)')).toBe(
+            '<p><a href="https://example.com" target="_blank" rel="noreferrer noopener">docs</a></p>\n',
+        );
         expect(renderMarkdown('[x](javascript:alert(1))')).not.toContain('<a');
     });
 });

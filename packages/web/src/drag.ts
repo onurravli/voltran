@@ -15,6 +15,11 @@ export function dropEdgeAt(x: number, y: number, width: number, height: number):
     if (rx > CENTRE[0] && rx < CENTRE[1] && ry > CENTRE[0] && ry < CENTRE[1]) {
         return 'swap';
     }
-    const distances: [DropEdge, number][] = [['left', rx], ['right', 1 - rx], ['top', ry], ['bottom', 1 - ry]];
+    const distances: [DropEdge, number][] = [
+        ['left', rx],
+        ['right', 1 - rx],
+        ['top', ry],
+        ['bottom', 1 - ry],
+    ];
     return distances.reduce((best, entry) => (entry[1] < best[1] ? entry : best))[0];
 }

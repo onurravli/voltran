@@ -16,12 +16,7 @@ export function paneIds(layout: Layout | null): string[] {
     return layout.children.flatMap(paneIds);
 }
 
-export function insertPane(
-    layout: Layout | null,
-    paneId: string,
-    targetId?: string,
-    direction: LayoutDirection = 'horizontal',
-): Layout {
+export function insertPane(layout: Layout | null, paneId: string, targetId?: string, direction: LayoutDirection = 'horizontal'): Layout {
     if (!layout) {
         return leaf(paneId);
     }
@@ -141,13 +136,15 @@ export function isValidLayout(value: unknown): value is Layout {
     }
     if (node.type === 'split') {
         const split = node as Partial<LayoutSplit>;
-        return (split.direction === 'horizontal' || split.direction === 'vertical')
-            && Array.isArray(split.children)
-            && split.children.length >= 2
-            && Array.isArray(split.sizes)
-            && split.sizes.length === split.children.length
-            && split.sizes.every((size) => typeof size === 'number' && Number.isFinite(size))
-            && split.children.every(isValidLayout);
+        return (
+            (split.direction === 'horizontal' || split.direction === 'vertical') &&
+            Array.isArray(split.children) &&
+            split.children.length >= 2 &&
+            Array.isArray(split.sizes) &&
+            split.sizes.length === split.children.length &&
+            split.sizes.every((size) => typeof size === 'number' && Number.isFinite(size)) &&
+            split.children.every(isValidLayout)
+        );
     }
     return false;
 }

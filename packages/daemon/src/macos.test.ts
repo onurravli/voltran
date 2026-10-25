@@ -21,9 +21,12 @@ function tempDir(): string {
 function shim(appsDir: string, name: string, plist: Record<string, string> | string): void {
     const contents = join(appsDir, name, 'Contents');
     mkdirSync(contents, { recursive: true });
-    const body = typeof plist === 'string'
-        ? plist
-        : `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>${Object.entries(plist).map(([key, value]) => `<key>${key}</key><string>${value}</string>`).join('')}</dict></plist>\n`;
+    const body =
+        typeof plist === 'string'
+            ? plist
+            : `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>${Object.entries(plist)
+                  .map(([key, value]) => `<key>${key}</key><string>${value}</string>`)
+                  .join('')}</dict></plist>\n`;
     writeFileSync(join(contents, 'Info.plist'), body);
 }
 
@@ -38,10 +41,22 @@ describe.skipIf(process.platform !== 'darwin')('macOS integration', () => {
     it('finds the Chrome app installed for this daemon in the default Chrome profile folder', () => {
         const appsDir = tempDir();
         const userDataDir = '/Users/me/Library/Application Support/Google/Chrome';
-        shim(appsDir, 'Other.app', { CrAppModeShortcutID: 'other', CrAppModeShortcutURL: 'https://example.com/', CrAppModeUserDataDir: `${userDataDir}/Default/Web Applications/_crx_other` });
-        shim(appsDir, 'Voltran (test profile).app', { CrAppModeShortcutID: 'temp', CrAppModeShortcutURL: 'http://127.0.0.1:4747/', CrAppModeUserDataDir: '/tmp/profile/Default/Web Applications/_crx_temp' });
+        shim(appsDir, 'Other.app', {
+            CrAppModeShortcutID: 'other',
+            CrAppModeShortcutURL: 'https://example.com/',
+            CrAppModeUserDataDir: `${userDataDir}/Default/Web Applications/_crx_other`,
+        });
+        shim(appsDir, 'Voltran (test profile).app', {
+            CrAppModeShortcutID: 'temp',
+            CrAppModeShortcutURL: 'http://127.0.0.1:4747/',
+            CrAppModeUserDataDir: '/tmp/profile/Default/Web Applications/_crx_temp',
+        });
         shim(appsDir, 'Broken.app', 'not a plist');
-        shim(appsDir, 'Voltran.app', { CrAppModeShortcutID: 'abc', CrAppModeShortcutURL: 'http://127.0.0.1:4747/', CrAppModeUserDataDir: `${userDataDir}/Profile 2/Web Applications/_crx_abc` });
+        shim(appsDir, 'Voltran.app', {
+            CrAppModeShortcutID: 'abc',
+            CrAppModeShortcutURL: 'http://127.0.0.1:4747/',
+            CrAppModeUserDataDir: `${userDataDir}/Profile 2/Web Applications/_crx_abc`,
+        });
         writeFileSync(join(appsDir, 'Icon\r'), '');
 
         expect(installedChromeApp('http://127.0.0.1:4747', appsDir, userDataDir)).toEqual({ id: 'abc', profileDirectory: 'Profile 2' });
@@ -49,11 +64,16 @@ describe.skipIf(process.platform !== 'darwin')('macOS integration', () => {
         expect(installedChromeApp('http://127.0.0.1:4747', join(appsDir, 'missing'), userDataDir)).toBeNull();
     });
 
-    it('takes the profile from Chrome\'s Local State when several profiles share the app bundle', () => {
+    it("takes the profile from Chrome's Local State when several profiles share the app bundle", () => {
         const appsDir = tempDir();
         const userDataDir = tempDir();
-        const localState = (appShims: unknown): void => writeFileSync(join(userDataDir, 'Local State'), JSON.stringify({ app_shims: appShims }));
-        shim(appsDir, 'Voltran.app', { CrAppModeShortcutID: 'abc', CrAppModeShortcutURL: 'http://127.0.0.1:4747/', CrAppModeUserDataDir: `${userDataDir}/-/Web Applications/_crx_abc` });
+        const localState = (appShims: unknown): void =>
+            writeFileSync(join(userDataDir, 'Local State'), JSON.stringify({ app_shims: appShims }));
+        shim(appsDir, 'Voltran.app', {
+            CrAppModeShortcutID: 'abc',
+            CrAppModeShortcutURL: 'http://127.0.0.1:4747/',
+            CrAppModeUserDataDir: `${userDataDir}/-/Web Applications/_crx_abc`,
+        });
         const find = (): unknown => installedChromeApp('http://127.0.0.1:4747', appsDir, userDataDir);
 
         expect(find()).toBeNull();

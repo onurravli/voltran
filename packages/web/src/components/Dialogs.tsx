@@ -6,7 +6,19 @@ import { reportError, useUi, type Dialog } from '../store.ts';
 import { CommandPalette } from './CommandPalette.tsx';
 import { VoltranMark } from './Icons.tsx';
 
-function Modal({ title, onClose, children, className, hideTitle = false }: { title: string; onClose: () => void; children: ReactNode; className?: string; hideTitle?: boolean }) {
+function Modal({
+    title,
+    onClose,
+    children,
+    className,
+    hideTitle = false,
+}: {
+    title: string;
+    onClose: () => void;
+    children: ReactNode;
+    className?: string;
+    hideTitle?: boolean;
+}) {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -18,7 +30,8 @@ function Modal({ title, onClose, children, className, hideTitle = false }: { tit
             }
         };
         window.addEventListener('keydown', onKeyDown);
-        const first = ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('input, select, button');
+        const first =
+            ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('input, select, button');
         first?.focus();
         return () => {
             window.removeEventListener('keydown', onKeyDown);
@@ -72,14 +85,31 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
                     <span className="field__hint">Any folder or repository. Sessions start their panes here.</span>
                 </label>
                 <label className="field">
-                    <span className="field__label">Name <span className="field__optional">optional</span></span>
-                    <input className="field__input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Defaults to the folder name" />
+                    <span className="field__label">
+                        Name <span className="field__optional">optional</span>
+                    </span>
+                    <input
+                        className="field__input"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        placeholder="Defaults to the folder name"
+                    />
                 </label>
-                {error ? <p className="form__error" role="alert">{error}</p> : null}
-                <p className="form__aside">From a terminal, <code>voltran add</code> registers the current folder.</p>
+                {error ? (
+                    <p className="form__error" role="alert">
+                        {error}
+                    </p>
+                ) : null}
+                <p className="form__aside">
+                    From a terminal, <code>voltran add</code> registers the current folder.
+                </p>
                 <div className="form__actions">
-                    <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
-                    <button type="submit" className="button button--primary" disabled={busy || !path.trim()}>Add project</button>
+                    <button type="button" className="button button--ghost" onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button type="submit" className="button button--primary" disabled={busy || !path.trim()}>
+                        Add project
+                    </button>
                 </div>
             </form>
         </Modal>
@@ -89,7 +119,9 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
 function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projectId?: string; worktree?: boolean; onClose: () => void }) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
-    const adapters = (app?.adapters ?? []).filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent');
+    const adapters = (app?.adapters ?? []).filter(
+        (adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent',
+    );
     const currentProjectId = useUi((state) => state.app?.sessions.find((session) => session.id === state.selectedSessionId)?.projectId);
     const [project, setProject] = useState(projectId ?? currentProjectId ?? projects[0]?.id ?? '');
     const [title, setTitle] = useState('');
@@ -169,13 +201,23 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
             <form className="form" onSubmit={submit}>
                 <label className="field">
                     <span className="field__label">
-                        What are you working on?{namesItself ? <> <span className="field__optional">optional</span></> : null}
+                        What are you working on?
+                        {namesItself ? (
+                            <>
+                                {' '}
+                                <span className="field__optional">optional</span>
+                            </>
+                        ) : null}
                     </span>
                     <input
                         className="field__input"
                         value={title}
                         onChange={(event) => setTitle(event.target.value)}
-                        placeholder={namesItself ? 'Leave it empty and the agent names it from your first prompt' : 'Fix login redirect, PROJ-123, flaky test hunt…'}
+                        placeholder={
+                            namesItself
+                                ? 'Leave it empty and the agent names it from your first prompt'
+                                : 'Fix login redirect, PROJ-123, flaky test hunt…'
+                        }
                         required={!namesItself}
                     />
                 </label>
@@ -183,12 +225,24 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                     <label className="field">
                         <span className="field__label">Project</span>
                         <select className="field__input" value={project} onChange={(event) => setProject(event.target.value)}>
-                            {projects.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+                            {projects.map((entry) => (
+                                <option key={entry.id} value={entry.id}>
+                                    {entry.name}
+                                </option>
+                            ))}
                         </select>
                     </label>
                     <label className="field">
-                        <span className="field__label">Link <span className="field__optional">optional</span></span>
-                        <input className="field__input" value={link} onChange={(event) => setLink(event.target.value)} placeholder="Ticket or PR URL" type="url" />
+                        <span className="field__label">
+                            Link <span className="field__optional">optional</span>
+                        </span>
+                        <input
+                            className="field__input"
+                            value={link}
+                            onChange={(event) => setLink(event.target.value)}
+                            placeholder="Ticket or PR URL"
+                            type="url"
+                        />
                     </label>
                 </div>
                 {git?.repository ? (
@@ -197,7 +251,9 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                             <input type="checkbox" checked={worktree} onChange={(event) => setWorktree(event.target.checked)} />
                             <span>
                                 Work in its own worktree
-                                <span className="check__note">A new folder and branch, so agents in other sessions never touch its files</span>
+                                <span className="check__note">
+                                    A new folder and branch, so agents in other sessions never touch its files
+                                </span>
                             </span>
                         </label>
                         {worktree ? (
@@ -215,9 +271,17 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                                 </label>
                                 <label className="field">
                                     <span className="field__label">From</span>
-                                    <select className="field__input field__input--mono" value={base} onChange={(event) => setBase(event.target.value)}>
+                                    <select
+                                        className="field__input field__input--mono"
+                                        value={base}
+                                        onChange={(event) => setBase(event.target.value)}
+                                    >
                                         {git.branches.length === 0 ? <option value="">HEAD</option> : null}
-                                        {git.branches.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+                                        {git.branches.map((entry) => (
+                                            <option key={entry} value={entry}>
+                                                {entry}
+                                            </option>
+                                        ))}
                                     </select>
                                 </label>
                             </div>
@@ -228,12 +292,19 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                     <legend className="field__label">Open with</legend>
                     <div className="chips">
                         {adapters.map((adapter) => (
-                            <AdapterChip key={adapter.id} adapter={adapter} selected={picks.includes(adapter.id)} onToggle={() => toggle(adapter.id)} />
+                            <AdapterChip
+                                key={adapter.id}
+                                adapter={adapter}
+                                selected={picks.includes(adapter.id)}
+                                onToggle={() => toggle(adapter.id)}
+                            />
                         ))}
                     </div>
                 </fieldset>
                 <label className="field">
-                    <span className="field__label">Run a command <span className="field__optional">optional</span></span>
+                    <span className="field__label">
+                        Run a command <span className="field__optional">optional</span>
+                    </span>
                     <input
                         className="field__input field__input--mono"
                         value={command}
@@ -242,10 +313,26 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                         spellCheck={false}
                     />
                 </label>
-                {error ? <p className="form__error" role="alert">{error}</p> : null}
+                {error ? (
+                    <p className="form__error" role="alert">
+                        {error}
+                    </p>
+                ) : null}
                 <div className="form__actions">
-                    <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
-                    <button type="submit" className="button button--primary" disabled={busy || (!title.trim() && !namesItself) || !project || (picks.length === 0 && !command.trim()) || (git?.repository === true && worktree && !branchName.trim())}>
+                    <button type="button" className="button button--ghost" onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        className="button button--primary"
+                        disabled={
+                            busy ||
+                            (!title.trim() && !namesItself) ||
+                            !project ||
+                            (picks.length === 0 && !command.trim()) ||
+                            (git?.repository === true && worktree && !branchName.trim())
+                        }
+                    >
                         {busy && git?.repository && worktree ? 'Creating the worktree…' : 'Start session'}
                     </button>
                 </div>
@@ -286,11 +373,17 @@ function ConfirmDialog({ dialog, onClose }: { dialog: Extract<Dialog, { kind: 'c
         <Modal title={dialog.title} onClose={onClose}>
             <p className="modal__body">{dialog.body}</p>
             <div className="form__actions">
-                <button type="button" className="button button--ghost" onClick={onClose}>Cancel</button>
+                <button type="button" className="button button--ghost" onClick={onClose}>
+                    Cancel
+                </button>
                 {dialog.alternative ? (
-                    <button type="button" className="button" onClick={() => confirm(dialog.alternative!.onConfirm)} disabled={busy}>{dialog.alternative.action}</button>
+                    <button type="button" className="button" onClick={() => confirm(dialog.alternative!.onConfirm)} disabled={busy}>
+                        {dialog.alternative.action}
+                    </button>
                 ) : null}
-                <button type="button" className="button button--danger" onClick={() => confirm(dialog.onConfirm)} disabled={busy}>{dialog.action}</button>
+                <button type="button" className="button button--danger" onClick={() => confirm(dialog.onConfirm)} disabled={busy}>
+                    {dialog.action}
+                </button>
             </div>
         </Modal>
     );
@@ -302,7 +395,9 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
             <dl className="shortcuts">
                 {[...SHORTCUTS, ...FIND_KEYS].map((shortcut) => (
                     <div key={shortcut.keys} className="shortcuts__row">
-                        <dt><kbd>{shortcut.keys}</kbd></dt>
+                        <dt>
+                            <kbd>{shortcut.keys}</kbd>
+                        </dt>
                         <dd>{shortcut.label}</dd>
                     </div>
                 ))}
@@ -318,7 +413,9 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
     const [version, setVersion] = useState<string | null>(null);
 
     useEffect(() => {
-        api.health().then((health) => setVersion(health.version)).catch(() => undefined);
+        api.health()
+            .then((health) => setVersion(health.version))
+            .catch(() => undefined);
     }, []);
 
     return (
@@ -329,17 +426,37 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
                 <p className="about__version">{version ? `Version ${version}` : '\u00a0'}</p>
                 <p className="about__tagline">Local multi-agent session and terminal orchestrator</p>
                 <p className="about__author">
-                    Made by <a href="https://github.com/onurravli" target="_blank" rel="noreferrer noopener">Onur Ravli</a>
+                    Made by{' '}
+                    <a href="https://github.com/onurravli" target="_blank" rel="noreferrer noopener">
+                        Onur Ravli
+                    </a>
                 </p>
                 <nav className="about__links" aria-label="Voltran links">
-                    <a href={REPOSITORY} target="_blank" rel="noreferrer noopener">GitHub</a>
-                    <a href={`${REPOSITORY}/blob/main/CHANGELOG.md`} target="_blank" rel="noreferrer noopener">Changelog</a>
-                    <a href={`${REPOSITORY}/blob/main/LICENSE.md`} target="_blank" rel="noreferrer noopener">Apache-2.0</a>
-                    <button type="button" className="about__link-button" onClick={() => { onClose(); reportProblem(); }}>Report a problem</button>
+                    <a href={REPOSITORY} target="_blank" rel="noreferrer noopener">
+                        GitHub
+                    </a>
+                    <a href={`${REPOSITORY}/blob/main/CHANGELOG.md`} target="_blank" rel="noreferrer noopener">
+                        Changelog
+                    </a>
+                    <a href={`${REPOSITORY}/blob/main/LICENSE.md`} target="_blank" rel="noreferrer noopener">
+                        Apache-2.0
+                    </a>
+                    <button
+                        type="button"
+                        className="about__link-button"
+                        onClick={() => {
+                            onClose();
+                            reportProblem();
+                        }}
+                    >
+                        Report a problem
+                    </button>
                 </nav>
             </div>
             <div className="form__actions">
-                <button type="button" className="button button--primary" data-autofocus onClick={onClose}>Close</button>
+                <button type="button" className="button button--primary" data-autofocus onClick={onClose}>
+                    Close
+                </button>
             </div>
         </Modal>
     );
@@ -412,7 +529,12 @@ export function PaneMenu() {
 
     const create = (spec: PaneSpec): void => {
         openPaneMenu(null);
-        api.createPane(target.sessionId, { ...spec, splitFrom: target.splitFrom, direction: target.direction, workspaceId: target.workspaceId })
+        api.createPane(target.sessionId, {
+            ...spec,
+            splitFrom: target.splitFrom,
+            direction: target.direction,
+            workspaceId: target.workspaceId,
+        })
             .then((pane) => useUi.getState().focusPane(pane.id))
             .catch(reportError);
     };
@@ -423,19 +545,23 @@ export function PaneMenu() {
 
     return (
         <div className="menu" ref={ref} style={{ left, top, width }} role="menu">
-            {adapters.filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent').map((adapter) => (
-                <button
-                    key={adapter.id}
-                    type="button"
-                    role="menuitem"
-                    className="menu__item"
-                    disabled={!adapter.available}
-                    onClick={() => create({ adapter: adapter.id })}
-                >
-                    <span>{adapter.label}</span>
-                    <span className="menu__note">{adapter.available ? (adapter.kind === 'agent' ? 'agent' : '') : 'not installed'}</span>
-                </button>
-            ))}
+            {adapters
+                .filter((adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent')
+                .map((adapter) => (
+                    <button
+                        key={adapter.id}
+                        type="button"
+                        role="menuitem"
+                        className="menu__item"
+                        disabled={!adapter.available}
+                        onClick={() => create({ adapter: adapter.id })}
+                    >
+                        <span>{adapter.label}</span>
+                        <span className="menu__note">
+                            {adapter.available ? (adapter.kind === 'agent' ? 'agent' : '') : 'not installed'}
+                        </span>
+                    </button>
+                ))}
             <button type="button" role="menuitem" className="menu__item" disabled={!inGit} onClick={() => create({ adapter: 'changes' })}>
                 <span>Changes</span>
                 <span className="menu__note">{inGit ? '' : 'not in git'}</span>

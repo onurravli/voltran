@@ -7,9 +7,21 @@ declare const __VOLTRAN_UI__: string;
 
 const MESSAGES: Record<UpdateNotice, React.ReactNode> = {
     reload: 'Voltran’s UI was updated.',
-    'restart-daemon': <>The daemon is running older code. Restart it: <code>voltran restart</code></>,
-    rebuild: <>This UI build is older than the daemon. Run <code>npm run build</code>, then reload.</>,
-    'rebuild-and-restart': <>Voltran’s code changed. Run <code>npm run build</code>, then <code>voltran restart</code>.</>,
+    'restart-daemon': (
+        <>
+            The daemon is running older code. Restart it: <code>voltran restart</code>
+        </>
+    ),
+    rebuild: (
+        <>
+            This UI build is older than the daemon. Run <code>npm run build</code>, then reload.
+        </>
+    ),
+    'rebuild-and-restart': (
+        <>
+            Voltran’s code changed. Run <code>npm run build</code>, then <code>voltran restart</code>.
+        </>
+    ),
 };
 
 export function UpdateBanner() {
@@ -26,7 +38,9 @@ export function UpdateBanner() {
             {notice === 'reload' ? null : <span className="lamp lamp--sm update__lamp" />}
             <span>{MESSAGES[notice]}</span>
             {notice === 'reload' ? (
-                <button type="button" className="button button--small button--primary" onClick={() => window.location.reload()}>Reload</button>
+                <button type="button" className="button button--small button--primary" onClick={() => window.location.reload()}>
+                    Reload
+                </button>
             ) : null}
             <button type="button" className="icon-button" aria-label="Dismiss" title="Dismiss" onClick={() => setDismissed(key)}>
                 <CloseIcon size={13} />

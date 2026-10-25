@@ -29,7 +29,11 @@ function toolDetail(name: string, input: Record<string, unknown>): ToolDetail | 
             return str(input.command) ? { kind: 'command', command: text(str(input.command)) } : null;
         case 'Edit':
             return str(input.file_path)
-                ? { kind: 'edit', path: text(str(input.file_path), MAX_NAME * 4), changes: [{ before: text(str(input.old_string)), after: text(str(input.new_string)) }] }
+                ? {
+                      kind: 'edit',
+                      path: text(str(input.file_path), MAX_NAME * 4),
+                      changes: [{ before: text(str(input.old_string)), after: text(str(input.new_string)) }],
+                  }
                 : null;
         case 'MultiEdit': {
             const edits = Array.isArray(input.edits) ? input.edits : [];
@@ -39,7 +43,9 @@ function toolDetail(name: string, input: Record<string, unknown>): ToolDetail | 
             return str(input.file_path) ? { kind: 'edit', path: text(str(input.file_path), MAX_NAME * 4), changes } : null;
         }
         case 'Write':
-            return str(input.file_path) ? { kind: 'write', path: text(str(input.file_path), MAX_NAME * 4), content: text(str(input.content)) } : null;
+            return str(input.file_path)
+                ? { kind: 'write', path: text(str(input.file_path), MAX_NAME * 4), content: text(str(input.content)) }
+                : null;
         case 'TodoWrite': {
             const todos = Array.isArray(input.todos) ? input.todos.slice(0, MAX_TODOS) : [];
             return {
@@ -73,8 +79,13 @@ function userText(raw: string, images: number, at: number | null): ConversationE
     const stdout = tag(raw, 'local-command-stdout') ?? tag(raw, 'bash-stdout');
     const stderr = tag(raw, 'local-command-stderr') ?? tag(raw, 'bash-stderr');
     if (stdout !== null || stderr !== null) {
-        const output = [stdout, stderr].map((part) => part?.trim() ?? '').filter(Boolean).join('\n');
-        return output ? [{ kind: 'notice', text: text(output, MAX_RESULT), tone: stderr?.trim() && !stdout?.trim() ? 'error' : 'info', at }] : [];
+        const output = [stdout, stderr]
+            .map((part) => part?.trim() ?? '')
+            .filter(Boolean)
+            .join('\n');
+        return output
+            ? [{ kind: 'notice', text: text(output, MAX_RESULT), tone: stderr?.trim() && !stdout?.trim() ? 'error' : 'info', at }]
+            : [];
     }
     if (/^\[Request interrupted by user/.test(raw.trim())) {
         return [{ kind: 'notice', text: 'Interrupted', tone: 'info', at }];
@@ -98,10 +109,15 @@ export function parseClaudeLine(line: unknown): ConversationEntry[] | null {
     if (record.type === 'system' && record.subtype === 'compact_boundary') {
         return [{ kind: 'notice', text: 'Conversation compacted', tone: 'info', at }];
     }
-    if ((record.type !== 'user' && record.type !== 'assistant') || record.isMeta === true || record.isCompactSummary === true || record.isSidechain === true) {
+    if (
+        (record.type !== 'user' && record.type !== 'assistant') ||
+        record.isMeta === true ||
+        record.isCompactSummary === true ||
+        record.isSidechain === true
+    ) {
         return [];
     }
-    const message = record.message && typeof record.message === 'object' ? record.message as Record<string, unknown> : null;
+    const message = record.message && typeof record.message === 'object' ? (record.message as Record<string, unknown>) : null;
     if (!message) {
         return null;
     }
@@ -121,7 +137,10 @@ export function parseClaudeLine(line: unknown): ConversationEntry[] | null {
     const entries: ConversationEntry[] = [];
     if (record.type === 'user') {
         const images = blocks.filter((block) => block.type === 'image').length;
-        const prompt = blocks.filter((block) => block.type === 'text').map((block) => str(block.text)).join('\n');
+        const prompt = blocks
+            .filter((block) => block.type === 'text')
+            .map((block) => str(block.text))
+            .join('\n');
         if (prompt.trim() || images > 0) {
             entries.push(...userText(prompt, images, at));
         }
@@ -132,12 +151,15 @@ export function parseClaudeLine(line: unknown): ConversationEntry[] | null {
         } else if (block.type === 'thinking' && str(block.thinking).trim()) {
             entries.push({ kind: 'thinking', text: text(str(block.thinking)), at });
         } else if (block.type === 'tool_use' && typeof block.name === 'string') {
-            const input = block.input && typeof block.input === 'object' ? block.input as Record<string, unknown> : {};
+            const input = block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {};
             entries.push({
                 kind: 'tool',
                 id: typeof block.id === 'string' ? block.id : '',
                 name: clip(block.name, MAX_NAME),
-                summary: block.name === 'Bash' && oneLine(input.description) ? clip(oneLine(input.description), MAX_NAME) : toolSummary(block.name, input),
+                summary:
+                    block.name === 'Bash' && oneLine(input.description)
+                        ? clip(oneLine(input.description), MAX_NAME)
+                        : toolSummary(block.name, input),
                 detail: toolDetail(block.name, input),
                 at,
             });

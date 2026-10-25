@@ -31,5 +31,5 @@ export function matchCommands(commands: SlashCommand[], query: string, limit = M
 
 export function commandOf(text: string, commands: SlashCommand[]): SlashCommand | null {
     const match = /^\/([\w:.-]+)(?:\s|$)/.exec(text.trim());
-    return match ? commands.find((command) => command.name === match[1]) ?? null : null;
+    return match ? (commands.find((command) => command.name === match[1]) ?? null) : null;
 }

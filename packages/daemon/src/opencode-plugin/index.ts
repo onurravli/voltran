@@ -73,14 +73,24 @@ export class Reporter {
                     return null;
                 }
                 const outcome = event.type.slice('session.execution.'.length);
-                const message = outcome === 'succeeded'
-                    ? (sessionId !== null ? this.lastText.get(sessionId) ?? null : null)
-                    : outcome === 'failed' ? text(record(data.error).message) : null;
+                const message =
+                    outcome === 'succeeded'
+                        ? sessionId !== null
+                            ? (this.lastText.get(sessionId) ?? null)
+                            : null
+                        : outcome === 'failed'
+                          ? text(record(data.error).message)
+                          : null;
                 this.forget(sessionId);
                 return { event: 'TurnEnd', payload: { session_id: sessionId, outcome, message } };
             }
             case 'permission.asked': {
-                const resources = Array.isArray(data.resources) ? data.resources.slice(0, 5).map(text).filter((value) => value !== null) : [];
+                const resources = Array.isArray(data.resources)
+                    ? data.resources
+                          .slice(0, 5)
+                          .map(text)
+                          .filter((value) => value !== null)
+                    : [];
                 return { event: 'Permission', payload: { request_id: text(data.id), action: text(data.action), resources } };
             }
             case 'permission.replied':
@@ -122,13 +132,18 @@ export default {
         let queue = Promise.resolve();
         const send = (report: Report): void => {
             queue = queue
-                .then(() => fetch(`${url}/api/hooks/${encodeURIComponent(paneId)}/${report.event}`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(report.payload),
-                    signal: AbortSignal.timeout(POST_TIMEOUT_MS),
-                }))
-                .then(() => undefined, () => undefined);
+                .then(() =>
+                    fetch(`${url}/api/hooks/${encodeURIComponent(paneId)}/${report.event}`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(report.payload),
+                        signal: AbortSignal.timeout(POST_TIMEOUT_MS),
+                    }),
+                )
+                .then(
+                    () => undefined,
+                    () => undefined,
+                );
         };
 
         const reporter = new Reporter();

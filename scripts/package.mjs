@@ -52,22 +52,29 @@ writeFileSync(versionFile, JSON.stringify({ ...version, protocol: sourceHash(joi
 
 const manifest = readJson('package.json');
 const { '@voltran/shared': _, ...dependencies } = readJson('packages/daemon/package.json').dependencies;
-writeFileSync(join(out, 'package.json'), `${JSON.stringify({
-    name: manifest.name,
-    version: manifest.version,
-    description: manifest.description,
-    keywords: ['claude-code', 'codex', 'opencode', 'agents', 'terminal', 'orchestrator'],
-    type: 'module',
-    license: manifest.license,
-    author: manifest.author,
-    homepage: manifest.homepage,
-    repository: manifest.repository,
-    bugs: manifest.bugs,
-    engines: manifest.engines,
-    os: ['darwin', 'linux'],
-    bin: manifest.bin,
-    scripts: { postinstall: 'node scripts/postinstall.mjs' },
-    dependencies,
-}, null, 2)}\n`);
+writeFileSync(
+    join(out, 'package.json'),
+    `${JSON.stringify(
+        {
+            name: manifest.name,
+            version: manifest.version,
+            description: manifest.description,
+            keywords: ['claude-code', 'codex', 'opencode', 'agents', 'terminal', 'orchestrator'],
+            type: 'module',
+            license: manifest.license,
+            author: manifest.author,
+            homepage: manifest.homepage,
+            repository: manifest.repository,
+            bugs: manifest.bugs,
+            engines: manifest.engines,
+            os: ['darwin', 'linux'],
+            bin: manifest.bin,
+            scripts: { postinstall: 'node scripts/postinstall.mjs' },
+            dependencies,
+        },
+        null,
+        2,
+    )}\n`,
+);
 
 console.log(`Packaged ${manifest.name}@${manifest.version} in ${out}`);

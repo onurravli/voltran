@@ -7,7 +7,15 @@ import { ChevronIcon, MoreIcon } from './Icons.tsx';
 
 export type { MenuItem } from '../menus.ts';
 
-export function InlineEdit({ value, onSave, className, label, hint = 'Double-click to rename', editing: requested, onEditingChange }: {
+export function InlineEdit({
+    value,
+    onSave,
+    className,
+    label,
+    hint = 'Double-click to rename',
+    editing: requested,
+    onEditingChange,
+}: {
     value: string;
     onSave: (next: string) => Promise<unknown>;
     className: string;
@@ -112,7 +120,14 @@ function MenuEntries({ items }: { items: MenuItem[] }) {
                         <ChevronIcon size={12} className="menu__chevron" />
                     </Menu.SubmenuTrigger>
                     <Menu.Portal>
-                        <Menu.Positioner className="menu-layer" side="inline-end" align="start" sideOffset={4} alignOffset={-5} collisionPadding={VIEWPORT_MARGIN}>
+                        <Menu.Positioner
+                            className="menu-layer"
+                            side="inline-end"
+                            align="start"
+                            sideOffset={4}
+                            alignOffset={-5}
+                            collisionPadding={VIEWPORT_MARGIN}
+                        >
                             <Menu.Popup className="menu menu--floating" aria-label={item.label} onContextMenu={keepContextMenu}>
                                 <MenuEntries items={item.items} />
                             </Menu.Popup>
@@ -171,7 +186,12 @@ function openFromKeyboard(event: ReactKeyboardEvent<HTMLElement>): void {
 
 // The trigger is display: contents, so wrapping a row changes nothing about its layout. Items are
 // built when the menu opens, from the state at that moment.
-export function ContextMenuArea({ label, items, render, children }: {
+export function ContextMenuArea({
+    label,
+    items,
+    render,
+    children,
+}: {
     label: string;
     items: () => MenuItem[];
     render?: ContextMenu.Trigger.Props['render'];

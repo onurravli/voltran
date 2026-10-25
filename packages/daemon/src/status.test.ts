@@ -5,12 +5,25 @@ describe('codexTransition', () => {
     it('maps Codex hooks to statuses', () => {
         expect(codexTransition('SessionStart', {}, 'starting')).toEqual({ status: 'idle', detail: null });
         expect(codexTransition('SessionStart', {}, 'working')).toBeNull();
-        expect(codexTransition('UserPromptSubmit', { prompt: 'bump\n  postgres' }, 'idle')).toEqual({ status: 'working', detail: 'bump postgres' });
-        expect(codexTransition('PostToolUse', { tool_name: 'apply_patch' }, 'working')).toEqual({ status: 'working', detail: 'apply_patch' });
-        expect(codexTransition('PermissionRequest', { tool_name: 'shell', tool_input: { description: 'Run terraform plan' } }, 'working'))
-            .toEqual({ status: 'needs-input', detail: 'Run terraform plan' });
-        expect(codexTransition('PermissionRequest', { tool_name: 'shell', tool_input: {} }, 'working')).toEqual({ status: 'needs-input', detail: 'Allow shell?' });
-        expect(codexTransition('Stop', { last_assistant_message: 'Plan is clean.' }, 'working')).toEqual({ status: 'done', detail: 'Plan is clean.' });
+        expect(codexTransition('UserPromptSubmit', { prompt: 'bump\n  postgres' }, 'idle')).toEqual({
+            status: 'working',
+            detail: 'bump postgres',
+        });
+        expect(codexTransition('PostToolUse', { tool_name: 'apply_patch' }, 'working')).toEqual({
+            status: 'working',
+            detail: 'apply_patch',
+        });
+        expect(
+            codexTransition('PermissionRequest', { tool_name: 'shell', tool_input: { description: 'Run terraform plan' } }, 'working'),
+        ).toEqual({ status: 'needs-input', detail: 'Run terraform plan' });
+        expect(codexTransition('PermissionRequest', { tool_name: 'shell', tool_input: {} }, 'working')).toEqual({
+            status: 'needs-input',
+            detail: 'Allow shell?',
+        });
+        expect(codexTransition('Stop', { last_assistant_message: 'Plan is clean.' }, 'working')).toEqual({
+            status: 'done',
+            detail: 'Plan is clean.',
+        });
         expect(codexTransition('Interrupt', {}, 'working')).toEqual({ status: 'idle', detail: null });
     });
 });
@@ -18,15 +31,22 @@ describe('codexTransition', () => {
 describe('claudeTransition', () => {
     it('maps the hook lifecycle to statuses', () => {
         expect(claudeTransition('SessionStart', {})).toEqual({ status: 'idle', detail: null });
-        expect(claudeTransition('UserPromptSubmit', { prompt: 'fix   the\nbanner' })).toEqual({ status: 'working', detail: 'fix the banner' });
+        expect(claudeTransition('UserPromptSubmit', { prompt: 'fix   the\nbanner' })).toEqual({
+            status: 'working',
+            detail: 'fix the banner',
+        });
         expect(claudeTransition('PreToolUse', { tool_name: 'Bash' })).toEqual({ status: 'working', detail: 'Bash' });
         expect(claudeTransition('Stop', { last_assistant_message: 'Done.' })).toEqual({ status: 'done', detail: 'Done.' });
         expect(claudeTransition('SessionEnd', {})).toBeNull();
     });
 
     it('treats permission and question notifications as needing input', () => {
-        expect(claudeTransition('Notification', { notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' }))
-            .toEqual({ status: 'needs-input', detail: 'Claude needs your permission to use Bash' });
+        expect(
+            claudeTransition('Notification', {
+                notification_type: 'permission_prompt',
+                message: 'Claude needs your permission to use Bash',
+            }),
+        ).toEqual({ status: 'needs-input', detail: 'Claude needs your permission to use Bash' });
         expect(claudeTransition('Notification', {})).toEqual({ status: 'needs-input', detail: 'Waiting for your input' });
     });
 
@@ -50,11 +70,17 @@ describe('OpencodeStatus', () => {
     it('maps a turn to statuses', () => {
         const status = new OpencodeStatus();
         expect(status.transition('Ready', {}, 'starting')).toEqual({ status: 'idle', detail: null });
-        expect(status.transition('PromptSubmit', { prompt: 'fix   the\nbanner' }, 'idle')).toEqual({ status: 'working', detail: 'fix the banner' });
+        expect(status.transition('PromptSubmit', { prompt: 'fix   the\nbanner' }, 'idle')).toEqual({
+            status: 'working',
+            detail: 'fix the banner',
+        });
         expect(status.transition('TurnStart', {}, 'working')).toBeNull();
         expect(status.transition('ToolStart', { tool_name: 'shell' }, 'working')).toEqual({ status: 'working', detail: 'shell' });
         expect(status.transition('ToolEnd', {}, 'working')).toBeNull();
-        expect(status.transition('TurnEnd', { outcome: 'succeeded', message: 'Done.' }, 'working')).toEqual({ status: 'done', detail: 'Done.' });
+        expect(status.transition('TurnEnd', { outcome: 'succeeded', message: 'Done.' }, 'working')).toEqual({
+            status: 'done',
+            detail: 'Done.',
+        });
     });
 
     it('does not let a second plugin load reset a working pane', () => {
@@ -63,12 +89,19 @@ describe('OpencodeStatus', () => {
 
     it('needs input until every permission prompt and question is answered', () => {
         const status = new OpencodeStatus();
-        expect(status.transition('Permission', { request_id: 'per_1', action: 'shell', resources: ['echo hi'] }, 'working'))
-            .toEqual({ status: 'needs-input', detail: 'Allow shell: echo hi' });
-        expect(status.transition('Question', { request_id: 'frm_1', message: 'Red or blue?' }, 'needs-input'))
-            .toEqual({ status: 'needs-input', detail: 'Red or blue?' });
+        expect(status.transition('Permission', { request_id: 'per_1', action: 'shell', resources: ['echo hi'] }, 'working')).toEqual({
+            status: 'needs-input',
+            detail: 'Allow shell: echo hi',
+        });
+        expect(status.transition('Question', { request_id: 'frm_1', message: 'Red or blue?' }, 'needs-input')).toEqual({
+            status: 'needs-input',
+            detail: 'Red or blue?',
+        });
         expect(status.transition('ToolStart', { tool_name: 'read' }, 'needs-input')).toBeNull();
-        expect(status.transition('PermissionReplied', { request_id: 'per_1' }, 'needs-input')).toEqual({ status: 'needs-input', detail: 'Red or blue?' });
+        expect(status.transition('PermissionReplied', { request_id: 'per_1' }, 'needs-input')).toEqual({
+            status: 'needs-input',
+            detail: 'Red or blue?',
+        });
         expect(status.transition('QuestionAnswered', { request_id: 'frm_1' }, 'needs-input')).toEqual({ status: 'working', detail: null });
         expect(status.transition('QuestionAnswered', { request_id: 'frm_1' }, 'working')).toBeNull();
     });
@@ -81,7 +114,10 @@ describe('OpencodeStatus', () => {
             status.transition('Question', { request_id: `frm_${index}`, message: `Question ${index}` }, 'needs-input');
         }
         expect(status.transition('QuestionAnswered', { request_id: 'frm_0' }, 'needs-input')).toBeNull();
-        expect(status.transition('QuestionAnswered', { request_id: 'frm_99' }, 'needs-input')).toEqual({ status: 'needs-input', detail: 'Question 36' });
+        expect(status.transition('QuestionAnswered', { request_id: 'frm_99' }, 'needs-input')).toEqual({
+            status: 'needs-input',
+            detail: 'Question 36',
+        });
     });
 
     it('reports failures and treats an interruption as idle', () => {
@@ -89,7 +125,10 @@ describe('OpencodeStatus', () => {
         status.transition('Permission', { request_id: 'per_1', action: 'edit' }, 'working');
         expect(status.transition('TurnEnd', { outcome: 'interrupted' }, 'needs-input')).toEqual({ status: 'idle', detail: null });
         expect(status.transition('PermissionReplied', { request_id: 'per_1' }, 'needs-input')).toBeNull();
-        expect(status.transition('TurnEnd', { outcome: 'failed', message: 'rate limited' }, 'working')).toEqual({ status: 'done', detail: 'Failed: rate limited' });
+        expect(status.transition('TurnEnd', { outcome: 'failed', message: 'rate limited' }, 'working')).toEqual({
+            status: 'done',
+            detail: 'Failed: rate limited',
+        });
     });
 });
 

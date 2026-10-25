@@ -54,7 +54,12 @@ export function subagentTranscriptPath(parentTranscript: unknown, sessionId: unk
 
 // A transcript path from a hook must name the conversation the same hook reported.
 export function isClaudeTranscript(transcript: unknown, sessionId: unknown): transcript is string {
-    return typeof transcript === 'string' && isAbsolute(transcript) && isClaudeSessionId(sessionId) && basename(transcript) === `${sessionId}.jsonl`;
+    return (
+        typeof transcript === 'string' &&
+        isAbsolute(transcript) &&
+        isClaudeSessionId(sessionId) &&
+        basename(transcript) === `${sessionId}.jsonl`
+    );
 }
 
 // Claude keeps each conversation at <config>/projects/<folder>/<session>.jsonl. A pane that has not
@@ -76,9 +81,7 @@ export function findClaudeTranscript(configDir: string | null, sessionId: string
             if (lstatSync(candidate).isFile()) {
                 return candidate;
             }
-        } catch {
-            continue;
-        }
+        } catch {}
     }
     return null;
 }
@@ -112,9 +115,7 @@ export function readAiTitle(transcript: unknown, sessionId: unknown): string | n
             if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string' && entry.aiTitle.trim()) {
                 title = entry.aiTitle.replace(/\s+/g, ' ').replace(CONTROL, '').trim() || title;
             }
-        } catch {
-            continue;
-        }
+        } catch {}
     }
     return title;
 }
@@ -219,7 +220,11 @@ export function resultText(content: unknown): string {
     }
     if (Array.isArray(content)) {
         return content
-            .map((block) => (block && typeof block === 'object' && (block as Record<string, unknown>).type === 'text' ? String((block as Record<string, unknown>).text ?? '') : ''))
+            .map((block) =>
+                block && typeof block === 'object' && (block as Record<string, unknown>).type === 'text'
+                    ? String((block as Record<string, unknown>).text ?? '')
+                    : '',
+            )
             .filter(Boolean)
             .join('\n');
     }
@@ -240,13 +245,15 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
         return [];
     }
     const at = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) || null : null;
-    const message = record.message && typeof record.message === 'object' ? record.message as Record<string, unknown> : null;
+    const message = record.message && typeof record.message === 'object' ? (record.message as Record<string, unknown>) : null;
     if (!message) {
         return null;
     }
     const content = message.content;
     if (typeof content === 'string') {
-        return record.type === 'user' ? [{ kind: 'prompt', text: clip(content, MAX_TEXT), at }] : [{ kind: 'text', text: clip(content, MAX_TEXT), at }];
+        return record.type === 'user'
+            ? [{ kind: 'prompt', text: clip(content, MAX_TEXT), at }]
+            : [{ kind: 'text', text: clip(content, MAX_TEXT), at }];
     }
     if (!Array.isArray(content)) {
         return null;
@@ -258,14 +265,24 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
         }
         const block = raw as Record<string, unknown>;
         if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
-            entries.push(record.type === 'user' ? { kind: 'prompt', text: clip(block.text, MAX_TEXT), at } : { kind: 'text', text: clip(block.text, MAX_TEXT), at });
+            entries.push(
+                record.type === 'user'
+                    ? { kind: 'prompt', text: clip(block.text, MAX_TEXT), at }
+                    : { kind: 'text', text: clip(block.text, MAX_TEXT), at },
+            );
         } else if (block.type === 'tool_use' && typeof block.name === 'string') {
-            const input = block.input && typeof block.input === 'object' ? block.input as Record<string, unknown> : {};
+            const input = block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {};
             if (block.name === 'SubagentHandback' && typeof input.message === 'string') {
                 entries.push({ kind: 'text', text: clip(input.message, MAX_TEXT), at });
                 continue;
             }
-            entries.push({ kind: 'tool', id: typeof block.id === 'string' ? block.id : '', name: clip(block.name, MAX_SUMMARY), summary: toolSummary(block.name, input), at });
+            entries.push({
+                kind: 'tool',
+                id: typeof block.id === 'string' ? block.id : '',
+                name: clip(block.name, MAX_SUMMARY),
+                summary: toolSummary(block.name, input),
+                at,
+            });
         } else if (block.type === 'tool_result') {
             entries.push({
                 kind: 'result',
@@ -296,7 +313,9 @@ export function readJsonLines<T>(fd: number, from: number, parse: (line: unknown
     const read = length > 0 ? readSync(fd, buffer, 0, length, start) : 0;
     const lastNewline = buffer.subarray(0, read).lastIndexOf(0x0a);
     if (lastNewline < 0) {
-        return read === MAX_CHUNK_BYTES ? { entries: [], next: start + read, skipped: 1, more: true } : { entries: [], next: start, skipped: 0, more: false };
+        return read === MAX_CHUNK_BYTES
+            ? { entries: [], next: start + read, skipped: 1, more: true }
+            : { entries: [], next: start, skipped: 0, more: false };
     }
     const entries: T[] = [];
     let skipped = 0;

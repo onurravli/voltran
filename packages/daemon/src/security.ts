@@ -16,7 +16,7 @@ export function safeEqual(a: string, b: string): boolean {
 
 export function bearerToken(req: IncomingMessage): string | null {
     const header = req.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
+    if (!header?.startsWith('Bearer ')) {
         return null;
     }
     return header.slice('Bearer '.length).trim();
@@ -26,7 +26,12 @@ export function bearerToken(req: IncomingMessage): string | null {
 // next to WS_PROTOCOL, the one the server picks.
 export function offeredProtocols(req: IncomingMessage): string[] {
     const header = req.headers['sec-websocket-protocol'];
-    return typeof header === 'string' ? header.split(',').map((protocol) => protocol.trim()).filter(Boolean) : [];
+    return typeof header === 'string'
+        ? header
+              .split(',')
+              .map((protocol) => protocol.trim())
+              .filter(Boolean)
+        : [];
 }
 
 export type GuardResult = { ok: true } | { ok: false; status: number; reason: string };

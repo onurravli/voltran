@@ -17,13 +17,25 @@ const ENTRIES: ConversationEntry[] = [
 describe('groupTurns', () => {
     it('starts a turn at each prompt and groups tool calls in a row with their results', () => {
         const turns = groupTurns(ENTRIES);
-        expect(turns.map((turn) => [turn.key, turn.prompt?.text ?? null, turn.items.map((item) => item.kind), turn.model, turn.startedAt, turn.endedAt])).toEqual([
+        expect(
+            turns.map((turn) => [
+                turn.key,
+                turn.prompt?.text ?? null,
+                turn.items.map((item) => item.kind),
+                turn.model,
+                turn.startedAt,
+                turn.endedAt,
+            ]),
+        ).toEqual([
             ['turn-0', null, ['notice'], null, 500, 500],
             ['turn-1', 'Fix it', ['text', 'tools', 'text'], 'claude-b', 1000, 4000],
             ['turn-7', 'Thanks', ['tools'], null, 9000, 9500],
         ]);
         const tools = turns[1].items[1];
-        expect(tools.kind === 'tools' && tools.tools.map(({ tool, result }) => [tool.id, result?.text ?? null])).toEqual([['t1', 'code'], ['t2', null]]);
+        expect(tools.kind === 'tools' && tools.tools.map(({ tool, result }) => [tool.id, result?.text ?? null])).toEqual([
+            ['t1', 'code'],
+            ['t2', null],
+        ]);
     });
 });
 

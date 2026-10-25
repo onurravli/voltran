@@ -24,7 +24,7 @@ export function dropSide(offset: number, height: number): DropSide {
 
 // What to move an item in front of (null: to the end) so that it lands on that side of the target.
 export function dropBefore(ids: readonly string[], target: string, side: DropSide): string | null {
-    return side === 'before' ? target : ids[ids.indexOf(target) + 1] ?? null;
+    return side === 'before' ? target : (ids[ids.indexOf(target) + 1] ?? null);
 }
 
 // Undefined when the item is already at that end of the list.
@@ -34,5 +34,5 @@ export function stepBefore(ids: readonly string[], id: string, step: -1 | 1): st
     if (index === -1 || to < 0 || to >= ids.length) {
         return undefined;
     }
-    return step === -1 ? ids[to] : ids[to + 1] ?? null;
+    return step === -1 ? ids[to] : (ids[to + 1] ?? null);
 }

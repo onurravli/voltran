@@ -22,7 +22,16 @@ const MAX_OUTPUT = 16 * 1024 * 1024;
 // config and filters, which the overrides below never see. A submodule moved to another commit
 // still shows.
 export const SUBMODULE_ARGS = ['--ignore-submodules=dirty'];
-export const STATUS_ARGS = ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z', ...SUBMODULE_ARGS];
+export const STATUS_ARGS = [
+    '--no-optional-locks',
+    '-c',
+    'core.fsmonitor=false',
+    'status',
+    '--porcelain=v2',
+    '--branch',
+    '-z',
+    ...SUBMODULE_ARGS,
+];
 export const PULL_REQUEST_ARGS = ['pr', 'view', '--json', 'number,url,state,isDraft,statusCheckRollup'];
 export const FILTER_CONFIG_ARGS = ['config', '--show-scope', '-z', '--get-regexp', '^filter\\.'];
 const FILTER_NAME = /^[A-Za-z0-9._-]+$/;
@@ -49,16 +58,35 @@ export function repositoryFilterOverrides(output: string): string[] | null {
         }
         names.add(name);
     }
-    return [...names].flatMap((name) => ['-c', `filter.${name}.clean=`, '-c', `filter.${name}.smudge=`, '-c', `filter.${name}.process=`, '-c', `filter.${name}.required=false`]);
+    return [...names].flatMap((name) => [
+        '-c',
+        `filter.${name}.clean=`,
+        '-c',
+        `filter.${name}.smudge=`,
+        '-c',
+        `filter.${name}.process=`,
+        '-c',
+        `filter.${name}.required=false`,
+    ]);
 }
 
 export function commandRunner(env: NodeJS.ProcessEnv): GitRunner {
     const commandEnv = { ...env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' };
-    return (command, args, cwd) => new Promise((resolve) => {
-        execFile(command, args, { cwd, env: commandEnv, timeout: COMMAND_TIMEOUT_MS, maxBuffer: MAX_OUTPUT, encoding: 'utf8' }, (error, stdout) => {
-            resolve({ ok: !error, stdout: String(stdout ?? ''), missing: (error as NodeJS.ErrnoException | null)?.code === 'ENOENT' });
+    return (command, args, cwd) =>
+        new Promise((resolve) => {
+            execFile(
+                command,
+                args,
+                { cwd, env: commandEnv, timeout: COMMAND_TIMEOUT_MS, maxBuffer: MAX_OUTPUT, encoding: 'utf8' },
+                (error, stdout) => {
+                    resolve({
+                        ok: !error,
+                        stdout: String(stdout ?? ''),
+                        missing: (error as NodeJS.ErrnoException | null)?.code === 'ENOENT',
+                    });
+                },
+            );
         });
-    });
 }
 
 export function parseStatus(output: string): Omit<GitStatus, 'pullRequest'> {
@@ -223,11 +251,14 @@ export class GitWatcher {
         if (this.stopped || this.soon.has(folder)) {
             return;
         }
-        this.soon.set(folder, setTimeout(() => {
-            this.soon.delete(folder);
-            this.queue.add(folder);
-            void this.drain();
-        }, this.options.soonMs));
+        this.soon.set(
+            folder,
+            setTimeout(() => {
+                this.soon.delete(folder);
+                this.queue.add(folder);
+                void this.drain();
+            }, this.options.soonMs),
+        );
     }
 
     async refresh(folder: string): Promise<void> {

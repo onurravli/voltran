@@ -126,8 +126,10 @@ export class Store {
     }
 
     listSessions(): Session[] {
-        const rows = this.db.prepare(`select sessions.* from sessions left join projects on projects.id = sessions.project_id
-            order by projects.position, projects.created_at, sessions.position, sessions.created_at`).all() as Row[];
+        const rows = this.db
+            .prepare(`select sessions.* from sessions left join projects on projects.id = sessions.project_id
+            order by projects.position, projects.created_at, sessions.position, sessions.created_at`)
+            .all() as Row[];
         return rows.map(toSession);
     }
 
@@ -164,12 +166,15 @@ export class Store {
     }
 
     sessionsOfProject(projectId: string): Session[] {
-        return (this.db.prepare('select * from sessions where project_id = ? order by position, created_at').all(projectId) as Row[]).map(toSession);
+        return (this.db.prepare('select * from sessions where project_id = ? order by position, created_at').all(projectId) as Row[]).map(
+            toSession,
+        );
     }
 
     insertProject(project: Project): void {
         const position = (this.db.prepare('select coalesce(max(position), -1) + 1 as next from projects').get() as Row).next;
-        this.db.prepare('insert into projects (id, name, path, color, position, created_at) values (?, ?, ?, ?, ?, ?)')
+        this.db
+            .prepare('insert into projects (id, name, path, color, position, created_at) values (?, ?, ?, ?, ?, ?)')
             .run(project.id, project.name, project.path, project.color, Number(position), project.createdAt);
     }
 
@@ -184,7 +189,12 @@ export class Store {
 
     moveProject(id: string, before: string | null): void {
         const ids = this.db.prepare('select id from projects order by position, created_at').all() as Row[];
-        this.reorder('projects', ids.map((row) => String(row.id)), id, before);
+        this.reorder(
+            'projects',
+            ids.map((row) => String(row.id)),
+            id,
+            before,
+        );
     }
 
     deleteProject(id: string): void {
@@ -192,8 +202,13 @@ export class Store {
     }
 
     insertSession(session: Session): void {
-        const position = (this.db.prepare('select coalesce(max(position), -1) + 1 as next from sessions where project_id = ?').get(session.projectId) as Row).next;
-        this.db.prepare(`insert into sessions (id, project_id, title, title_source, link, cwd, worktree, layout, archived, position, created_at, updated_at)
+        const position = (
+            this.db
+                .prepare('select coalesce(max(position), -1) + 1 as next from sessions where project_id = ?')
+                .get(session.projectId) as Row
+        ).next;
+        this.db
+            .prepare(`insert into sessions (id, project_id, title, title_source, link, cwd, worktree, layout, archived, position, created_at, updated_at)
             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
             .run(
                 session.id,
@@ -217,8 +232,17 @@ export class Store {
             return;
         }
         const next = { ...current, ...patch, updatedAt: Date.now() };
-        this.db.prepare('update sessions set title = ?, title_source = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?')
-            .run(next.title, next.titleSource, next.link, next.archived ? 1 : 0, next.layout ? JSON.stringify(next.layout) : null, next.updatedAt, id);
+        this.db
+            .prepare('update sessions set title = ?, title_source = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?')
+            .run(
+                next.title,
+                next.titleSource,
+                next.link,
+                next.archived ? 1 : 0,
+                next.layout ? JSON.stringify(next.layout) : null,
+                next.updatedAt,
+                id,
+            );
     }
 
     moveSession(id: string, before: string | null): void {
@@ -226,8 +250,15 @@ export class Store {
         if (!session) {
             return;
         }
-        const ids = this.db.prepare('select id from sessions where project_id = ? order by position, created_at').all(session.projectId) as Row[];
-        this.reorder('sessions', ids.map((row) => String(row.id)), id, before);
+        const ids = this.db
+            .prepare('select id from sessions where project_id = ? order by position, created_at')
+            .all(session.projectId) as Row[];
+        this.reorder(
+            'sessions',
+            ids.map((row) => String(row.id)),
+            id,
+            before,
+        );
     }
 
     deleteSession(id: string): void {
@@ -235,7 +266,8 @@ export class Store {
     }
 
     insertPane(pane: Pane): void {
-        this.db.prepare(`insert into panes (id, session_id, adapter, title, command, cwd, agent_session_id, agent_resumable, ended, created_at)
+        this.db
+            .prepare(`insert into panes (id, session_id, adapter, title, command, cwd, agent_session_id, agent_resumable, ended, created_at)
             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
             .run(
                 pane.id,
@@ -251,13 +283,19 @@ export class Store {
             );
     }
 
-    updatePane(id: string, patch: Partial<Pick<Pane, 'sessionId' | 'title' | 'command' | 'agentSessionId' | 'agentResumable' | 'ended'>>): void {
+    updatePane(
+        id: string,
+        patch: Partial<Pick<Pane, 'sessionId' | 'title' | 'command' | 'agentSessionId' | 'agentResumable' | 'ended'>>,
+    ): void {
         const current = this.getPane(id);
         if (!current) {
             return;
         }
         const next = { ...current, ...patch };
-        this.db.prepare('update panes set session_id = ?, title = ?, command = ?, agent_session_id = ?, agent_resumable = ?, ended = ? where id = ?')
+        this.db
+            .prepare(
+                'update panes set session_id = ?, title = ?, command = ?, agent_session_id = ?, agent_resumable = ?, ended = ? where id = ?',
+            )
             .run(next.sessionId, next.title, next.command, next.agentSessionId, next.agentResumable ? 1 : 0, next.ended ? 1 : 0, id);
     }
 
@@ -266,8 +304,15 @@ export class Store {
     }
 
     insertWorkspace(workspace: Workspace): void {
-        this.db.prepare('insert into workspaces (id, title, layout, created_at, updated_at) values (?, ?, ?, ?, ?)')
-            .run(workspace.id, workspace.title, workspace.layout ? JSON.stringify(workspace.layout) : null, workspace.createdAt, workspace.updatedAt);
+        this.db
+            .prepare('insert into workspaces (id, title, layout, created_at, updated_at) values (?, ?, ?, ?, ?)')
+            .run(
+                workspace.id,
+                workspace.title,
+                workspace.layout ? JSON.stringify(workspace.layout) : null,
+                workspace.createdAt,
+                workspace.updatedAt,
+            );
     }
 
     updateWorkspace(id: string, patch: Partial<Pick<Workspace, 'title' | 'layout'>>): void {
@@ -276,7 +321,8 @@ export class Store {
             return;
         }
         const next = { ...current, ...patch, updatedAt: Date.now() };
-        this.db.prepare('update workspaces set title = ?, layout = ?, updated_at = ? where id = ?')
+        this.db
+            .prepare('update workspaces set title = ?, layout = ?, updated_at = ? where id = ?')
             .run(next.title, next.layout ? JSON.stringify(next.layout) : null, next.updatedAt, id);
     }
 

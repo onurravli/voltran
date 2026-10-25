@@ -40,25 +40,34 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
     const status = notes.conflict
         ? ''
         : blocked === 'agent'
-            ? `${writer} is writing…`
-            : blocked === 'window'
-                ? 'Open in another window'
-                : notes.saving
-                    ? 'Saving…'
-                    : notes.dirty
-                        ? 'Editing'
-                        : notes.holding
-                            ? 'Saved'
-                            : pane.notes.updatedBy === 'agent'
-                                ? agent ? `Updated by ${agent}` : 'Changed on disk'
-                                : '';
+          ? `${writer} is writing…`
+          : blocked === 'window'
+            ? 'Open in another window'
+            : notes.saving
+              ? 'Saving…'
+              : notes.dirty
+                ? 'Editing'
+                : notes.holding
+                  ? 'Saved'
+                  : pane.notes.updatedBy === 'agent'
+                    ? agent
+                        ? `Updated by ${agent}`
+                        : 'Changed on disk'
+                    : '';
 
     return (
         <aside ref={drawer} className="notes" aria-label={`Notes for ${pane.title}`}>
             <div className="notes__header">
                 <span className="notes__title">Notes</span>
-                <span className="notes__status" aria-live="polite">{status}</span>
-                <button type="button" className="icon-button" title={`Hide notes (${keys('⌃⌥E')})`} onClick={() => useUi.getState().toggleNotes(pane.id)}>
+                <span className="notes__status" aria-live="polite">
+                    {status}
+                </span>
+                <button
+                    type="button"
+                    className="icon-button"
+                    title={`Hide notes (${keys('⌃⌥E')})`}
+                    onClick={() => useUi.getState().toggleNotes(pane.id)}
+                >
                     <CloseIcon size={14} />
                 </button>
             </div>
@@ -66,8 +75,12 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
                 <div className="notes__conflict" role="alert">
                     <span>{notes.conflict} Your text is kept.</span>
                     <div className="notes__conflict-actions">
-                        <button type="button" className="button button--small" onClick={() => editor.keepMine()}>Keep mine</button>
-                        <button type="button" className="button button--small button--ghost" onClick={() => editor.takeTheirs()}>Load theirs</button>
+                        <button type="button" className="button button--small" onClick={() => editor.keepMine()}>
+                            Keep mine
+                        </button>
+                        <button type="button" className="button button--small button--ghost" onClick={() => editor.takeTheirs()}>
+                            Load theirs
+                        </button>
                     </div>
                 </div>
             ) : null}
