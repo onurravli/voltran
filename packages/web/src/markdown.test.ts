@@ -4,8 +4,16 @@ import { renderMarkdown } from './markdown.ts';
 describe('renderMarkdown', () => {
     it('renders the markdown agents write', () => {
         expect(renderMarkdown('## Plan\n\n- **one** `two`\n\n```ts\nconst a = 1;\n```')).toBe(
-            '<h2>Plan</h2>\n<ul>\n<li><strong>one</strong> <code>two</code></li>\n</ul>\n<pre><code class="language-ts">const a = 1;\n</code></pre>\n',
+            '<h2>Plan</h2>\n<ul>\n<li><strong>one</strong> <code>two</code></li>\n</ul>\n<pre><code class="language-ts"><span class="hljs-keyword">const</span> a = <span class="hljs-number">1</span>;\n</code></pre>\n',
         );
+    });
+
+    it('highlights a block that names a language it knows, and only that', () => {
+        expect(renderMarkdown('```sh\necho "<b>"\n```')).toBe(
+            '<pre><code class="language-sh"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;&lt;b&gt;&quot;</span>\n</code></pre>\n',
+        );
+        expect(renderMarkdown('```\nconst a = 1;\n```')).toBe('<pre><code>const a = 1;\n</code></pre>\n');
+        expect(renderMarkdown('```brainfuck\n<b>\n```')).toBe('<pre><code class="language-brainfuck">&lt;b&gt;\n</code></pre>\n');
     });
 
     it('keeps raw HTML and images as text', () => {

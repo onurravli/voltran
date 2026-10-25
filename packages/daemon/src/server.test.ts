@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { DEFAULT_SETTINGS, MAX_WORKSPACE_PANES, paneIds, type AppState, type ConversationChunk, type Diagnostics, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
+import { DEFAULT_SETTINGS, MAX_ATTACHMENT_BYTES, MAX_WORKSPACE_PANES, paneIds, type AppState, type ConversationChunk, type Diagnostics, type Layout, type NotesMeta, type PaneNotes, type PaneView, type ServerEvent, type Session, type SettingsState, type Workspace } from '@voltran/shared';
 import { loadConfig, voltranVersion } from './config.ts';
 import { commandRunner } from './git.ts';
 import { buildDaemon, type Daemon } from './main.ts';
@@ -324,6 +324,34 @@ describe('validation', () => {
         expect((await api('POST', `/api/sessions/${session.id}/panes`, { adapter: 'subagent', command: '/etc/passwd' })).status).toBe(400);
         expect((await api('POST', '/api/sessions', { projectId, title: 'x', panes: [{ adapter: 'subagent', command: '/etc/passwd' }] })).status).toBe(400);
         await api('DELETE', `/api/sessions/${session.id}`);
+    });
+});
+
+describe('attachments', () => {
+    it('keeps an image pasted into a pane as a file of that pane until the pane goes', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', { projectId: state.projects[0].id, title: 'attachments', panes: [{ adapter: 'shell' }] });
+        const paneId = session.layout?.type === 'pane' ? session.layout.paneId : '';
+        const upload = (body: Buffer, pane = paneId) => fetch(`${base}/api/panes/${pane}/attachments`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'image/png' },
+            body: new Uint8Array(body),
+        });
+        const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('pixels')]);
+
+        const saved = await upload(png);
+        expect(saved.status).toBe(201);
+        const { path } = (await saved.json()) as { path: string };
+        expect(path).toMatch(new RegExp(`^${join(home, 'data', 'attachments', paneId)}/[0-9a-f]{16}\\.png$`));
+        expect(readFileSync(path)).toEqual(png);
+        expect(statSync(path).mode & 0o777).toBe(0o600);
+
+        expect((await upload(Buffer.from('<svg onload=alert(1)>'))).status).toBe(415);
+        expect((await upload(png, 'no-such-pane')).status).toBe(404);
+        expect(await upload(Buffer.alloc(MAX_ATTACHMENT_BYTES + 1)).then((response) => response.status, () => 'cut off')).toMatch(/413|cut off/);
+
+        await api('DELETE', `/api/sessions/${session.id}`);
+        expect(existsSync(path)).toBe(false);
     });
 });
 

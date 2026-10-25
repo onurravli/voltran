@@ -79,7 +79,9 @@ function userText(raw: string, images: number, at: number | null): ConversationE
     if (/^\[Request interrupted by user/.test(raw.trim())) {
         return [{ kind: 'notice', text: 'Interrupted', tone: 'info', at }];
     }
-    return raw.trim() || images > 0 ? [{ kind: 'prompt', text: text(raw.trim()), images, at }] : [];
+    // The entry counts the images, so the placeholders Claude Code types for them go.
+    const prompt = images > 0 ? raw.replace(/\[Image #\d+\]\s*/g, '').trim() : raw.trim();
+    return prompt || images > 0 ? [{ kind: 'prompt', text: text(prompt), images, at }] : [];
 }
 
 // Returns the entries one line of a Claude Code transcript contributes, an empty list for records the

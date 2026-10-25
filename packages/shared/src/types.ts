@@ -173,6 +173,15 @@ export interface ConversationChunk {
     more: boolean;
 }
 
+// A command the composer offers after `/`. `terminal` marks one that answers in a picker or panel
+// drawn in the terminal rather than in the conversation.
+export interface SlashCommand {
+    name: string;
+    description: string;
+    source: 'builtin' | 'user' | 'project' | 'plugin';
+    terminal: boolean;
+}
+
 export interface PaneRuntimeState {
     status: PaneStatus;
     statusAt: number;

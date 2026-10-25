@@ -1,9 +1,10 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { ConversationEntry, PaneView, ToolDetail } from '@voltran/shared';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { MAX_ATTACHMENT_BYTES, type ConversationEntry, type PaneView, type SlashCommand, type ToolDetail } from '@voltran/shared';
 import { api } from '../api.ts';
 import { formatDuration, groupTurns, lineDiff, type ConversationItem, type Turn } from '../conversation.ts';
 import { renderMarkdown } from '../markdown.ts';
 import { keys } from '../shortcuts.ts';
+import { commandOf, matchCommands, slashQuery } from '../slash.ts';
 import { useUi } from '../store.ts';
 import { terminalFor } from '../terminals.ts';
 
@@ -11,9 +12,32 @@ type Entry<K extends ConversationEntry['kind']> = Extract<ConversationEntry, { k
 
 const POLL_MS = 1500;
 const TURNS_PER_PAGE = 30;
+const SETTLE_READS_MS = [500, 1500, 4000];
 const LIVE_STATUSES = new Set(['starting', 'working', 'needs-input']);
 
 const drafts = new Map<string, string>();
+const imageDrafts = new Map<string, Attachment[]>();
+
+interface Attachment {
+    id: number;
+    preview: string;
+    path: string | null;
+}
+
+let nextAttachmentId = 1;
+
+function imagesOf(data: DataTransfer): File[] {
+    return [...data.files].filter((file) => file.type.startsWith('image/'));
+}
+
+function readPreview(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
 
 function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -75,8 +99,15 @@ function useConversation(paneId: string, status: string): { entries: Conversatio
         }
     }, [paneId]);
 
+    // Claude can run its Stop hook before the last reply is in the transcript, so a pane that has
+    // just settled is read a few more times.
     useEffect(() => {
         void load();
+        if (LIVE_STATUSES.has(status)) {
+            return;
+        }
+        const timers = SETTLE_READS_MS.map((delay) => setTimeout(() => void load(), delay));
+        return () => timers.forEach(clearTimeout);
     }, [load, status]);
 
     const live = LIVE_STATUSES.has(status);
@@ -224,7 +255,36 @@ function TurnView({ turn, live }: { turn: Turn; live: boolean }) {
 
 function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | null }) {
     const [draft, setDraft] = useState(() => drafts.get(pane.id) ?? '');
+    const [images, setImages] = useState<Attachment[]>(() => imageDrafts.get(pane.id) ?? []);
+    const [dragging, setDragging] = useState(false);
+    const [commands, setCommands] = useState<SlashCommand[]>([]);
+    const [active, setActive] = useState(0);
+    const [dismissed, setDismissed] = useState(false);
     const input = useRef<HTMLTextAreaElement>(null);
+    const menu = useRef<HTMLDivElement>(null);
+    const query = slashQuery(draft);
+    const opening = query !== null;
+    const matches = useMemo(() => (query === null ? [] : matchCommands(commands, query)), [commands, query]);
+    const menuOpen = opening && !dismissed && matches.length > 0;
+
+    // Read again each time the menu opens, so a command or skill added on disk shows up.
+    useEffect(() => {
+        if (!opening) {
+            setDismissed(false);
+            return;
+        }
+        let current = true;
+        api.commands(pane.id).then((list) => current && setCommands(list), () => undefined);
+        return () => {
+            current = false;
+        };
+    }, [opening, pane.id]);
+
+    useEffect(() => setActive(0), [query]);
+
+    useEffect(() => {
+        menu.current?.querySelector('.slash-menu__item.is-active')?.scrollIntoView({ block: 'nearest' });
+    }, [active]);
 
     useEffect(() => {
         if (focusToken !== null && input.current && document.activeElement !== input.current) {
@@ -245,47 +305,179 @@ function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | n
         drafts.set(pane.id, value);
     };
 
-    const send = (): void => {
-        const text = draft.trim();
-        if (!text) {
+    const updateImages = (update: (current: Attachment[]) => Attachment[]): void => {
+        setImages((current) => {
+            const next = update(current);
+            imageDrafts.set(pane.id, next);
+            return next;
+        });
+    };
+
+    const attach = (files: File[]): void => {
+        for (const file of files) {
+            if (file.size > MAX_ATTACHMENT_BYTES) {
+                useUi.getState().showToast(`${file.name || 'The image'} is larger than ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB`, 'error');
+                continue;
+            }
+            const id = nextAttachmentId++;
+            const set = (fields: Partial<Attachment>): void => updateImages((current) => current.map((image) => (image.id === id ? { ...image, ...fields } : image)));
+            updateImages((current) => [...current, { id, preview: '', path: null }]);
+            readPreview(file).then((preview) => set({ preview }), () => undefined);
+            api.attach(pane.id, file)
+                .then(({ path }) => set({ path }))
+                .catch((error: unknown) => {
+                    updateImages((current) => current.filter((image) => image.id !== id));
+                    useUi.getState().showToast(message(error), 'error');
+                });
+        }
+    };
+
+    const uploading = images.some((image) => image.path === null);
+    const ready = !uploading && (draft.trim() !== '' || images.length > 0);
+
+    // A command that answers in a picker or panel needs the terminal, so the pane shows it.
+    const send = (text = draft.trim()): void => {
+        if (uploading || (!text && images.length === 0)) {
             return;
         }
-        if (!terminalFor(pane.id).submit(text)) {
+        const paths = images.flatMap((image) => (image.path ? [image.path] : []));
+        const terminal = terminalFor(pane.id);
+        if (!terminal.submit(text, paths)) {
             useUi.getState().showToast('The pane is not connected yet', 'error');
             return;
         }
         change('');
+        updateImages(() => []);
+        if (commandOf(text, commands)?.terminal) {
+            useUi.getState().toggleConversation(pane.id);
+            terminal.focus();
+        }
     };
 
     const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+        if (menuOpen && !event.nativeEvent.isComposing) {
+            const chosen = matches[Math.min(active, matches.length - 1)];
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActive((index) => (index + (event.key === 'ArrowDown' ? 1 : matches.length - 1)) % matches.length);
+                return;
+            }
+            if (event.key === 'Tab') {
+                event.preventDefault();
+                change(`/${chosen.name} `);
+                return;
+            }
+            if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
+                event.preventDefault();
+                send(`/${chosen.name}`);
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setDismissed(true);
+                return;
+            }
+        }
         if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             send();
         }
     };
 
+    const onPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>): void => {
+        const files = imagesOf(event.clipboardData);
+        if (files.length > 0) {
+            event.preventDefault();
+            attach(files);
+        }
+    };
+
+    const onDragOver = (event: ReactDragEvent<HTMLDivElement>): void => {
+        if (event.dataTransfer.types.includes('Files')) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+            setDragging(true);
+        }
+    };
+
+    const onDrop = (event: ReactDragEvent<HTMLDivElement>): void => {
+        setDragging(false);
+        const files = imagesOf(event.dataTransfer);
+        if (files.length > 0) {
+            event.preventDefault();
+            attach(files);
+        }
+    };
+
     return (
-        <div className="composer">
-            <textarea
-                ref={input}
-                className="composer__input"
-                rows={1}
-                value={draft}
-                placeholder={`Message ${pane.title}…`}
-                title="↩ sends, ⇧↩ adds a line"
-                aria-label="Message"
-                onChange={(event) => change(event.target.value)}
-                onKeyDown={onKeyDown}
-                onFocus={() => {
-                    useUi.getState().focusPane(pane.id, false);
-                    if (pane.status === 'done' || pane.status === 'needs-input') {
-                        api.seenPane(pane.id).catch(() => undefined);
-                    }
-                }}
-            />
-            <button type="button" className="button button--small" disabled={!draft.trim()} onClick={send}>
-                Send
-            </button>
+        <div
+            className={`composer${dragging ? ' is-drop-target' : ''}`}
+            onDragOver={onDragOver}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+        >
+            {menuOpen ? (
+                <div ref={menu} className="slash-menu" role="listbox" aria-label="Commands">
+                    {matches.map((command, index) => (
+                        <div
+                            key={command.name}
+                            role="option"
+                            aria-selected={index === active}
+                            className={`slash-menu__item${index === active ? ' is-active' : ''}`}
+                            onMouseEnter={() => setActive(index)}
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                send(`/${command.name}`);
+                            }}
+                        >
+                            <span className="slash-menu__name">/{command.name}</span>
+                            <span className="slash-menu__description">{command.description}</span>
+                            {command.terminal ? <span className="slash-menu__tag">terminal</span> : command.source !== 'builtin' ? <span className="slash-menu__tag">{command.source}</span> : null}
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+            {images.length > 0 ? (
+                <div className="composer__images">
+                    {images.map((image) => (
+                        <div key={image.id} className={`composer__image${image.path ? '' : ' is-uploading'}`}>
+                            {image.preview ? <img src={image.preview} alt="" /> : null}
+                            <button
+                                type="button"
+                                className="composer__image-remove"
+                                aria-label="Remove image"
+                                title="Remove image"
+                                onClick={() => updateImages((current) => current.filter((other) => other.id !== image.id))}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+            <div className="composer__row">
+                <textarea
+                    ref={input}
+                    className="composer__input"
+                    rows={2}
+                    value={draft}
+                    placeholder={`Message ${pane.title}…`}
+                    title="↩ sends, ⇧↩ adds a line, / lists commands, images can be pasted or dropped"
+                    aria-label="Message"
+                    onChange={(event) => change(event.target.value)}
+                    onKeyDown={onKeyDown}
+                    onPaste={onPaste}
+                    onFocus={() => {
+                        useUi.getState().focusPane(pane.id, false);
+                        if (pane.status === 'done' || pane.status === 'needs-input') {
+                            api.seenPane(pane.id).catch(() => undefined);
+                        }
+                    }}
+                />
+                <button type="button" className="button button--small" disabled={!ready} onClick={() => send()}>
+                    Send
+                </button>
+            </div>
         </div>
     );
 }
@@ -305,6 +497,25 @@ export function ConversationView({ pane, focusToken }: { pane: PaneView; focusTo
             element.scrollTop = element.scrollHeight;
         }
     }, [turns, pane.status, pane.detail]);
+
+    // A composer growing as one types shrinks the log, and a message laid out late grows it; neither
+    // scrolls, so whoever was reading the end keeps it in view.
+    useEffect(() => {
+        const element = scroller.current;
+        if (!element) {
+            return;
+        }
+        const observer = new ResizeObserver(() => {
+            if (pinned.current) {
+                element.scrollTop = element.scrollHeight;
+            }
+        });
+        observer.observe(element);
+        if (element.firstElementChild) {
+            observer.observe(element.firstElementChild);
+        }
+        return () => observer.disconnect();
+    }, []);
 
     return (
         <div className="conversation">

@@ -28,6 +28,10 @@ describe('parseClaudeLine', () => {
     it('turns prompts, messages, thinking, tool calls and results into entries', () => {
         expect(parseClaudeLine({ type: 'user', timestamp: '2026-10-10T00:00:00.000Z', message: { content: [{ type: 'image', source: {} }, { type: 'text', text: 'What is this?' }] } }))
             .toEqual([{ kind: 'prompt', text: 'What is this?', images: 1, at: Date.parse('2026-10-10T00:00:00.000Z') }]);
+        expect(parseClaudeLine({ type: 'user', message: { content: [{ type: 'text', text: '[Image #1] [Image #2] Compare them' }, { type: 'image', source: {} }, { type: 'image', source: {} }] } }))
+            .toEqual([{ kind: 'prompt', text: 'Compare them', images: 2, at: null }]);
+        expect(parseClaudeLine({ type: 'user', message: { content: [{ type: 'text', text: 'What does [Image #1] mean?' }] } }))
+            .toEqual([{ kind: 'prompt', text: 'What does [Image #1] mean?', images: 0, at: null }]);
         expect(parseClaudeLine(assistant([
             { type: 'thinking', thinking: '' },
             { type: 'thinking', thinking: 'Look first.' },
