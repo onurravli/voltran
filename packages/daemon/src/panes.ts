@@ -5,11 +5,11 @@ import * as nodePty from 'node-pty';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
 import type { AttentionStatus, Pane, PaneRuntimeState, PaneServerMessage, PaneStatus } from '@voltran/shared';
-import { adapterFor, childEnv, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type CodexHookEvent, type OpencodeEvent } from './adapters.ts';
+import { adapterFor, childEnv, claudeConfigDir, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, resolveBinary, type ClaudeHookEvent, type CodexHookEvent, type OpencodeEvent } from './adapters.ts';
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, codexTransition, OpencodeStatus, type StatusChange } from './status.ts';
 import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
-import { isClaudeSessionId, readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
+import { findClaudeTranscript, isClaudeSessionId, isClaudeTranscript, readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
 
 export interface PaneClient {
     sendText(text: string): void;
@@ -40,6 +40,7 @@ interface Runtime {
     hooked: boolean;
     opencode: OpencodeStatus | null;
     subagents: SubagentTracker;
+    transcript: AgentTranscript | null;
     cols: number;
     rows: number;
     lastOutputAt: number;
@@ -77,6 +78,11 @@ const ECHO_WINDOW_MS = 400;
 // the screen, where the notice that follows would overwrite the output. xterm saves a cursor per
 // buffer, so saving it first changes nothing for a program that did switch screens.
 const RESET_MODES = '\x1b7\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[0m';
+
+export interface AgentTranscript {
+    sessionId: string;
+    path: string;
+}
 
 const notice = (text: string, tone: 'dim' | 'error' = 'dim'): string =>
     `\r\n${tone === 'error' ? '\x1b[31m' : '\x1b[2m'}── ${text} ──\x1b[0m\r\n`;
@@ -297,6 +303,9 @@ export class PaneManager {
         if (sessionId && sessionId !== runtime.pane.agentSessionId) {
             this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: false });
         }
+        if (sessionId && isClaudeTranscript(payload.transcript_path, sessionId)) {
+            runtime.transcript = { sessionId, path: payload.transcript_path };
+        }
         if (event === 'UserPromptSubmit' && !runtime.pane.agentResumable) {
             this.updateRecord(runtime, { agentResumable: true });
         }
@@ -334,6 +343,21 @@ export class PaneManager {
         } else if (recordChanged) {
             this.options.onChange();
         }
+    }
+
+    // The transcript of the conversation the pane shows: the one its hooks last named, or, until a hook
+    // arrives after a daemon restart, the stored session's file.
+    transcript(id: string): AgentTranscript | null {
+        const runtime = this.runtimes.get(id);
+        if (!runtime || runtime.pane.adapter !== 'claude') {
+            return null;
+        }
+        const sessionId = runtime.pane.agentSessionId;
+        if (runtime.transcript?.sessionId !== sessionId) {
+            const path = sessionId ? findClaudeTranscript(claudeConfigDir(this.options.baseEnv), sessionId) : null;
+            runtime.transcript = sessionId && path ? { sessionId, path } : null;
+        }
+        return runtime.transcript;
     }
 
     subagent(id: string, agentId: string): SubagentTranscript | null {
@@ -412,6 +436,7 @@ export class PaneManager {
             hooked: false,
             opencode: pane.adapter === 'opencode' ? new OpencodeStatus() : null,
             subagents: new SubagentTracker(locateSubagent),
+            transcript: null,
             cols: 120,
             rows: 32,
             lastOutputAt: 0,

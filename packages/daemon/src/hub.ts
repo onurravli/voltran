@@ -13,6 +13,7 @@ import {
     type AdapterInfo,
     type AppState,
     type AttentionStatus,
+    type ConversationChunk,
     type CreatePaneBody,
     type CreateProjectBody,
     type CreateSessionBody,
@@ -41,6 +42,7 @@ import {
 } from '@voltran/shared';
 import { adapterFor, claudeArgsProblem, isAdapterId, isClaudeHookEvent, isCodexHookEvent, isOpencodeEvent, opencodeArgsProblem, STATUS_LINE_EVENT, voltranSessionId } from './adapters.ts';
 import { ChangesError, SessionChangesReader } from './changes.ts';
+import { readClaudeConversation } from './conversation.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { NotesRefused, NotesStore } from './notes.ts';
@@ -636,6 +638,20 @@ export class Hub {
             }, TITLE_RETRY_MS);
             this.namingTimers.add(timer);
         }
+    }
+
+    // A client that still shows the same conversation continues from where it stopped reading.
+    paneConversation(id: string, source: string | null, from: number): ConversationChunk {
+        const pane = this.mustGetPane(id);
+        if (pane.adapter !== 'claude') {
+            throw new HttpError(400, 'Only Claude Code panes show a conversation so far.');
+        }
+        const transcript = this.panes.transcript(id);
+        if (!transcript) {
+            return { source: null, entries: [], next: 0, more: false };
+        }
+        const start = source === transcript.sessionId && Number.isSafeInteger(from) && from > 0 ? from : 0;
+        return readClaudeConversation(transcript.path, transcript.sessionId, start) ?? { source: transcript.sessionId, entries: [], next: 0, more: false };
     }
 
     paneNotes(id: string): PaneNotes {

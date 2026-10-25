@@ -18,6 +18,7 @@ const MIN_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 5000;
 const RESIZE_DEBOUNCE_MS = 60;
 const RECONNECT_NOTICE_MS = 1000;
+const SUBMIT_DELAY_MS = 120;
 
 export class TerminalSession {
     readonly paneId: string;
@@ -138,6 +139,17 @@ export class TerminalSession {
     onFocus(listener: () => void): () => void {
         this.focusListeners.add(listener);
         return () => this.focusListeners.delete(listener);
+    }
+
+    // The text goes in the way a paste does, so an agent keeps its line breaks as text, and Enter
+    // follows on its own: inside the same write an agent can take it as part of the paste.
+    submit(text: string): boolean {
+        if (this.socket?.readyState !== WebSocket.OPEN) {
+            return false;
+        }
+        this.term.paste(text);
+        setTimeout(() => this.send({ type: 'input', data: '\r' }), SUBMIT_DELAY_MS);
+        return true;
     }
 
     dispose(): void {

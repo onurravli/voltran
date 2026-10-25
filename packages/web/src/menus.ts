@@ -214,6 +214,14 @@ function showNotes(pane: PaneView, on: boolean): void {
     }
 }
 
+function showConversation(pane: PaneView, on: boolean): void {
+    revealPane(pane.sessionId, pane.id);
+    const ui = useUi.getState();
+    if (Boolean(ui.conversationOpen[pane.id]) !== on) {
+        ui.toggleConversation(pane.id);
+    }
+}
+
 export function paneMenu(pane: PaneView): MenuItem[] {
     const ui = useUi.getState();
     const session = ui.app?.sessions.find((entry) => entry.id === pane.sessionId);
@@ -223,10 +231,12 @@ export function paneMenu(pane: PaneView): MenuItem[] {
     const adapter = ui.app.adapters.find((entry) => entry.id === pane.adapter);
     const maximized = ui.maximizedPaneId === pane.id;
     const notesOpen = Boolean(ui.notesOpen[pane.id]);
+    const conversationOpen = Boolean(ui.conversationOpen[pane.id]);
     const others = ui.app.sessions.filter((entry) => entry.projectId === session.projectId && entry.id !== session.id && !entry.archived);
     return [
         { label: 'Show', onSelect: () => revealPane(session.id, pane.id) },
         { label: maximized ? 'Restore size' : 'Maximize', onSelect: () => maximize(pane, !maximized) },
+        ...(pane.adapter === 'claude' ? [{ label: conversationOpen ? 'Show terminal' : 'Show conversation', onSelect: () => showConversation(pane, !conversationOpen) }] : []),
         ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes' ? [] : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
         {
             label: adapter?.resumable ? 'Restart and resume' : 'Restart',

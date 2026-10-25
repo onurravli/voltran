@@ -1,4 +1,5 @@
 import type {
+    ConversationChunk,
     CreatePaneBody,
     CreateProjectBody,
     CreateSessionBody,
@@ -161,6 +162,8 @@ export const api = {
     diagnostics: () => request<Diagnostics>('GET', '/api/diagnostics'),
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
     contents: (sessionId: string, path: string) => request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
+    conversation: (paneId: string, source: string | null, from: number) =>
+        request<ConversationChunk>('GET', `/api/panes/${encodeURIComponent(paneId)}/conversation?${new URLSearchParams({ source: source ?? '', from: String(from) })}`),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };

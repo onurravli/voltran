@@ -261,6 +261,10 @@ export function createVoltranServer(options: ServerOptions): Server {
         hub.seenPane(id);
         sendJson(res, 200, { ok: true });
     });
+    route('GET', '/api/panes/:id/conversation', (req, res, [id]) => {
+        const params = requestUrl(req).searchParams;
+        sendJson(res, 200, hub.paneConversation(id, params.get('source'), Number(params.get('from') ?? 0)));
+    });
     route('GET', '/api/panes/:id/notes', (_req, res, [id]) => sendJson(res, 200, hub.paneNotes(id)));
     route('PUT', '/api/panes/:id/notes', async (req, res, [id]) => sendJson(res, 200, hub.saveNotes(id, await readJson(req))));
     route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) => sendJson(res, 200, hub.lockNotes(id, await readJson(req))));
