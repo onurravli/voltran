@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { connectEvents } from './events.ts';
 import { syncAttentionBadge } from './notify.ts';
 import { installShortcuts } from './shortcuts.ts';
+import { installSpooky } from './spooky.ts';
 import { selectedWorkspace, useUi } from './store.ts';
 import { disposeNotesExcept, flushNotesOnExit } from './notes.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
@@ -73,11 +74,13 @@ export function App() {
     useEffect(() => {
         const stopEvents = connectEvents();
         const stopShortcuts = installShortcuts();
+        const stopSpooky = installSpooky((message) => useUi.getState().showToast(message));
         const stopBadge = syncAttentionBadge();
         window.addEventListener('pagehide', flushNotesOnExit);
         return () => {
             stopEvents();
             stopShortcuts();
+            stopSpooky();
             stopBadge();
             window.removeEventListener('pagehide', flushNotesOnExit);
         };

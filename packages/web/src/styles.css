@@ -3711,3 +3711,41 @@ kbd {
         --sidebar-slide: 0s;
     }
 }
+
+.bats {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.bat {
+    position: absolute;
+    top: var(--bat-top);
+    left: 0;
+    font-size: var(--bat-size);
+    line-height: 1;
+    opacity: 0;
+    animation: bat-flight 2600ms var(--bat-delay) ease-in-out forwards;
+}
+
+@keyframes bat-flight {
+    0% {
+        opacity: 1;
+        transform: translate(-60px, 0) rotate(-8deg);
+    }
+    25% {
+        transform: translate(25vw, var(--bat-swoop)) rotate(10deg);
+    }
+    50% {
+        transform: translate(50vw, 0) rotate(-10deg);
+    }
+    75% {
+        transform: translate(75vw, calc(var(--bat-swoop) * -1)) rotate(10deg);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(calc(100vw + 60px), 0) rotate(-8deg);
+    }
+}

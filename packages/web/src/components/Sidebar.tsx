@@ -17,6 +17,7 @@ import {
 import { gitLabels } from '../labels.ts';
 import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
 import { keys, orderedSessions, reportProblem, togglePalette } from '../shortcuts.ts';
+import { quietLabel } from '../spooky.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
@@ -606,7 +607,7 @@ function Footer() {
             <UsageMeters />
             {connection === 'offline' ? <span className="connection connection--offline">Reconnecting to the daemon…</span> : null}
             <div className="sidebar__footer-row">
-                {quiet && connection !== 'offline' ? <span className="sidebar__quiet">Nothing needs you</span> : null}
+                {quiet && connection !== 'offline' ? <span className="sidebar__quiet">{quietLabel(new Date())}</span> : null}
                 {permission === 'default' ? (
                     <button
                         type="button"
