@@ -1094,6 +1094,7 @@ kbd {
 
 .sidebar__keys {
     margin-left: auto;
+    display: none; /*FIXME*/
 }
 
 .usage {
@@ -3086,6 +3087,13 @@ body:has(.separator[data-separator="active"]) .pane__frame {
     background: none;
     font: inherit;
     cursor: pointer;
+}
+
+.about__quote {
+    font-style: italic;
+    color: var(--text-muted);
+    margin-top: 1rem;
+    font-size: 12px;
 }
 
 .modal__title {

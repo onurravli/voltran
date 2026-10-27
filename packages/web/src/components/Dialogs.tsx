@@ -452,6 +452,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
                         Report a problem
                     </button>
                 </nav>
+                <span className='about__quote'>Fikri hür, vicdanı hür, irfanı hür.</span>
             </div>
             <div className="form__actions">
                 <button type="button" className="button button--primary" data-autofocus onClick={onClose}>

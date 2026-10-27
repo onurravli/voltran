@@ -618,7 +618,7 @@ function Footer() {
                 ) : null}
                 {archivedCount > 0 ? (
                     <button type="button" className="text-button" onClick={() => setShowArchived(!showArchived)}>
-                        {showArchived ? 'Hide archived' : `Archived (${archivedCount})`}
+                        {showArchived ? 'Hide archived' : `🗃️ (${archivedCount})`}
                     </button>
                 ) : null}
                 <button
