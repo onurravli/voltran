@@ -293,8 +293,9 @@ program; Option-drag selects the terminal's text anyway.
 ⌘K → **Appearance…** follows the system's dark or light mode, or keeps one of them. Dark and light
 each have their own theme, which colours the whole app and every terminal: ⌘K → **Dark theme…** picks
 from Voltran (the default), Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, One Dark,
-Rosé Pine and Solarized Dark, and ⌘K → **Light theme…** from Voltran Light (the default), Catppuccin
-Latte, Solarized Light and GitHub Light. ⌘K → **Terminal font family…** lists the common monospace fonts
+Rosé Pine, Solarized Dark, Kanagawa, Everforest Dark and the Halloween trio Pumpkin Spice, Witching Hour
+and Ghost Pepper, and ⌘K → **Light theme…** from Voltran Light (the default), Catppuccin Latte,
+Solarized Light, GitHub Light, Rosé Pine Dawn, Gruvbox Light and Candy Corn. ⌘K → **Terminal font family…** lists the common monospace fonts
 installed on your Mac or takes any installed font by name, and the terminal font size commands make
 terminal text bigger or smaller. ⌘K → **UI font family…** and the UI font size commands do the same
 for the rest of the window (sidebar, bars, dialogs), from 11 to 18 pixels; the UI uses the system font

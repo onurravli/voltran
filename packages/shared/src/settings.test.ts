@@ -47,7 +47,7 @@ describe('parseSettings', () => {
         expect(settings).toEqual(DEFAULT_SETTINGS);
         expect(problems).toEqual([
             '"appearance" must be "system", "dark" or "light"',
-            expect.stringMatching(/^"theme\.dark" must be "voltran", .* or "solarized-dark"$/),
+            expect.stringMatching(/^"theme\.dark" must be "voltran", .* or "ghost-pepper"$/),
             expect.stringMatching(/^"terminal\.fontFamily" must be the name of a font/),
             `"terminal.fontSize" must be a whole number from 9 to ${MAX_FONT_SIZE}`,
             expect.stringMatching(/^"ui\.fontFamily" must be the name of a font, or empty for the system font/),

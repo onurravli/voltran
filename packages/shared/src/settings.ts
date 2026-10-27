@@ -40,8 +40,21 @@ export const DARK_THEME_IDS: readonly string[] = [
     'one-dark',
     'rose-pine',
     'solarized-dark',
+    'kanagawa',
+    'everforest-dark',
+    'pumpkin-spice',
+    'witching-hour',
+    'ghost-pepper',
 ];
-export const LIGHT_THEME_IDS: readonly string[] = ['voltran-light', 'catppuccin-latte', 'solarized-light', 'github-light'];
+export const LIGHT_THEME_IDS: readonly string[] = [
+    'voltran-light',
+    'catppuccin-latte',
+    'solarized-light',
+    'github-light',
+    'rose-pine-dawn',
+    'gruvbox-light',
+    'candy-corn',
+];
 export const MIN_FONT_SIZE = 9;
 export const MAX_FONT_SIZE = 28;
 export const MIN_UI_FONT_SIZE = 11;
