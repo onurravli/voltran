@@ -124,9 +124,13 @@ describe('PaneManager', () => {
         expect(recorded.records.at(-1)?.ended).toBe(true);
     });
 
-    it('never starts a process for a preview or changes pane', () => {
+    it('never starts a process for a preview, changes or files pane', () => {
         const { manager, recorded } = setup();
-        for (const pane of [makePane({ adapter: 'preview', command: 'http://localhost:5173/' }), makePane({ adapter: 'changes' })]) {
+        for (const pane of [
+            makePane({ adapter: 'preview', command: 'http://localhost:5173/' }),
+            makePane({ adapter: 'changes' }),
+            makePane({ adapter: 'files' }),
+        ]) {
             manager.add(pane);
             manager.attach(pane.id, new FakeClient());
             manager.resize(pane.id, 80, 24);

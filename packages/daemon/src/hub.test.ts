@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -135,6 +135,33 @@ describe('Hub', () => {
             modified: 'const a = 2;\n',
         });
         await expect(hub.sessionFileContents(session.id, 'missing.ts')).rejects.toMatchObject({ status: 409 });
+    });
+
+    it("lists, reads and saves the files of a files pane's session folder", async () => {
+        const dir = realpathSync(mkdtempSync(join(tmpdir(), 'voltran-hub-')));
+        cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+        mkdirSync(join(dir, 'src'));
+        writeFileSync(join(dir, 'src', 'app.ts'), 'const a = 1;\n');
+        const { store, hub } = open(dir);
+        cleanups.push(async () => {
+            await hub.shutdown();
+            store.close();
+        });
+        const project = hub.createProject({ path: dir });
+        const session = await hub.createSession({ projectId: project.id, title: 'edit', panes: [{ adapter: 'files' }] });
+        const pane = hub.state().panes.find((entry) => entry.sessionId === session.id)!;
+        expect(pane).toMatchObject({ adapter: 'files', title: 'Files', command: null, status: 'idle', pid: null });
+        expect(hub.sessionFolder(session.id, '').entries).toContainEqual({ name: 'src', kind: 'folder' });
+        const file = hub.sessionFile(session.id, 'src/app.ts');
+        expect(file.text).toBe('const a = 1;\n');
+        const saved = hub.saveSessionFile(session.id, { path: 'src/app.ts', text: 'const a = 2;\n', version: file.version! });
+        expect(saved.version).not.toBe(file.version);
+        expect(readFileSync(join(dir, 'src', 'app.ts'), 'utf8')).toBe('const a = 2;\n');
+        expect(() => hub.saveSessionFile(session.id, { path: 'src/app.ts', text: 'stale', version: file.version! })).toThrow(
+            expect.objectContaining({ status: 409 }),
+        );
+        expect(() => hub.sessionFile(session.id, '../outside')).toThrow(expect.objectContaining({ status: 400 }));
+        expect(() => hub.sessionFile(session.id, undefined)).toThrow(expect.objectContaining({ status: 400 }));
     });
 
     describe('worktrees', () => {

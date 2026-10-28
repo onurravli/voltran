@@ -567,6 +567,10 @@ export function PaneMenu() {
                 <span>Changes</span>
                 <span className="menu__note">{inGit ? '' : 'not in git'}</span>
             </button>
+            <button type="button" role="menuitem" className="menu__item" onClick={() => create({ adapter: 'files' })}>
+                <span>Files</span>
+                <span className="menu__note" />
+            </button>
             <form
                 className="menu__command"
                 onSubmit={(event) => {

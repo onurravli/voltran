@@ -1,6 +1,16 @@
 import type { SettingsState } from './settings.ts';
 
-export type AdapterId = 'claude' | 'opencode' | 'codex' | 'antigravity' | 'shell' | 'command' | 'subagent' | 'preview' | 'changes';
+export type AdapterId =
+    | 'claude'
+    | 'opencode'
+    | 'codex'
+    | 'antigravity'
+    | 'shell'
+    | 'command'
+    | 'subagent'
+    | 'preview'
+    | 'changes'
+    | 'files';
 
 export type PaneKind = 'agent' | 'shell' | 'process' | 'page';
 
@@ -94,6 +104,26 @@ export interface FileContents {
     modified: string | null;
     binary: boolean;
     tooLarge: boolean;
+}
+
+export interface FolderEntry {
+    name: string;
+    kind: 'folder' | 'file' | 'link' | 'other';
+}
+
+export interface FolderListing {
+    path: string;
+    entries: FolderEntry[];
+    truncated: boolean;
+}
+
+export interface EditableFile {
+    path: string;
+    text: string | null;
+    version: string | null;
+    binary: boolean;
+    tooLarge: boolean;
+    readOnly: boolean;
 }
 
 export interface Workspace {
@@ -301,6 +331,12 @@ export interface SaveNotesBody {
     content: string;
     version: string;
     holder: string;
+}
+
+export interface SaveFileBody {
+    path: string;
+    text: string;
+    version: string;
 }
 
 export interface NotesLockBody {

@@ -1604,6 +1604,58 @@ button.git-count:hover {
     color: var(--fault);
 }
 
+.files__row {
+    align-items: center;
+    gap: 4px;
+    min-height: 0;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.files__row:focus-visible {
+    outline: 1px solid var(--signal);
+    outline-offset: -1px;
+}
+
+.files__row--link,
+.files__row--other {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+.files__twisty {
+    flex: none;
+    width: 1.2ch;
+    color: var(--text-faint);
+    font-size: calc(10px * var(--ui-scale));
+}
+
+.files__row .changes__name {
+    flex: 1;
+    max-width: none;
+}
+
+.files__save {
+    flex: none;
+    margin-left: auto;
+}
+
+.files__conflict {
+    flex: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--hull);
+    color: var(--text-strong);
+}
+
+.files__conflict span {
+    margin-right: auto;
+}
+
 .git-pr {
     flex: none;
 }

@@ -30,6 +30,7 @@ import {
     StopIcon,
 } from './Icons.tsx';
 import { ChangesView } from './ChangesView.tsx';
+import { FilesView } from './FilesView.tsx';
 import { ConversationView } from './ConversationView.tsx';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
@@ -212,8 +213,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const finding = useUi((state) => state.findPaneId === pane.id);
     const preview = pane.adapter === 'preview' ? pane.command : null;
     const changes = pane.adapter === 'changes';
+    const files = pane.adapter === 'files';
     const git = useUi((state) => (changes && session ? state.app?.git[session.cwd] : undefined));
-    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes;
+    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes && !files;
     const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
     const archived = session?.archived ?? false;
     const hasConversation = pane.adapter === 'claude';
@@ -381,6 +383,10 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     />
                 ) : changes ? (
                     <span className="pane__summary">{changesSummary(git)}</span>
+                ) : files && session ? (
+                    <span className="pane__summary" title={session.cwd}>
+                        {shortPath(session.cwd)}
+                    </span>
                 ) : (
                     <span className="pane__summary" title={pane.detail ?? undefined}>
                         {paneSummary(pane, adapter?.kind)}
@@ -433,7 +439,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                             <StopIcon size={14} />
                         </button>
                     ) : null}
-                    {preview !== null || changes ? (
+                    {files ? null : preview !== null || changes ? (
                         <>
                             <button type="button" className="icon-button" title="Reload" onClick={() => setLoads((count) => count + 1)}>
                                 <RestartIcon size={14} />
@@ -475,6 +481,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <div className="pane__placeholder">Archived. Restore the session to resume this pane.</div>
                 ) : changes ? (
                     <ChangesView key={loads} sessionId={pane.sessionId} pane focusToken={focusToken} />
+                ) : files ? (
+                    <FilesView sessionId={pane.sessionId} focusToken={focusToken} />
                 ) : preview !== null ? (
                     sameOrigin(preview) ? (
                         <div className="pane__placeholder">Voltran does not preview itself.</div>

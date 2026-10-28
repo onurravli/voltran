@@ -18,7 +18,9 @@ import {
     type CreateProjectBody,
     type CreateSessionBody,
     type CreateWorkspaceBody,
+    type EditableFile,
     type FileContents,
+    type FolderListing,
     type Layout,
     type MovePaneBody,
     type NotesLockBody,
@@ -27,6 +29,7 @@ import {
     type PaneNotes,
     type PaneSpec,
     type Project,
+    type SaveFileBody,
     type SaveNotesBody,
     type ServerEvent,
     type Session,
@@ -54,6 +57,7 @@ import {
     voltranSessionId,
 } from './adapters.ts';
 import { ChangesError, SessionChangesReader } from './changes.ts';
+import { FilesRefused, listFolder, readEditableFile, saveEditableFile } from './files.ts';
 import { readClaudeConversation } from './conversation.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
@@ -98,6 +102,13 @@ const TITLE_RETRY_MS = 4000;
 const MAX_TITLE = 200;
 const MAX_COMMAND = 4000;
 const NOTES_HOLDER = /^[A-Za-z0-9-]{8,64}$/;
+
+const requirePath = (value: unknown): string => {
+    if (typeof value !== 'string') {
+        throw new HttpError(400, 'path is required');
+    }
+    return value;
+};
 
 const requireString = (value: unknown, field: string, max: number): string => {
     if (typeof value !== 'string' || !value.trim()) {
@@ -941,6 +952,38 @@ export class Hub {
     async sessionFileContents(id: string, path: string): Promise<FileContents> {
         const session = this.mustGetSession(id);
         return this.readChanges(() => this.changes.contents(session.cwd, requireString(path, 'path', 4096)));
+    }
+
+    sessionFolder(id: string, path: unknown): FolderListing {
+        const session = this.mustGetSession(id);
+        return this.inSessionFolder(() => listFolder(session.cwd, requirePath(path)));
+    }
+
+    sessionFile(id: string, path: unknown): EditableFile {
+        const session = this.mustGetSession(id);
+        return this.inSessionFolder(() => readEditableFile(session.cwd, requirePath(path)));
+    }
+
+    saveSessionFile(id: string, body: Partial<SaveFileBody> | null): EditableFile {
+        const session = this.mustGetSession(id);
+        if (typeof body?.text !== 'string' || typeof body.version !== 'string') {
+            throw new HttpError(400, 'text and version are required');
+        }
+        const { text, version } = body;
+        const saved = this.inSessionFolder(() => saveEditableFile(session.cwd, requirePath(body.path), text, version));
+        this.refreshGitSoon(session.cwd);
+        return saved;
+    }
+
+    private inSessionFolder<T>(read: () => T): T {
+        try {
+            return read();
+        } catch (error) {
+            if (error instanceof FilesRefused) {
+                throw new HttpError(error.status, error.message);
+            }
+            throw error;
+        }
     }
 
     private async readChanges<T>(read: () => Promise<T>): Promise<T> {

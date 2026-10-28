@@ -61,6 +61,7 @@ function addPaneItems(sessionId: string): MenuItem[] {
             onSelect: () => create({ adapter: adapter.id }),
         })),
         { label: 'Changes', note: inGit ? undefined : 'not in git', disabled: !inGit, onSelect: () => create({ adapter: 'changes' }) },
+        { label: 'Files', onSelect: () => create({ adapter: 'files' }) },
     ];
 }
 
@@ -278,7 +279,7 @@ export function paneMenu(pane: PaneView): MenuItem[] {
                   },
               ]
             : []),
-        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes'
+        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes' || pane.adapter === 'files'
             ? []
             : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
         {

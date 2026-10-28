@@ -221,7 +221,7 @@ function toggleFocusedNotes(): void {
     const state = useUi.getState();
     const paneId = visibleFocusedPane();
     const pane = state.app?.panes.find((entry) => entry.id === paneId);
-    if (!pane || pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes') {
+    if (!pane || pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes' || pane.adapter === 'files') {
         state.showToast('Focus a terminal pane to see its notes');
         return;
     }

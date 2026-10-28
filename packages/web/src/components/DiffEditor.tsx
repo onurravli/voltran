@@ -5,7 +5,7 @@ import { fontStack } from '../fonts.ts';
 import { activeThemeId, useUi } from '../store.ts';
 import { themeById } from '../themes.ts';
 
-type Monaco = typeof import('../monaco.ts').monaco;
+export type Monaco = typeof import('../monaco.ts').monaco;
 type DiffWidget = ReturnType<Monaco['editor']['createDiffEditor']>;
 
 export interface DiffStat {
@@ -16,7 +16,7 @@ export interface DiffStat {
 let loading: Promise<Monaco> | null = null;
 let editors = 0;
 
-function loadMonaco(): Promise<Monaco> {
+export function loadMonaco(): Promise<Monaco> {
     loading ??= import('../monaco.ts').then((module) => module.monaco);
     loading.catch(() => {
         loading = null;

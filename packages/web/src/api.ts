@@ -5,8 +5,10 @@ import type {
     CreateSessionBody,
     CreateWorkspaceBody,
     Diagnostics,
+    EditableFile,
     EditSettingsBody,
     FileContents,
+    FolderListing,
     MovePaneBody,
     NotesLockBody,
     NotesMeta,
@@ -14,6 +16,7 @@ import type {
     PaneNotes,
     Project,
     ProjectGit,
+    SaveFileBody,
     SaveNotesBody,
     Session,
     SessionChanges,
@@ -171,6 +174,11 @@ export const api = {
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
     contents: (sessionId: string, path: string) =>
         request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
+    folder: (sessionId: string, path: string) =>
+        request<FolderListing>('GET', `/api/sessions/${sessionId}/folder?path=${encodeURIComponent(path)}`),
+    file: (sessionId: string, path: string) =>
+        request<EditableFile>('GET', `/api/sessions/${sessionId}/file?path=${encodeURIComponent(path)}`),
+    saveFile: (sessionId: string, body: SaveFileBody) => request<EditableFile>('PUT', `/api/sessions/${sessionId}/file`, body),
     conversation: (paneId: string, source: string | null, from: number) =>
         request<ConversationChunk>(
             'GET',

@@ -59,7 +59,7 @@ is already open, `voltran up` does not open another one.
 |---|---|
 | `voltran up [--browser] [--no-open] [--new]` | Start the daemon if needed and open the UI, unless a Voltran window is already open (`--new` opens another anyway) |
 | `voltran add [path] [--name <name>]` | Register a folder as a project (defaults to the current folder) |
-| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, `command` followed by a command to run, `preview` followed by a page on this computer (`localhost:5173`), or `changes` for the git changes of the folder. Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
+| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, `command` followed by a command to run, `preview` followed by a page on this computer (`localhost:5173`), `changes` for the git changes of the folder, or `files` for its files in an editor. Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
@@ -178,6 +178,17 @@ button in its bar, or add a **Changes** pane from a pane's split menu (or `--pan
 pane shows the changes of its own session's folder. Voltran reads the last commit's side with
 `git cat-file`, which runs none of the repository's filters or textconv drivers, and the file on
 disk without following links; binary files and files over 512 KB are not shown.
+
+### Files
+
+A **Files** pane, from a pane's split menu or `--pane files`, shows the session's folder as a tree
+on the left and the file you pick in the same editor on the right, where you can change and save it
+(⌘S, or Ctrl+S off a Mac). While the file has no unsaved changes, the editor follows what agents
+write to it; when an agent changes a file you are editing, Voltran asks whether to take the version
+on disk or save yours over it, and it asks before another file replaces unsaved changes. The tree
+leaves out `.git` and shows links without following them. Binary files, text that is not UTF-8 and
+files over 2 MB are not opened, and a file with another hard link opens read only. A save writes
+the file in place, so it keeps its mode, and only when it still holds what the editor started from.
 
 ### Worktrees
 
@@ -429,6 +440,8 @@ A local server that can start processes is reachable from every web page you ope
   before the viewer writes it to a terminal;
 - never writes, reads or changes the mode of a notes file through a link or hard link an agent
   planted, and gives Claude the notes through the daemon rather than by reading the agent's folder;
+- reads and saves a file in a Files pane only inside the session's folder, never through a link or
+  into `.git`, and never saves a file that has another hard link;
 - keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns;
 - drops control characters from session titles and status lines taken from what agents report, so
   `voltran status` never writes an agent's escape sequence to your terminal.

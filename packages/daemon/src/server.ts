@@ -15,6 +15,7 @@ import {
     type ServerEvent,
 } from '@voltran/shared';
 import { voltranVersion, writeNewToken, type Config } from './config.ts';
+import { MAX_EDIT_BYTES } from './files.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
 import { editorCommand, type SettingsFile } from './settings.ts';
@@ -246,6 +247,15 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('GET', '/api/sessions/:id/changes', async (_req, res, [id]) => sendJson(res, 200, await hub.sessionChanges(id)));
     route('GET', '/api/sessions/:id/contents', async (req, res, [id]) =>
         sendJson(res, 200, await hub.sessionFileContents(id, requestUrl(req).searchParams.get('path') ?? '')),
+    );
+    route('GET', '/api/sessions/:id/folder', (req, res, [id]) =>
+        sendJson(res, 200, hub.sessionFolder(id, requestUrl(req).searchParams.get('path') ?? '')),
+    );
+    route('GET', '/api/sessions/:id/file', (req, res, [id]) =>
+        sendJson(res, 200, hub.sessionFile(id, requestUrl(req).searchParams.get('path'))),
+    );
+    route('PUT', '/api/sessions/:id/file', async (req, res, [id]) =>
+        sendJson(res, 200, hub.saveSessionFile(id, await readJson(req, MAX_EDIT_BYTES * 6 + JSON_LIMIT))),
     );
     route('POST', '/api/sessions/:id/reveal', (_req, res, [id]) => {
         hub.revealSession(id);

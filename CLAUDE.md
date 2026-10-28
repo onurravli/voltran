@@ -216,6 +216,17 @@ in Monaco (`web/src/monaco.ts`, loaded on first use with only the editor worker 
 languages, no language service). The same view is the ⌃⌥G overlay and a `changes` pane, which,
 like `preview`, is a `page` adapter that runs no process.
 
+**Files.** A `files` pane (another `page` adapter) is a tree of the session's `cwd` and a Monaco
+editor (`components/FilesView.tsx`, `CodeEditor.tsx`; the tree's rows come from `web/src/files.ts`).
+`daemon/src/files.ts` serves `GET /api/sessions/:id/folder?path=`, `GET …/file?path=` and
+`PUT …/file`: a path is relative with no `.`, `..` or `.git` part, every folder on the way is
+`lstat`ed, the file opens with `O_NOFOLLOW` and must still be the file the path names after it
+opened. A file's `version` is the hash of its bytes; a save carries the version it started from,
+writes in place (keeping mode and owner) and answers 409 if the file changed meanwhile, which the
+view turns into a choice between the disk's version and the user's. Files with another hard link
+are read only. The view polls the open file and the expanded folders, and follows changes on disk
+while nothing is unsaved.
+
 **Worktrees.** A session created with `worktree: { branch, base? }` gets a `git worktree` under
 `~/.voltran/worktrees/<project>/<branch>` (`daemon/src/worktrees.ts`); `Session.worktree` is its
 root and `Session.cwd` the project's subfolder inside it, so panes and `GitWatcher` need nothing
