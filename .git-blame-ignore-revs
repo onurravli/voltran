@@ -1,2 +1,4 @@
 # style: format the code with Biome and apply its safe fixes
 bc0145283146fadd25a5ace8b5f19eb834776644
+# style: wrap lines at 120 columns
+fc99c508032de9688416ece23a81b0d017a2a734

@@ -59,7 +59,7 @@ is already open, `voltran up` does not open another one.
 |---|---|
 | `voltran up [--browser] [--no-open] [--new]` | Start the daemon if needed and open the UI, unless a Voltran window is already open (`--new` opens another anyway) |
 | `voltran add [path] [--name <name>]` | Register a folder as a project (defaults to the current folder) |
-| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, `command` followed by a command to run, `preview` followed by a page on this computer (`localhost:5173`), or `changes` for the git changes of the folder. Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
+| `voltran new [path] [--pane <pane>]… [--title <title>] [--worktree <branch>[:<base>]]` | Open a session in a folder (the current one by default), registering it as a project if it is not one yet, and show it in the window. Each `--pane` adds a pane in order: `claude`, `codex`, `opencode`, `antigravity` or `shell`, followed by arguments for that agent, `command` followed by a command to run, `preview` followed by a page on this computer (`localhost:5173`), `changes` for the git changes of the folder, or `editor` for its files. Without `--pane` the session starts with one Claude Code pane. Prints the session's id; `--no-open` leaves the window alone |
 | `voltran status` | Show the daemon and every pane that needs you |
 | `voltran down` | Stop the daemon. Agents resume the next time you open them |
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
@@ -179,6 +179,39 @@ pane shows the changes of its own session's folder. Voltran reads the last commi
 `git cat-file`, which runs none of the repository's filters or textconv drivers, and the file on
 disk without following links; binary files and files over 512 KB are not shown.
 
+### Editor
+
+An **Editor** pane shows the files of its session's folder (the worktree, for a session in one) as a
+tree, and edits them in Monaco with syntax highlighting, tabs and the editing keys of VS Code. Press
+⌃⌥O to open one to the right of the focused pane, such as next to Claude Code, or add it from a
+pane's split menu (or `--pane editor`); like any pane it can go anywhere in the layout or into a
+workspace. Folders open as you expand them; files git ignores are dimmed, and `.git` is hidden.
+Changed files show their git state as in the changes view (M, U, A, D, R, ! in its colour), and a
+folder shows a dot in the colour of the strongest change inside it. ⌘B or the button left of the
+tabs hides the tree. The editor's font, tab size, word wrap, minimap and line numbers are in the
+`editor` section of the [settings file](#settings-file), and in ⌘K (type “editor”); its font follows
+the terminal's until you give it one, and the changes view uses the same font.
+
+| Key | In an editor pane |
+| --- | --- |
+| ⌘S / ⌥⌘S | Save the file / every file |
+| ⌘P | Open a file by name |
+| ⌘B | Show or hide the tree |
+| ⌃W | Close the tab (⌘W belongs to the browser) |
+| ⌥⌘← / ⌥⌘→ | Previous / next tab |
+| F2, ⌫ | Rename or delete the file selected in the tree |
+| F1 | Every command of the editor's own (⌘F find, ⌥⌘F replace, ⌘/ comment, ⌥↑/⌥↓ move a line…) |
+
+Off a Mac, ⌘ is Ctrl here, ⌃W is Alt+W, and tabs step with Ctrl+Alt+PageUp/PageDown. Right-click the
+tree to create, rename or delete files and folders: a name with slashes creates the folders on the
+way, and deleting moves to the Trash (on Linux, the freedesktop.org trash), asking before it deletes
+for good when it cannot. The open file is read again every two seconds, so an agent's edit appears
+as it lands, as one step you can undo. When the file also has unsaved changes, nothing is
+overwritten: the editor asks whether to take the version on disk or overwrite it with yours, and
+saving checks again, so a save never replaces an edit it has not seen. Unsaved text stays while you
+switch sessions; closing the tab, the pane or the window asks first. Files that are not UTF-8 text or
+are over 4 MB open read-only as a note. Every path stays inside the session's folder, links included.
+
 ### Worktrees
 
 In a git repository, **Work in its own worktree** in the new session dialog gives the session a
@@ -280,6 +313,7 @@ Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal.
 | ⌃⌥C | Switch the focused Claude Code pane between its conversation and its terminal |
 | ⌃⌥E | Show or hide the notes of the focused pane |
 | ⌃⌥G | Show or hide the git changes of the focused session |
+| ⌃⌥O | Open the files of the focused session in an editor to its right |
 | ⌃⌥/ | Show all shortcuts |
 
 In terminals, Option types the characters of your keyboard layout (such as @ and { on Turkish Q), as
@@ -306,11 +340,12 @@ project list on the other side.
 ### Settings file
 
 Every choice above is saved in `~/.voltran/settings.json`, and you can edit that file instead of
-using ⌘K: ⌘K → **Open the settings file** opens it in a terminal editor in a pane next to the focused
-one, creating it with every setting and the values each accepts. The editor is `editor.command`, or
-`$VISUAL`, then `$EDITOR`, then `vim`; the pane closes when the editor exits cleanly. With no session
-open, or with **Open the settings file in the default app**, it opens in your system's editor
-instead. The file takes comments and trailing commas, like VS Code's:
+using ⌘K: ⌘K → **Open the settings file** opens it as a tab of the session's editor pane (one opens
+next to the focused pane if there is none), creating it with every setting and the values each
+accepts; ⌘S saves it, and a value Voltran does not accept is named in the window. **Open the settings
+file in a terminal editor** uses `editor.command`, or `$VISUAL`, then `$EDITOR`, then `vim`, in a pane
+that closes when the editor exits cleanly. With no session open, or with **Open the settings file in
+the default app**, it opens in your system's editor instead. The file takes comments and trailing commas, like VS Code's:
 
 ```jsonc
 {
@@ -319,7 +354,35 @@ instead. The file takes comments and trailing commas, like VS Code's:
     "terminal": { "fontFamily": "JetBrains Mono", "fontSize": 13 },
     "ui": { "fontFamily": "", "fontSize": 13 }, // "" is the system font
     "sidebar": { "position": "left" }, // "left" or "right"
-    "editor": { "command": "" },       // such as "nvim"
+    "editor": {
+        "command": "",                 // what opens this file in a pane, such as "nvim"
+        "fontFamily": "",              // the editor pane's font; "" is the terminal's
+        "fontSize": null,              // null is the terminal's
+        "tabSize": 4,                  // for files without indentation of their own
+        "wordWrap": false,
+        "minimap": false,
+        "lineNumbers": "on",           // "on", "relative" or "off"
+        "lineHeight": null,            // null is the font's own; 1 to 3 times the font size
+        "fontLigatures": false,
+        "cursorStyle": "line",         // "line", "block" or "underline"
+        "cursorBlinking": "blink",     // "blink", "smooth", "phase", "expand" or "solid"
+        "renderWhitespace": "selection", // "none", "boundary", "selection", "trailing" or "all"
+        "renderLineHighlight": "gutter", // "none", "gutter", "line" or "all"
+        "rulers": [],                  // columns, such as [80, 120]
+        "insertSpaces": true,          // spaces or tabs, where a file does not show which
+        "detectIndentation": true,     // take the indentation from each file
+        "bracketPairColorization": true,
+        "autoClosingBrackets": true,
+        "quickSuggestions": true,      // suggest words from the file while typing
+        "folding": true,
+        "stickyScroll": false,
+        "smoothScrolling": false,
+        "scrollBeyondLastLine": false,
+        "trimTrailingWhitespace": false, // on save (not on an auto save after a delay)
+        "insertFinalNewline": false,   // on save
+        "autoSave": "off",             // "off", "afterDelay" or "onFocusChange"
+        "autoSaveDelay": 1000          // milliseconds, for "afterDelay"
+    },
     "git": { "pullRequests": true }    // look up each branch's pull request with gh
 }
 ```

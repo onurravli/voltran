@@ -47,7 +47,9 @@ describe('Linux integration', () => {
         expect(lines).toContain('Type=oneshot');
         expect(lines).toContain('RemainAfterExit=yes');
         expect(lines).toContain('KillMode=process');
-        expect(lines).toContain('ExecStart="/home/me/.nvm/node" "/home/me/R&D \\"voltran\\" 100%% $$5/bin/voltran.mjs" "up" "--no-open"');
+        expect(lines).toContain(
+            'ExecStart="/home/me/.nvm/node" "/home/me/R&D \\"voltran\\" 100%% $$5/bin/voltran.mjs" "up" "--no-open"',
+        );
         expect(lines).toContain('Environment="SHELL=/bin/bash"');
         expect(lines).toContain('Environment="VOLTRAN_HOME=/home/me/$voltran"');
         expect(lines).toContain('StandardOutput=append:/home/me/.voltran/daemon.log');

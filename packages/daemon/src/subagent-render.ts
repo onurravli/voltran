@@ -64,7 +64,9 @@ function result(entry: Extract<TranscriptEntry, { kind: 'result' }>, state: Rend
     const shown = all.length > 0 ? all.slice(0, RESULT_LINES) : ['(no output)'];
     const name = state.tools.get(entry.toolUseId);
     const label = entry.toolUseId !== state.lastToolId && name ? `(${name}) ` : '';
-    const body = shown.map((line, index) => `${index === 0 ? '  ⎿  ' : '     '}${color}${index === 0 ? label : ''}${line}${RESET}`);
+    const body = shown.map(
+        (line, index) => `${index === 0 ? '  ⎿  ' : '     '}${color}${index === 0 ? label : ''}${line}${RESET}`,
+    );
     if (all.length > RESULT_LINES) {
         body.push(`     ${DIM}… +${all.length - RESULT_LINES} lines${RESET}`);
     }

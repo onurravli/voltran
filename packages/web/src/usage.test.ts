@@ -6,7 +6,9 @@ describe('usageRows', () => {
         const fiveHour = { usedPercent: 38, resetsAt: 1000 };
         const sevenDay = { usedPercent: 61, resetsAt: null };
         expect(usageRows(null)).toEqual([]);
-        expect(usageRows({ fiveHour: null, sevenDay })).toEqual([{ label: '7d', name: 'Weekly limit', window: sevenDay }]);
+        expect(usageRows({ fiveHour: null, sevenDay })).toEqual([
+            { label: '7d', name: 'Weekly limit', window: sevenDay },
+        ]);
         expect(usageRows({ fiveHour, sevenDay }).map((row) => row.label)).toEqual(['5h', '7d']);
     });
 });

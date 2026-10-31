@@ -3,7 +3,14 @@ import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, wr
 import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bugReportUrl, formatDiagnostics, type AppState, type CreateSessionBody, type PaneSpec, type Project } from '@voltran/shared';
+import {
+    bugReportUrl,
+    formatDiagnostics,
+    type AppState,
+    type CreateSessionBody,
+    type PaneSpec,
+    type Project,
+} from '@voltran/shared';
 import { resolveShellPath } from './adapters.ts';
 import {
     DEV_WEB_PORT,
@@ -58,8 +65,9 @@ Options:
 new:
   --pane      a pane, in order: claude, codex, opencode, antigravity or shell, followed by
               arguments for it, command and a command to run, preview and a local page
-              (localhost:5173), or changes for the git changes of the folder. Repeat it for
-              more panes; without it the session starts with one Claude Code pane.
+              (localhost:5173), changes for the git changes of the folder, or editor for
+              its files. Repeat it for more panes; without it the session starts with one
+              Claude Code pane.
               voltran new . --pane "claude --model opus" --pane "command npm run dev"
   --title     the session's title; agents name an untitled session from its first prompt
   --worktree  work in a new git worktree on this branch, from <base> or the current HEAD
@@ -294,7 +302,11 @@ function systemctl(args: string[]): boolean {
 // path and passes on the shell and Voltran's own settings; the daemon builds its PATH from that shell.
 // Homebrew keeps Node and Voltran in versioned Cellar folders that an upgrade deletes, while its opt
 // links and the bin link the CLI was started through stay where they are.
-export function autostartProgram(execPath = process.execPath, invoked = process.argv[1], cliEntry = CLI_ENTRY): string[] {
+export function autostartProgram(
+    execPath = process.execPath,
+    invoked = process.argv[1],
+    cliEntry = CLI_ENTRY,
+): string[] {
     const optNode = execPath.replace(/\/Cellar\/(node(?:@\d+)?)\/[^/]+\/bin\/node$/, '/opt/$1/bin/node');
     const node = optNode !== execPath && existsSync(optNode) && realpathSync(optNode) === execPath ? optNode : execPath;
     const cli = invoked && realpathSync(invoked) === realpathSync(cliEntry) ? invoked : cliEntry;
@@ -358,7 +370,9 @@ function autostartLinux(args: string[]): void {
         mkdirSync(dirname(SYSTEMD_UNIT_FILE), { recursive: true });
         writeFileSync(SYSTEMD_UNIT_FILE, systemdUnit({ program, env: autostartEnv(), log: config.logFile }));
         if (!systemctl(['daemon-reload']) || !systemctl(['enable', '--now', SYSTEMD_UNIT_NAME])) {
-            console.error(`systemctl --user could not enable ${SYSTEMD_UNIT_FILE}. Autostart needs a systemd user session.`);
+            console.error(
+                `systemctl --user could not enable ${SYSTEMD_UNIT_FILE}. Autostart needs a systemd user session.`,
+            );
             process.exit(1);
         }
         console.log(`Voltran now starts when you log in (${SYSTEMD_UNIT_FILE}).`);
@@ -389,7 +403,9 @@ async function status(): Promise<void> {
     console.log(`Voltran running on ${api.config.url} (pid ${pid})`);
     const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
     const open = state.sessions.filter((session) => !session.archived).length;
-    console.log(`${count(state.projects.length, 'project')}, ${count(open, 'session')}, ${count(state.panes.length, 'pane')}`);
+    console.log(
+        `${count(state.projects.length, 'project')}, ${count(open, 'session')}, ${count(state.panes.length, 'pane')}`,
+    );
     for (const pane of attention) {
         const session = state.sessions.find((entry) => entry.id === pane.sessionId);
         const line = `${session?.title ?? '?'} · ${pane.title}${pane.detail ? ` — ${pane.detail}` : ''}`;
@@ -419,7 +435,17 @@ export interface NewSessionArgs {
     windowArgs: string[];
 }
 
-const PANE_ADAPTERS = new Set(['claude', 'codex', 'opencode', 'antigravity', 'shell', 'command', 'preview', 'changes']);
+const PANE_ADAPTERS = new Set([
+    'claude',
+    'codex',
+    'opencode',
+    'antigravity',
+    'shell',
+    'command',
+    'preview',
+    'changes',
+    'editor',
+]);
 
 // A pane is its adapter's name and the rest of the words as they were typed: arguments for an agent,
 // or the command line of a `command` pane.
@@ -444,7 +470,9 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
             const [adapter] = spec.split(/\s+/, 1);
             const rest = spec.slice(adapter.length).trim();
             if (!PANE_ADAPTERS.has(adapter)) {
-                throw new Error(`unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell, command, preview or changes`);
+                throw new Error(
+                    `unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell, command, preview, changes or editor`,
+                );
             }
             if (adapter === 'command' && !rest) {
                 throw new Error('a command pane needs the command to run, such as --pane "command npm run dev"');
@@ -455,8 +483,8 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
             if (adapter === 'shell' && rest) {
                 throw new Error('a shell pane takes no arguments; use --pane "command …" to run a command');
             }
-            if (adapter === 'changes' && rest) {
-                throw new Error('a changes pane takes no arguments');
+            if ((adapter === 'changes' || adapter === 'editor') && rest) {
+                throw new Error(`a ${adapter} pane takes no arguments`);
             }
             result.panes.push(rest ? ({ adapter, command: rest } as PaneSpec) : ({ adapter } as PaneSpec));
         } else if (flag === '--title') {
@@ -501,7 +529,12 @@ async function newSession(args: string[]): Promise<void> {
             project = await api.request<Project>('POST', '/api/projects', { path: parsed.path });
             console.log(`Added project ${project.name} → ${project.path}`);
         }
-        const body: CreateSessionBody = { projectId: project.id, title: parsed.title, panes: parsed.panes, worktree: parsed.worktree };
+        const body: CreateSessionBody = {
+            projectId: project.id,
+            title: parsed.title,
+            panes: parsed.panes,
+            worktree: parsed.worktree,
+        };
         const session = await api.request<{ id: string; title: string; cwd: string }>('POST', '/api/sessions', body);
         console.log(`Opened ${parsed.title ? `"${withoutControls(session.title)}"` : 'a session'} in ${session.cwd}`);
         console.log(session.id);

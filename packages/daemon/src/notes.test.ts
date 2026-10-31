@@ -121,7 +121,9 @@ describe('NotesStore', () => {
 
         expect(refusal(() => store.save(paneId, HOLDER, version, 'stale')).status).toBe(409);
         expect(refusal(() => store.save(paneId, 'window-two', saved.version, 'other')).status).toBe(409);
-        expect(refusal(() => store.save(paneId, HOLDER, saved.version, 'x'.repeat(MAX_NOTES_BYTES + 1))).status).toBe(413);
+        expect(refusal(() => store.save(paneId, HOLDER, saved.version, 'x'.repeat(MAX_NOTES_BYTES + 1))).status).toBe(
+            413,
+        );
         expect(store.read(paneId).content).toBe('# Plan\n');
     });
 
@@ -215,18 +217,21 @@ describe('NotesStore', () => {
     });
 
     // An error the watcher's reload threw would end the daemon, and every pane with it.
-    it.skipIf(process.getuid?.() === 0)('reads notes an agent made unreadable as empty instead of failing', async () => {
-        const { store } = setup();
-        const paneId = randomUUID();
-        const file = store.file(paneId);
-        writeFileSync(file, 'readable\n');
-        expect(store.read(paneId).content).toBe('readable\n');
-        store.watch();
-        chmodSync(file, 0o200);
-        appendFileSync(file, 'more\n');
-        await new Promise((resolveWait) => setTimeout(resolveWait, 500));
-        expect(store.current(paneId)).toBe('');
-    });
+    it.skipIf(process.getuid?.() === 0)(
+        'reads notes an agent made unreadable as empty instead of failing',
+        async () => {
+            const { store } = setup();
+            const paneId = randomUUID();
+            const file = store.file(paneId);
+            writeFileSync(file, 'readable\n');
+            expect(store.read(paneId).content).toBe('readable\n');
+            store.watch();
+            chmodSync(file, 0o200);
+            appendFileSync(file, 'more\n');
+            await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+            expect(store.current(paneId)).toBe('');
+        },
+    );
 
     it('refuses the lock to a stale window, another window and a running agent edit', () => {
         const { store } = setup();
@@ -240,7 +245,9 @@ describe('NotesStore', () => {
         expect(store.read(paneId).content).toBe('agent wrote this\n');
 
         store.lock(paneId, HOLDER, store.read(paneId).version);
-        expect(refusal(() => store.lock(paneId, 'window-two', store.read(paneId).version)).message).toMatch(/another window/);
+        expect(refusal(() => store.lock(paneId, 'window-two', store.read(paneId).version)).message).toMatch(
+            /another window/,
+        );
         store.unlock(paneId, 'window-two');
         expect(store.meta(paneId).lock).toBe('user');
         store.unlock(paneId, HOLDER);

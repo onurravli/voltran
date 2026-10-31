@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { insertPane, isValidLayout, movePane, normalizeSizes, paneIds, placeLayout, removePane, samePanes } from './layout.ts';
+import {
+    insertPane,
+    isValidLayout,
+    movePane,
+    normalizeSizes,
+    paneIds,
+    placeLayout,
+    removePane,
+    samePanes,
+} from './layout.ts';
 import type { Layout, LayoutSplit } from './types.ts';
 
 describe('insertPane', () => {
@@ -32,7 +41,10 @@ describe('insertPane', () => {
         expect(next).toMatchObject({
             type: 'split',
             direction: 'horizontal',
-            children: [{ paneId: 'a' }, { type: 'split', direction: 'vertical', children: [{ paneId: 'b' }, { paneId: 'c' }] }],
+            children: [
+                { paneId: 'a' },
+                { type: 'split', direction: 'vertical', children: [{ paneId: 'b' }, { paneId: 'c' }] },
+            ],
         });
     });
 
@@ -101,9 +113,14 @@ describe('validation helpers', () => {
 
     it('accepts only well-formed layouts', () => {
         expect(isValidLayout({ type: 'pane', paneId: 'a' })).toBe(true);
-        expect(isValidLayout({ type: 'split', direction: 'horizontal', children: [{ type: 'pane', paneId: 'a' }], sizes: [100] })).toBe(
-            false,
-        );
+        expect(
+            isValidLayout({
+                type: 'split',
+                direction: 'horizontal',
+                children: [{ type: 'pane', paneId: 'a' }],
+                sizes: [100],
+            }),
+        ).toBe(false);
         expect(isValidLayout({ type: 'split', direction: 'diagonal', children: [], sizes: [] })).toBe(false);
         expect(isValidLayout({ type: 'pane' })).toBe(false);
     });
@@ -209,7 +226,10 @@ describe('placeLayout', () => {
         expect(placeLayout(layout, pair, 'b', 'top')).toEqual({
             type: 'split',
             direction: 'horizontal',
-            children: [pane('a'), { type: 'split', direction: 'vertical', children: [pair, pane('b')], sizes: [50, 50] }],
+            children: [
+                pane('a'),
+                { type: 'split', direction: 'vertical', children: [pair, pane('b')], sizes: [50, 50] },
+            ],
             sizes: [50, 50],
         });
         expect(paneIds(placeLayout(layout, pane('c'), 'a', 'left'))).toEqual(['c', 'a', 'b']);
@@ -217,7 +237,11 @@ describe('placeLayout', () => {
     });
 
     it('goes to the right of the pane when dropped on its middle, or of everything without a target', () => {
-        expect(paneIds(placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), 'a', 'swap'))).toEqual(['a', 'c', 'b']);
+        expect(paneIds(placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), 'a', 'swap'))).toEqual([
+            'a',
+            'c',
+            'b',
+        ]);
         const appended = placeLayout(insertPane(pane('a'), 'b', 'a', 'horizontal'), pane('c'), null, 'swap');
         expect(appended.type === 'split' && appended.children.length).toBe(3);
         expect(placeLayout(pane('a'), pane('c'), 'missing', 'left')).toEqual({

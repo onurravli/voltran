@@ -24,7 +24,7 @@ npm run dev:web                  # Vite on :4774, proxies /api and /ws to the da
 node bin/voltran.mjs up|down|status|add|new|autostart   # the CLI, same as `voltran` after npm link
 ```
 
-Biome formats and lints the code (`biome.json`: 4-space indent, single quotes, 140 columns; the
+Biome formats and lints the code (`biome.json`: 4-space indent, single quotes, 120 columns; the
 recommended rules minus those that fight deliberate patterns, such as control characters in terminal
 regexes). Beyond that, match the surrounding code: no comments except for a constraint the code
 cannot show (a `biome-ignore` names its reason), every file ends with a newline. Commit
@@ -102,7 +102,7 @@ once the user trusts it, and keeps that trust by the command's hash, so the comm
 same for every pane. A Codex pane uses `ActivityTracker` until its first hook arrives and
 `codexTransition` after that. Other agents use `ActivityTracker` (output streaming / quiet / bell
 heuristics). Adapters (`claude`, `opencode`, `codex`, `antigravity`, `shell`, `command`, `subagent`,
-and the processless `preview` and `changes`)
+and the processless `preview`, `changes` and `editor`)
 are defined in `adapters.ts`.
 
 **Session titles.** A session created without a title is `titleSource: 'pending'` and needs a pane
@@ -215,6 +215,25 @@ filter or textconv) and the working tree's itself with `O_NOFOLLOW`, and the web
 in Monaco (`web/src/monaco.ts`, loaded on first use with only the editor worker and the basic
 languages, no language service). The same view is the ⌃⌥G overlay and a `changes` pane, which,
 like `preview`, is a `page` adapter that runs no process.
+
+**Editor.** An `editor` pane (a `page` adapter) browses and edits its session's `cwd`.
+`daemon/src/files.ts` (`ProjectFiles`) takes paths relative to that folder only (`relativePath`) and
+resolves every one with `realpath` to check it stays inside, links included; rename and delete act on
+the link itself. Reads return a `version` (a hash of the bytes) and answer `unchanged` to a client that
+sends it; a save is refused with 409 unless the file is still the version the client edited (or it
+forces it), and writes in place to keep the mode and links. Text is valid UTF-8 without NUL, so a
+save never rewrites bytes the editor could not show. Trash goes to `~/.Trash` or the freedesktop.org
+trash (`systemTrash`), and reports `trashed: false` instead of deleting when it cannot. In the web app,
+`editor-session.ts` (`EditorSession`, one per pane, kept across unmounts like `TerminalSession`) holds
+the tabs and a Monaco model per open file, polls the active file and the expanded folders, and applies
+a file changed on disk as one undoable edit (`minimalEdit`), or marks a conflict when it has unsaved
+changes; `editor.ts` holds the DOM-free parts (`editorCommand` for its keys, `rankFiles` for ⌘P,
+`parseMemory` for the tabs kept in `localStorage`, `gitMarks` for the tree's git colours from the
+changes list, whose `prefix` places the session's folder in the repository). The settings file opens
+as the tab `SETTINGS_TAB` (a path no file in the folder can have), which `EditorSession` reads and
+writes through `GET`/`PUT /api/settings/file`: routes that take no path and edit only the daemon's
+own settings file, through a link to its target, so `~/.voltran` itself is never browsable. Monaco's
+basic languages have no JSON, so `jsonc.ts` registers a Monarch tokenizer for it.
 
 **Worktrees.** A session created with `worktree: { branch, base? }` gets a `git worktree` under
 `~/.voltran/worktrees/<project>/<branch>` (`daemon/src/worktrees.ts`); `Session.worktree` is its

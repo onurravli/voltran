@@ -4,6 +4,7 @@ import { syncAttentionBadge } from './notify.ts';
 import { installShortcuts } from './shortcuts.ts';
 import { selectedWorkspace, useUi } from './store.ts';
 import { disposeNotesExcept, flushNotesOnExit } from './notes.ts';
+import { disposeEditorsExcept } from './editor-session.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
 import { ChangesView } from './components/ChangesView.tsx';
 import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
@@ -24,7 +25,11 @@ function Welcome() {
                 <>
                     <h1 className="welcome__title">Pick a session, or start one</h1>
                     <p className="welcome__body">A session groups the agents and terminals for one piece of work.</p>
-                    <button type="button" className="button button--primary" onClick={() => openDialog({ kind: 'session' })}>
+                    <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => openDialog({ kind: 'session' })}
+                    >
                         Start a session
                     </button>
                 </>
@@ -32,10 +37,14 @@ function Welcome() {
                 <>
                     <h1 className="welcome__title">Bring your agents into one place</h1>
                     <p className="welcome__body">
-                        Add a folder you work in. Each session there gets its own agents and terminals, and Voltran tells you which one is
-                        waiting on you.
+                        Add a folder you work in. Each session there gets its own agents and terminals, and Voltran
+                        tells you which one is waiting on you.
                     </p>
-                    <button type="button" className="button button--primary" onClick={() => openDialog({ kind: 'project' })}>
+                    <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => openDialog({ kind: 'project' })}
+                    >
                         <FolderIcon size={14} /> Add a project
                     </button>
                 </>
@@ -87,6 +96,7 @@ export function App() {
         if (app) {
             const live = new Set(app.panes.map((pane) => pane.id));
             disposeTerminalsExcept(live);
+            disposeEditorsExcept(live);
             disposeNotesExcept(live);
         }
     }, [app]);

@@ -56,7 +56,8 @@ describe('sidebar menus', () => {
         await page.getByText('This session is archived and its processes are stopped.').waitFor();
         await pane.getByText('Archived. Restore the session to resume this pane.').waitFor();
         await until(
-            async () => (await voltran.state()).panes.every((entry) => entry.sessionId !== session.id || entry.pid === null),
+            async () =>
+                (await voltran.state()).panes.every((entry) => entry.sessionId !== session.id || entry.pid === null),
             'the process to stop',
         );
 
@@ -80,7 +81,9 @@ describe('sidebar menus', () => {
         await waitForText(moving, 'moved-121');
         const [, movingId] = await panesIn(session.id);
 
-        await moving.locator('.pane__header .pane__summary').dragTo(page.locator('.session-row', { hasText: 'other session' }));
+        await moving
+            .locator('.pane__header .pane__summary')
+            .dragTo(page.locator('.session-row', { hasText: 'other session' }));
         await until(async () => (await panesIn(other.id)).includes(movingId), 'the pane in the other session');
         expect(await panesIn(session.id)).toHaveLength(1);
         await page.getByText('Moved to other session').waitFor();
@@ -100,7 +103,10 @@ describe('sidebar menus', () => {
         const input = page.getByRole('textbox', { name: 'Session name' });
         await input.fill('Renamed by e2e');
         await input.press('Enter');
-        await until(async () => (await voltran.session(session.id)).title === 'Renamed by e2e', 'the title to be saved');
+        await until(
+            async () => (await voltran.session(session.id)).title === 'Renamed by e2e',
+            'the title to be saved',
+        );
         await page.locator('.session-header__title', { hasText: 'Renamed by e2e' }).waitFor();
         expect((await voltran.session(session.id)).titleSource).toBe('user');
     });

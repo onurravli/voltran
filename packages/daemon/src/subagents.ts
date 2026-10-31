@@ -69,7 +69,13 @@ export class SubagentTracker {
 
     list(): SubagentView[] {
         return [...this.running.values()]
-            .map(({ id, type, description, background, startedAt }) => ({ id, type, description, background, startedAt }))
+            .map(({ id, type, description, background, startedAt }) => ({
+                id,
+                type,
+                description,
+                background,
+                startedAt,
+            }))
             .sort((a, b) => a.startedAt - b.startedAt);
     }
 

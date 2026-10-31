@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import type { FileContents } from '@voltran/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_SETTINGS, type FileContents } from '@voltran/shared';
+import { editorOptions } from '../editor.ts';
 import { editorTheme } from '../editor-theme.ts';
 import { fontStack } from '../fonts.ts';
 import { activeThemeId, useUi } from '../store.ts';
@@ -16,7 +17,7 @@ export interface DiffStat {
 let loading: Promise<Monaco> | null = null;
 let editors = 0;
 
-function loadMonaco(): Promise<Monaco> {
+export function loadMonaco(): Promise<Monaco> {
     loading ??= import('../monaco.ts').then((module) => module.monaco);
     loading.catch(() => {
         loading = null;
@@ -56,7 +57,9 @@ export function DiffEditor({ contents, onStat }: { contents: FileContents; onSta
     const [widget, setWidget] = useState<DiffWidget | null>(null);
     const [failed, setFailed] = useState(false);
     const themeId = useUi(activeThemeId);
-    const font = useUi((state) => state.terminalFont);
+    const terminalFont = useUi((state) => state.terminalFont);
+    const settings = useUi((state) => state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor);
+    const font = useMemo(() => editorOptions(settings, terminalFont), [settings, terminalFont]);
     const id = useRef(0);
     const reportStat = useRef(onStat);
     reportStat.current = onStat;
@@ -116,7 +119,7 @@ export function DiffEditor({ contents, onStat }: { contents: FileContents; onSta
     }, [monaco]);
 
     useEffect(() => {
-        widget?.updateOptions({ fontFamily: fontStack(font.family), fontSize: font.size });
+        widget?.updateOptions({ fontFamily: fontStack(font.fontFamily), fontSize: font.fontSize });
     }, [widget, font]);
 
     useEffect(() => {

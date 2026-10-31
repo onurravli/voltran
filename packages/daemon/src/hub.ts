@@ -18,7 +18,10 @@ import {
     type CreateProjectBody,
     type CreateSessionBody,
     type CreateWorkspaceBody,
+    type EditorFile,
+    type FileActionResult,
     type FileContents,
+    type FileTree,
     type Layout,
     type MovePaneBody,
     type NotesLockBody,
@@ -30,6 +33,8 @@ import {
     type SaveNotesBody,
     type ServerEvent,
     type Session,
+    type ProjectFileList,
+    type SavedFile,
     type SessionChanges,
     type SlashCommand,
     type UpdatePaneBody,
@@ -55,6 +60,7 @@ import {
 } from './adapters.ts';
 import { ChangesError, SessionChangesReader } from './changes.ts';
 import { readClaudeConversation } from './conversation.ts';
+import { FilesError, ProjectFiles, systemTrash, type Trash } from './files.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { AttachmentRefused, AttachmentStore } from './attachments.ts';
@@ -86,6 +92,7 @@ export interface HubOptions {
     path: string;
     baseEnv: NodeJS.ProcessEnv;
     gitRunner?: GitRunner;
+    trash?: Trash;
     pullRequests?: () => boolean;
     worktreesDir: string;
     worktreeRunner?: WorktreeRunner;
@@ -161,6 +168,7 @@ export class Hub {
     readonly panes: PaneManager;
     private readonly git: GitWatcher;
     private readonly changes: SessionChangesReader;
+    private readonly files: ProjectFiles;
     private readonly notes: NotesStore;
     private readonly attachments: AttachmentStore;
     private readonly claudeConfig: string | null;
@@ -198,7 +206,10 @@ export class Hub {
             onPaneRecord: (pane) => this.store.updatePane(pane.id, pane),
             onAttention: (pane, status, body) => this.attention(pane, status, body),
             onExit: (pane, exitCode) => this.exited(pane, exitCode),
-            notes: { guide: this.notes.guide, file: (pane) => (pane.adapter === 'subagent' ? null : this.notes.file(pane.id)) },
+            notes: {
+                guide: this.notes.guide,
+                file: (pane) => (pane.adapter === 'subagent' ? null : this.notes.file(pane.id)),
+            },
         });
         for (const pane of this.store.listPanes()) {
             this.panes.load(pane);
@@ -223,6 +234,7 @@ export class Hub {
             run: gitRunner,
         });
         this.changes = new SessionChangesReader(gitRunner);
+        this.files = new ProjectFiles({ run: gitRunner, trash: options.trash ?? systemTrash(options.baseEnv) });
     }
 
     state(): AppState {
@@ -359,9 +371,13 @@ export class Hub {
             throw new HttpError(400, 'a session starts with at most 8 panes');
         }
         specs.forEach((spec) => this.validatePaneSpec(spec));
-        const title = typeof body.title === 'string' && body.title.trim() ? requireString(body.title, 'title', MAX_TITLE) : null;
+        const title =
+            typeof body.title === 'string' && body.title.trim() ? requireString(body.title, 'title', MAX_TITLE) : null;
         if (title === null && !specs.some((spec) => adapterFor(spec.adapter).reportsHooks)) {
-            throw new HttpError(400, 'a session needs a title unless it starts with Claude Code, Codex or OpenCode, which name it');
+            throw new HttpError(
+                400,
+                'a session needs a title unless it starts with Claude Code, Codex or OpenCode, which name it',
+            );
         }
         const link = optionalLink(body.link);
         const worktree = body.worktree === undefined ? null : await this.createWorktree(project, body.worktree);
@@ -453,10 +469,16 @@ export class Hub {
         let removeWorktree = session.worktree !== null && choice !== 'keep';
         if (session.worktree && choice === null) {
             const changes = await this.worktrees.changes(session.worktree).catch((error: unknown) => {
-                throw new HttpError(409, `${error instanceof Error ? error.message : String(error)}; choose whether to keep the worktree`);
+                throw new HttpError(
+                    409,
+                    `${error instanceof Error ? error.message : String(error)}; choose whether to keep the worktree`,
+                );
             });
             if (changes > 0) {
-                throw new HttpError(409, `its worktree has ${changes} uncommitted ${changes === 1 ? 'change' : 'changes'}`);
+                throw new HttpError(
+                    409,
+                    `its worktree has ${changes} uncommitted ${changes === 1 ? 'change' : 'changes'}`,
+                );
             }
             removeWorktree = true;
         }
@@ -481,15 +503,22 @@ export class Hub {
     createPane(sessionId: string, body: CreatePaneBody, options: { closeOnCleanExit?: boolean } = {}): Pane {
         const session = this.mustGetSession(sessionId);
         this.validatePaneSpec(body);
-        const workspace = body.workspaceId === undefined ? null : this.mustGetWorkspace(requireString(body.workspaceId, 'workspaceId', 64));
+        const workspace =
+            body.workspaceId === undefined
+                ? null
+                : this.mustGetWorkspace(requireString(body.workspaceId, 'workspaceId', 64));
         if (workspace && paneIds(workspace.layout).length >= MAX_WORKSPACE_PANES) {
             throw new HttpError(409, `a workspace holds at most ${MAX_WORKSPACE_PANES} panes`);
         }
         const direction = body.direction === 'vertical' ? 'vertical' : 'horizontal';
         const pane = this.insertPaneRecord(session, body);
-        this.store.updateSession(session.id, { layout: insertPane(session.layout, pane.id, body.splitFrom, direction) });
+        this.store.updateSession(session.id, {
+            layout: insertPane(session.layout, pane.id, body.splitFrom, direction),
+        });
         if (workspace) {
-            this.store.updateWorkspace(workspace.id, { layout: insertPane(workspace.layout, pane.id, body.splitFrom, direction) });
+            this.store.updateWorkspace(workspace.id, {
+                layout: insertPane(workspace.layout, pane.id, body.splitFrom, direction),
+            });
         }
         if (options.closeOnCleanExit) {
             this.closeOnCleanExit.add(pane.id);
@@ -634,7 +663,11 @@ export class Hub {
         if (event === STATUS_LINE_EVENT && payload && typeof payload === 'object') {
             return this.statusLine(paneId, secret, payload as Record<string, unknown>);
         }
-        if (!(isClaudeHookEvent(event) || isOpencodeEvent(event) || isCodexHookEvent(event)) || !payload || typeof payload !== 'object') {
+        if (
+            !(isClaudeHookEvent(event) || isOpencodeEvent(event) || isCodexHookEvent(event)) ||
+            !payload ||
+            typeof payload !== 'object'
+        ) {
             return false;
         }
         const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
@@ -682,7 +715,12 @@ export class Hub {
             this.store.updateSession(session.id, named);
             this.scheduleBroadcast();
         }
-        if (retry && event === 'Stop' && pane.adapter === 'claude' && (named?.titleSource ?? session.titleSource) === 'prompt') {
+        if (
+            retry &&
+            event === 'Stop' &&
+            pane.adapter === 'claude' &&
+            (named?.titleSource ?? session.titleSource) === 'prompt'
+        ) {
             const timer = setTimeout(() => {
                 this.namingTimers.delete(timer);
                 this.nameSession(paneId, event, payload, false);
@@ -872,7 +910,10 @@ export class Hub {
         for (const workspace of this.store.listWorkspaces()) {
             const missing = paneIds(workspace.layout).filter((paneId) => !existing.has(paneId));
             if (missing.length > 0) {
-                const layout = missing.reduce<Layout | null>((rest, paneId) => removePane(rest, paneId), workspace.layout);
+                const layout = missing.reduce<Layout | null>(
+                    (rest, paneId) => removePane(rest, paneId),
+                    workspace.layout,
+                );
                 this.store.updateWorkspace(workspace.id, { layout });
             }
         }
@@ -887,7 +928,9 @@ export class Hub {
         }
         const branch = requireString(spec.branch, 'branch', MAX_TITLE);
         const base =
-            spec.base === undefined || spec.base === null || spec.base === '' ? undefined : requireString(spec.base, 'base', MAX_TITLE);
+            spec.base === undefined || spec.base === null || spec.base === ''
+                ? undefined
+                : requireString(spec.base, 'base', MAX_TITLE);
         try {
             return await this.worktrees.create(project.path, project.name, branch, base);
         } catch (error) {
@@ -941,6 +984,63 @@ export class Hub {
     async sessionFileContents(id: string, path: string): Promise<FileContents> {
         const session = this.mustGetSession(id);
         return this.readChanges(() => this.changes.contents(session.cwd, requireString(path, 'path', 4096)));
+    }
+
+    // The editor works in the session's folder: the project's, or the session's worktree.
+    async sessionTree(id: string, paths: string[]): Promise<FileTree> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.tree(session.cwd, paths));
+    }
+
+    async sessionFileList(id: string): Promise<ProjectFileList> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.list(session.cwd));
+    }
+
+    readSessionFile(id: string, path: unknown, known: string | null): Promise<EditorFile> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.read(session.cwd, path, known));
+    }
+
+    async writeSessionFile(
+        id: string,
+        path: unknown,
+        text: string,
+        base: string | null,
+        force: boolean,
+    ): Promise<SavedFile> {
+        const session = this.mustGetSession(id);
+        const saved = await this.useFiles(() => this.files.write(session.cwd, path, text, base, force));
+        this.refreshGitSoon(session.cwd);
+        return saved;
+    }
+
+    async sessionFileAction(id: string, body: unknown): Promise<FileActionResult> {
+        const session = this.mustGetSession(id);
+        const result = await this.useFiles(() => this.files.act(session.cwd, body));
+        this.refreshGitSoon(session.cwd);
+        return result;
+    }
+
+    private async useFiles<T>(action: () => T | Promise<T>): Promise<T> {
+        try {
+            return await action();
+        } catch (error) {
+            if (error instanceof FilesError) {
+                throw new HttpError(error.status, error.message);
+            }
+            const code = (error as NodeJS.ErrnoException | null)?.code;
+            if (code === 'EACCES' || code === 'EPERM') {
+                throw new HttpError(403, 'permission denied');
+            }
+            if (code === 'ENOENT' || code === 'ENOTDIR') {
+                throw new HttpError(404, 'it is no longer there');
+            }
+            if (code === 'EEXIST' || code === 'ENOTEMPTY' || code === 'EISDIR' || code === 'ELOOP') {
+                throw new HttpError(409, (error as Error).message);
+            }
+            throw error;
+        }
     }
 
     private async readChanges<T>(read: () => Promise<T>): Promise<T> {

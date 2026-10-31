@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { branchFromTitle, commandPane, type AdapterId, type AdapterInfo, type PaneSpec, type ProjectGit } from '@voltran/shared';
+import {
+    branchFromTitle,
+    commandPane,
+    type AdapterId,
+    type AdapterInfo,
+    type PaneSpec,
+    type ProjectGit,
+} from '@voltran/shared';
 import { api } from '../api.ts';
-import { FIND_KEYS, SHORTCUTS, reportProblem } from '../shortcuts.ts';
+import { editorKeys } from '../editor.ts';
+import { FIND_KEYS, IS_MAC, SHORTCUTS, reportProblem } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
 import { CommandPalette } from './CommandPalette.tsx';
 import { VoltranMark } from './Icons.tsx';
@@ -31,7 +39,8 @@ function Modal({
         };
         window.addEventListener('keydown', onKeyDown);
         const first =
-            ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('input, select, button');
+            ref.current?.querySelector<HTMLElement>('[data-autofocus]') ??
+            ref.current?.querySelector<HTMLElement>('input, select, button');
         first?.focus();
         return () => {
             window.removeEventListener('keydown', onKeyDown);
@@ -41,7 +50,13 @@ function Modal({
 
     return (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-            <div className={`modal${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}>
+            <div
+                className={`modal${className ? ` ${className}` : ''}`}
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
+                ref={ref}
+            >
                 {hideTitle ? null : <h2 className="modal__title">{title}</h2>}
                 {children}
             </div>
@@ -116,13 +131,23 @@ function ProjectDialog({ onClose }: { onClose: () => void }) {
     );
 }
 
-function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projectId?: string; worktree?: boolean; onClose: () => void }) {
+function SessionDialog({
+    projectId,
+    worktree: wantsWorktree,
+    onClose,
+}: {
+    projectId?: string;
+    worktree?: boolean;
+    onClose: () => void;
+}) {
     const app = useUi((state) => state.app);
     const projects = app?.projects ?? [];
     const adapters = (app?.adapters ?? []).filter(
         (adapter) => adapter.kind !== 'page' && adapter.id !== 'command' && adapter.id !== 'subagent',
     );
-    const currentProjectId = useUi((state) => state.app?.sessions.find((session) => session.id === state.selectedSessionId)?.projectId);
+    const currentProjectId = useUi(
+        (state) => state.app?.sessions.find((session) => session.id === state.selectedSessionId)?.projectId,
+    );
     const [project, setProject] = useState(projectId ?? currentProjectId ?? projects[0]?.id ?? '');
     const [title, setTitle] = useState('');
     const [link, setLink] = useState('');
@@ -146,7 +171,9 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
             .then((info) => {
                 if (current) {
                     setGit(info);
-                    setWorktree(info.repository && (wantsWorktree ?? useUi.getState().worktreeProjects[project] === true));
+                    setWorktree(
+                        info.repository && (wantsWorktree ?? useUi.getState().worktreeProjects[project] === true),
+                    );
                     setBase(info.branch ?? info.branches[0] ?? '');
                 }
             })
@@ -161,7 +188,9 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
     };
 
     const commandAdapter = command.trim() ? commandPane(command).adapter : null;
-    const namesItself = adapters.some((adapter) => adapter.reportsHooks && (picks.includes(adapter.id) || adapter.id === commandAdapter));
+    const namesItself = adapters.some(
+        (adapter) => adapter.reportsHooks && (picks.includes(adapter.id) || adapter.id === commandAdapter),
+    );
 
     const submit = async (event: FormEvent): Promise<void> => {
         event.preventDefault();
@@ -224,7 +253,11 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                 <div className="field-row">
                     <label className="field">
                         <span className="field__label">Project</span>
-                        <select className="field__input" value={project} onChange={(event) => setProject(event.target.value)}>
+                        <select
+                            className="field__input"
+                            value={project}
+                            onChange={(event) => setProject(event.target.value)}
+                        >
                             {projects.map((entry) => (
                                 <option key={entry.id} value={entry.id}>
                                     {entry.name}
@@ -248,7 +281,11 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
                 {git?.repository ? (
                     <div className="worktree-fields">
                         <label className="check">
-                            <input type="checkbox" checked={worktree} onChange={(event) => setWorktree(event.target.checked)} />
+                            <input
+                                type="checkbox"
+                                checked={worktree}
+                                onChange={(event) => setWorktree(event.target.checked)}
+                            />
                             <span>
                                 Work in its own worktree
                                 <span className="check__note">
@@ -341,7 +378,15 @@ function SessionDialog({ projectId, worktree: wantsWorktree, onClose }: { projec
     );
 }
 
-function AdapterChip({ adapter, selected, onToggle }: { adapter: AdapterInfo; selected: boolean; onToggle: () => void }) {
+function AdapterChip({
+    adapter,
+    selected,
+    onToggle,
+}: {
+    adapter: AdapterInfo;
+    selected: boolean;
+    onToggle: () => void;
+}) {
     return (
         <button
             type="button"
@@ -377,11 +422,21 @@ function ConfirmDialog({ dialog, onClose }: { dialog: Extract<Dialog, { kind: 'c
                     Cancel
                 </button>
                 {dialog.alternative ? (
-                    <button type="button" className="button" onClick={() => confirm(dialog.alternative!.onConfirm)} disabled={busy}>
+                    <button
+                        type="button"
+                        className="button"
+                        onClick={() => confirm(dialog.alternative!.onConfirm)}
+                        disabled={busy}
+                    >
                         {dialog.alternative.action}
                     </button>
                 ) : null}
-                <button type="button" className="button button--danger" onClick={() => confirm(dialog.onConfirm)} disabled={busy}>
+                <button
+                    type="button"
+                    className="button button--danger"
+                    onClick={() => confirm(dialog.onConfirm)}
+                    disabled={busy}
+                >
                     {dialog.action}
                 </button>
             </div>
@@ -403,6 +458,17 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
                 ))}
             </dl>
             <p className="form__aside">They work while a terminal has focus, too.</p>
+            <h3 className="shortcuts__heading">In an editor pane</h3>
+            <dl className="shortcuts">
+                {editorKeys(IS_MAC).map((shortcut) => (
+                    <div key={shortcut.label} className="shortcuts__row">
+                        <dt>
+                            <kbd>{shortcut.keys}</kbd>
+                        </dt>
+                        <dd>{shortcut.label}</dd>
+                    </div>
+                ))}
+            </dl>
         </Modal>
     );
 }
@@ -563,9 +629,19 @@ export function PaneMenu() {
                         </span>
                     </button>
                 ))}
-            <button type="button" role="menuitem" className="menu__item" disabled={!inGit} onClick={() => create({ adapter: 'changes' })}>
+            <button
+                type="button"
+                role="menuitem"
+                className="menu__item"
+                disabled={!inGit}
+                onClick={() => create({ adapter: 'changes' })}
+            >
                 <span>Changes</span>
                 <span className="menu__note">{inGit ? '' : 'not in git'}</span>
+            </button>
+            <button type="button" role="menuitem" className="menu__item" onClick={() => create({ adapter: 'editor' })}>
+                <span>Editor</span>
+                <span className="menu__note">files</span>
             </button>
             <form
                 className="menu__command"

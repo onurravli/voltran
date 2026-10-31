@@ -93,7 +93,9 @@ describe('parseUiFont', () => {
 
 describe('uiFontStack', () => {
     it('puts the family in front of the system font, or uses the system font alone', () => {
-        expect(uiFontStack('Inter')).toBe(`"Inter", -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif`);
+        expect(uiFontStack('Inter')).toBe(
+            `"Inter", -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif`,
+        );
         expect(uiFontStack('')).toBe(`-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif`);
     });
 });

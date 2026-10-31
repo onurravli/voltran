@@ -12,7 +12,8 @@ const MAX_SUMMARY = 140;
 const MAX_TITLE_SCAN_BYTES = 512 * 1024;
 const MAX_META_BYTES = 64 * 1024;
 
-export const isClaudeSessionId = (value: unknown): value is string => typeof value === 'string' && SESSION_ID.test(value);
+export const isClaudeSessionId = (value: unknown): value is string =>
+    typeof value === 'string' && SESSION_ID.test(value);
 
 // Hook payloads name these files, so the file is checked on the descriptor that is read: a link or a
 // pipe swapped in after a check of the path would otherwise be followed, or block the daemon.
@@ -127,7 +128,10 @@ function insideSubagents(path: string): boolean {
             return false;
         }
         const folder = dirname(path);
-        const run = basename(dirname(folder)) === 'workflows' && RUN_ID.test(basename(folder)) ? ['workflows', basename(folder)] : [];
+        const run =
+            basename(dirname(folder)) === 'workflows' && RUN_ID.test(basename(folder))
+                ? ['workflows', basename(folder)]
+                : [];
         const session = dirname(run.length > 0 ? dirname(dirname(folder)) : folder);
         return realpathSync(folder) === join(realpathSync(dirname(session)), basename(session), 'subagents', ...run);
     } catch {
@@ -245,7 +249,8 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
         return [];
     }
     const at = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) || null : null;
-    const message = record.message && typeof record.message === 'object' ? (record.message as Record<string, unknown>) : null;
+    const message =
+        record.message && typeof record.message === 'object' ? (record.message as Record<string, unknown>) : null;
     if (!message) {
         return null;
     }
@@ -271,7 +276,8 @@ export function parseTranscriptLine(line: unknown): TranscriptEntry[] | null {
                     : { kind: 'text', text: clip(block.text, MAX_TEXT), at },
             );
         } else if (block.type === 'tool_use' && typeof block.name === 'string') {
-            const input = block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {};
+            const input =
+                block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {};
             if (block.name === 'SubagentHandback' && typeof input.message === 'string') {
                 entries.push({ kind: 'text', text: clip(input.message, MAX_TEXT), at });
                 continue;

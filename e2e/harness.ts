@@ -30,7 +30,11 @@ const freePort = (): Promise<number> =>
         });
     });
 
-export async function until(condition: () => Promise<boolean> | boolean, what: string, timeoutMs = 10_000): Promise<void> {
+export async function until(
+    condition: () => Promise<boolean> | boolean,
+    what: string,
+    timeoutMs = 10_000,
+): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (!(await condition())) {
         if (Date.now() > deadline) {
@@ -158,8 +162,15 @@ export class Voltran {
         const path = join(this.work, name);
         mkdirSync(path, { recursive: true });
         const project = await this.api<Project>('POST', '/api/projects', { path, name });
-        const specs = Array.from({ length: panes }, (_, index) => ({ adapter: 'shell', title: `${name} ${index + 1}` }));
-        const session = await this.api<Session>('POST', '/api/sessions', { projectId: project.id, title: `${name} session`, panes: specs });
+        const specs = Array.from({ length: panes }, (_, index) => ({
+            adapter: 'shell',
+            title: `${name} ${index + 1}`,
+        }));
+        const session = await this.api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: `${name} session`,
+            panes: specs,
+        });
         const created = (await this.state()).panes.filter((pane) => pane.sessionId === session.id);
         return { project, session: await this.session(session.id), panes: created };
     }

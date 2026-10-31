@@ -21,10 +21,22 @@ export function parseChangedFiles(output: string): ChangedFile[] {
             const renamed = record.startsWith('2 ');
             const path = fields.slice(renamed ? 9 : 8).join(' ');
             const oldPath = renamed ? (records[++index] ?? null) : null;
-            const state = renamed ? 'renamed' : x === 'A' || y === 'A' ? 'added' : x === 'D' || y === 'D' ? 'deleted' : 'modified';
+            const state = renamed
+                ? 'renamed'
+                : x === 'A' || y === 'A'
+                  ? 'added'
+                  : x === 'D' || y === 'D'
+                    ? 'deleted'
+                    : 'modified';
             files.push({ path, oldPath, state, staged: x !== '.', unstaged: y !== '.' });
         } else if (record.startsWith('u ')) {
-            files.push({ path: fields.slice(10).join(' '), oldPath: null, state: 'conflicted', staged: false, unstaged: true });
+            files.push({
+                path: fields.slice(10).join(' '),
+                oldPath: null,
+                state: 'conflicted',
+                staged: false,
+                unstaged: true,
+            });
         } else if (record.startsWith('? ')) {
             files.push({ path: record.slice(2), oldPath: null, state: 'untracked', staged: false, unstaged: true });
         }
@@ -99,14 +111,23 @@ export class SessionChangesReader {
 
     async list(cwd: string): Promise<SessionChanges> {
         const { root, files } = await this.status(cwd);
-        return { root, files: files.slice(0, MAX_FILES), truncated: files.length > MAX_FILES };
+        const prefix = await this.run('git', ['rev-parse', '--show-prefix'], cwd);
+        return {
+            root,
+            prefix: prefix.ok ? prefix.stdout.trim() : '',
+            files: files.slice(0, MAX_FILES),
+            truncated: files.length > MAX_FILES,
+        };
     }
 
     private async status(cwd: string): Promise<{ root: string; files: ChangedFile[] }> {
         const root = await this.root(cwd);
         const guards = await this.guards(root);
         const files = parseChangedFiles(
-            await this.git([...guards, 'status', '--porcelain=v2', '-z', '--untracked-files=all', ...SUBMODULE_ARGS], root),
+            await this.git(
+                [...guards, 'status', '--porcelain=v2', '-z', '--untracked-files=all', ...SUBMODULE_ARGS],
+                root,
+            ),
         );
         return { root, files };
     }
@@ -119,7 +140,10 @@ export class SessionChangesReader {
         if (!file) {
             throw new ChangesError(`${path} has no changes`);
         }
-        const sides = [file.state === 'untracked' ? null : await this.committed(root, file.oldPath ?? path), readWorkingFile(root, path)];
+        const sides = [
+            file.state === 'untracked' ? null : await this.committed(root, file.oldPath ?? path),
+            readWorkingFile(root, path),
+        ];
         const text = sides.map((side) => (side !== null && typeof side === 'object' ? side.text : null));
         return {
             path,

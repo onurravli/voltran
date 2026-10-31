@@ -30,7 +30,10 @@ describe('mergeUsage', () => {
         expect(
             mergeUsage(
                 null,
-                limits({ used_percentage: 38.5, resets_at: 2_000_000_000 }, { used_percentage: 61, resets_at: 2_000_500_000 }),
+                limits(
+                    { used_percentage: 38.5, resets_at: 2_000_000_000 },
+                    { used_percentage: 61, resets_at: 2_000_500_000 },
+                ),
             ),
         ).toEqual({
             fiveHour: { usedPercent: 38.5, resetsAt: 2_000_000_000_000 },
@@ -75,7 +78,12 @@ describe('mergeUsage', () => {
 });
 
 describe('userStatusLine', () => {
-    function folders(): { root: string; sub: string; config: string; write: (dir: string, file: string, settings: unknown) => void } {
+    function folders(): {
+        root: string;
+        sub: string;
+        config: string;
+        write: (dir: string, file: string, settings: unknown) => void;
+    } {
         const base = mkdtempSync(join(tmpdir(), 'voltran-statusline-'));
         cleanups.push(() => rmSync(base, { recursive: true, force: true }));
         const root = join(base, 'repo');
@@ -124,7 +132,11 @@ describe('userStatusLine', () => {
 
 describe('status line script', () => {
     const run = (input: string, env: Record<string, string>): { status: number | null; stdout: string } =>
-        spawnSync('sh', [STATUS_LINE], { env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ...env }, input, encoding: 'utf8' });
+        spawnSync('sh', [STATUS_LINE], {
+            env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ...env },
+            input,
+            encoding: 'utf8',
+        });
 
     async function daemon(): Promise<{ url: string; requests: { path: string; auth: string; body: string }[] }> {
         const requests: { path: string; auth: string; body: string }[] = [];

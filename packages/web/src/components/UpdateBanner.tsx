@@ -38,11 +38,21 @@ export function UpdateBanner() {
             {notice === 'reload' ? null : <span className="lamp lamp--sm update__lamp" />}
             <span>{MESSAGES[notice]}</span>
             {notice === 'reload' ? (
-                <button type="button" className="button button--small button--primary" onClick={() => window.location.reload()}>
+                <button
+                    type="button"
+                    className="button button--small button--primary"
+                    onClick={() => window.location.reload()}
+                >
                     Reload
                 </button>
             ) : null}
-            <button type="button" className="icon-button" aria-label="Dismiss" title="Dismiss" onClick={() => setDismissed(key)}>
+            <button
+                type="button"
+                className="icon-button"
+                aria-label="Dismiss"
+                title="Dismiss"
+                onClick={() => setDismissed(key)}
+            >
                 <CloseIcon size={13} />
             </button>
         </div>

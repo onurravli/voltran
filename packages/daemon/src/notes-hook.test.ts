@@ -32,7 +32,11 @@ async function setup(): Promise<{
     const header = join(dir, 'header');
     writeFileSync(header, `Authorization: Bearer ${SECRET}\n`);
     const server = createServer((req, res) => {
-        if (req.method !== 'GET' || req.url !== '/api/hooks/pane-1/notes' || req.headers.authorization !== `Bearer ${SECRET}`) {
+        if (
+            req.method !== 'GET' ||
+            req.url !== '/api/hooks/pane-1/notes' ||
+            req.headers.authorization !== `Bearer ${SECRET}`
+        ) {
             res.writeHead(403).end();
             return;
         }
@@ -48,7 +52,9 @@ async function setup(): Promise<{
     const paneEnv = { VOLTRAN_NOTES: notes, VOLTRAN_PANE_ID: 'pane-1', VOLTRAN_HOOK_HEADER: header, VOLTRAN_URL: url };
     const run = (mode: string, input = '{}', env: Record<string, string> = paneEnv): Promise<string> =>
         new Promise((resolveRun, reject) => {
-            const child = spawn('sh', [NOTES_HOOK, mode, guide], { env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ...env } });
+            const child = spawn('sh', [NOTES_HOOK, mode, guide], {
+                env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ...env },
+            });
             let stdout = '';
             child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
                 stdout += chunk;
@@ -64,7 +70,8 @@ async function setup(): Promise<{
     return { notes, changed: `${folder}.changed`, run };
 }
 
-const toolCall = (path: string): string => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: path, content: 'x' } });
+const toolCall = (path: string): string =>
+    JSON.stringify({ tool_name: 'Write', tool_input: { file_path: path, content: 'x' } });
 
 describe('notes hook', () => {
     it('does nothing outside a Voltran pane', async () => {
@@ -124,8 +131,13 @@ describe('notes hook', () => {
         expect(await run('pre-tool-use', toolCall(join(folder, 'other.md')))).toBe('');
         const spaced = JSON.stringify({ tool_name: 'Edit', tool_input: { file_path: notes } }, null, 1);
         for (const input of [toolCall(notes), spaced]) {
-            const output = JSON.parse(await run('pre-tool-use', input)) as { hookSpecificOutput: Record<string, string> };
-            expect(output.hookSpecificOutput).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' });
+            const output = JSON.parse(await run('pre-tool-use', input)) as {
+                hookSpecificOutput: Record<string, string>;
+            };
+            expect(output.hookSpecificOutput).toMatchObject({
+                hookEventName: 'PreToolUse',
+                permissionDecision: 'deny',
+            });
             expect(output.hookSpecificOutput.permissionDecisionReason).toMatch(/editing these notes/);
         }
     });

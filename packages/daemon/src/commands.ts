@@ -179,7 +179,8 @@ export function frontmatter(text: string): { name: string | null; description: s
     const description = (fields.get('description') || firstLine).replace(/\s+/g, ' ').trim();
     return {
         name: fields.get('name') || null,
-        description: description.length > MAX_DESCRIPTION ? `${description.slice(0, MAX_DESCRIPTION - 1)}…` : description,
+        description:
+            description.length > MAX_DESCRIPTION ? `${description.slice(0, MAX_DESCRIPTION - 1)}…` : description,
     };
 }
 
@@ -220,7 +221,12 @@ function walk(dir: string, depth: number, visit: (path: string) => void, budget:
 }
 
 // commands/a/b.md is /a:b; a skill is the folder that holds SKILL.md, named by its frontmatter.
-function commandsIn(root: string, source: SlashCommand['source'], prefix: string, budget: { files: number }): SlashCommand[] {
+function commandsIn(
+    root: string,
+    source: SlashCommand['source'],
+    prefix: string,
+    budget: { files: number },
+): SlashCommand[] {
     const found: SlashCommand[] = [];
     walk(
         join(root, 'commands'),
@@ -230,7 +236,12 @@ function commandsIn(root: string, source: SlashCommand['source'], prefix: string
                 return;
             }
             const name = relative(join(root, 'commands'), path).slice(0, -3).split(sep).join(':');
-            found.push({ name: `${prefix}${name}`, description: frontmatter(readHead(path)).description, source, terminal: false });
+            found.push({
+                name: `${prefix}${name}`,
+                description: frontmatter(readHead(path)).description,
+                source,
+                terminal: false,
+            });
         },
         budget,
     );
@@ -298,12 +309,16 @@ function pluginRoots(configDir: string, folders: string[]): { name: string; root
     const settings = [
         join(configDir, 'settings.json'),
         ...folders
-            .flatMap((folder) => [join(folder, '.claude', 'settings.json'), join(folder, '.claude', 'settings.local.json')])
+            .flatMap((folder) => [
+                join(folder, '.claude', 'settings.json'),
+                join(folder, '.claude', 'settings.local.json'),
+            ])
             .reverse(),
     ];
     const enabled = enabledPlugins(settings);
     const installed =
-        (readJson(join(configDir, 'plugins', 'installed_plugins.json')) as { plugins?: Record<string, unknown> } | null)?.plugins ?? {};
+        (readJson(join(configDir, 'plugins', 'installed_plugins.json')) as { plugins?: Record<string, unknown> } | null)
+            ?.plugins ?? {};
     const roots: { name: string; root: string }[] = [];
     for (const [id, installs] of Object.entries(installed)) {
         if (!enabled.has(id) || !Array.isArray(installs)) {
@@ -343,12 +358,26 @@ export function claudeCommands(cwd: string, configDir: string | null, home = pro
     const listed = [
         ...folders.flatMap((folder) => commandsIn(join(folder, '.claude'), 'project', '', budget)),
         ...(configDir ? commandsIn(configDir, 'user', '', budget) : []),
-        ...(configDir ? pluginRoots(configDir, folders).flatMap(({ name, root }) => commandsIn(root, 'plugin', `${name}:`, budget)) : []),
+        ...(configDir
+            ? pluginRoots(configDir, folders).flatMap(({ name, root }) =>
+                  commandsIn(root, 'plugin', `${name}:`, budget),
+              )
+            : []),
         ...BUILTIN.map(
-            ([name, description, terminal]): SlashCommand => ({ name, description, source: 'builtin', terminal: terminal === 't' }),
+            ([name, description, terminal]): SlashCommand => ({
+                name,
+                description,
+                source: 'builtin',
+                terminal: terminal === 't',
+            }),
         ),
     ];
     const seen = new Set<string>();
-    const unique = listed.filter((command) => /^[\w:.-]+$/.test(command.name) && !seen.has(command.name) && seen.add(command.name));
-    return [...unique.filter((command) => command.source === 'builtin'), ...unique.filter((command) => command.source !== 'builtin')];
+    const unique = listed.filter(
+        (command) => /^[\w:.-]+$/.test(command.name) && !seen.has(command.name) && seen.add(command.name),
+    );
+    return [
+        ...unique.filter((command) => command.source === 'builtin'),
+        ...unique.filter((command) => command.source !== 'builtin'),
+    ];
 }

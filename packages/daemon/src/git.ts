@@ -1,7 +1,11 @@
 import { execFile } from 'node:child_process';
 import type { GitStatus, PullRequest } from '@voltran/shared';
 
-export type GitRunner = (command: 'git' | 'gh', args: string[], cwd: string) => Promise<{ ok: boolean; stdout: string; missing?: boolean }>;
+export type GitRunner = (
+    command: 'git' | 'gh',
+    args: string[],
+    cwd: string,
+) => Promise<{ ok: boolean; stdout: string; missing?: boolean }>;
 
 export interface GitWatcherOptions {
     folders: () => string[];
@@ -71,7 +75,13 @@ export function repositoryFilterOverrides(output: string): string[] | null {
 }
 
 export function commandRunner(env: NodeJS.ProcessEnv): GitRunner {
-    const commandEnv = { ...env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' };
+    const commandEnv = {
+        ...env,
+        GIT_TERMINAL_PROMPT: '0',
+        GH_PROMPT_DISABLED: '1',
+        GH_NO_UPDATE_NOTIFIER: '1',
+        NO_COLOR: '1',
+    };
     return (command, args, cwd) =>
         new Promise((resolve) => {
             execFile(
@@ -168,11 +178,18 @@ export function parsePullRequest(output: string): PullRequest | null {
     } catch {
         return null;
     }
-    const pr = raw as { number?: unknown; url?: unknown; state?: unknown; isDraft?: unknown; statusCheckRollup?: unknown };
+    const pr = raw as {
+        number?: unknown;
+        url?: unknown;
+        state?: unknown;
+        isDraft?: unknown;
+        statusCheckRollup?: unknown;
+    };
     if (typeof pr?.number !== 'number' || typeof pr.url !== 'string' || !/^https:\/\//.test(pr.url)) {
         return null;
     }
-    const state = pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : pr.isDraft === true ? 'draft' : 'open';
+    const state =
+        pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : pr.isDraft === true ? 'draft' : 'open';
     return { number: pr.number, url: pr.url, state, checks: checksOf(pr.statusCheckRollup) };
 }
 
@@ -263,7 +280,9 @@ export class GitWatcher {
 
     async refresh(folder: string): Promise<void> {
         const filters = repositoryFilterOverrides((await this.options.run('git', FILTER_CONFIG_ARGS, folder)).stdout);
-        const result = filters ? await this.options.run('git', [...filters, ...STATUS_ARGS], folder) : { ok: false, stdout: '' };
+        const result = filters
+            ? await this.options.run('git', [...filters, ...STATUS_ARGS], folder)
+            : { ok: false, stdout: '' };
         if (this.stopped) {
             return;
         }

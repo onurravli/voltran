@@ -17,7 +17,10 @@ export interface UiFont {
     size: number;
 }
 
-export const DEFAULT_FONT: TerminalFont = { family: DEFAULT_SETTINGS.terminal.fontFamily, size: DEFAULT_SETTINGS.terminal.fontSize };
+export const DEFAULT_FONT: TerminalFont = {
+    family: DEFAULT_SETTINGS.terminal.fontFamily,
+    size: DEFAULT_SETTINGS.terminal.fontSize,
+};
 export const DEFAULT_UI_FONT: UiFont = { family: DEFAULT_SETTINGS.ui.fontFamily, size: DEFAULT_SETTINGS.ui.fontSize };
 export { MAX_FONT_SIZE, MAX_UI_FONT_SIZE, MIN_FONT_SIZE, MIN_UI_FONT_SIZE };
 

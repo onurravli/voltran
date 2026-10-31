@@ -12,7 +12,12 @@ export function linkLabel(link: string): string {
     const host = url.hostname.replace(/^www\./, '');
     const parts = url.pathname.split('/').filter(Boolean);
 
-    if (host === 'github.com' && parts.length >= 4 && (parts[2] === 'pull' || parts[2] === 'issues') && /^\d+$/.test(parts[3])) {
+    if (
+        host === 'github.com' &&
+        parts.length >= 4 &&
+        (parts[2] === 'pull' || parts[2] === 'issues') &&
+        /^\d+$/.test(parts[3])
+    ) {
         return `${parts[1]}#${parts[3]}`;
     }
     const mergeRequest = parts.indexOf('merge_requests');
@@ -51,7 +56,9 @@ export interface GitLabels {
 export function gitLabels(status: GitStatus): GitLabels {
     const branch = status.branch ?? status.commit ?? 'no commits yet';
     const sync =
-        [status.ahead > 0 ? `↑${status.ahead}` : '', status.behind > 0 ? `↓${status.behind}` : ''].filter(Boolean).join(' ') || null;
+        [status.ahead > 0 ? `↑${status.ahead}` : '', status.behind > 0 ? `↓${status.behind}` : '']
+            .filter(Boolean)
+            .join(' ') || null;
     const where = status.branch
         ? status.upstream
             ? `On ${status.branch}, tracking ${status.upstream}`

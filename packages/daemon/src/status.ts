@@ -46,7 +46,11 @@ export function claudeTransition(event: ClaudeHookEvent, payload: Record<string,
     }
 }
 
-export function codexTransition(event: CodexHookEvent, payload: Record<string, unknown>, current: PaneStatus): StatusChange | null {
+export function codexTransition(
+    event: CodexHookEvent,
+    payload: Record<string, unknown>,
+    current: PaneStatus,
+): StatusChange | null {
     switch (event) {
         case 'SessionStart':
             return current === 'starting' ? { status: 'idle', detail: null } : null;
@@ -57,7 +61,9 @@ export function codexTransition(event: CodexHookEvent, payload: Record<string, u
             return { status: 'working', detail: oneLine(payload.tool_name, 80) };
         case 'PermissionRequest': {
             const input =
-                payload.tool_input && typeof payload.tool_input === 'object' ? (payload.tool_input as Record<string, unknown>) : {};
+                payload.tool_input && typeof payload.tool_input === 'object'
+                    ? (payload.tool_input as Record<string, unknown>)
+                    : {};
             const tool = oneLine(payload.tool_name, 40) ?? 'a tool';
             return { status: 'needs-input', detail: oneLine(input.description, 200) ?? `Allow ${tool}?` };
         }
@@ -94,17 +100,26 @@ export class OpencodeStatus {
                     ? payload.resources.filter((value) => typeof value === 'string').join(' ')
                     : '';
                 const action = oneLine(payload.action, 40) ?? 'a tool';
-                return this.ask(payload.request_id, oneLine(resources ? `Allow ${action}: ${resources}` : `Allow ${action}?`, 200) ?? '');
+                return this.ask(
+                    payload.request_id,
+                    oneLine(resources ? `Allow ${action}: ${resources}` : `Allow ${action}?`, 200) ?? '',
+                );
             }
             case 'Question':
                 return this.ask(payload.request_id, oneLine(payload.message, 200) ?? 'OpenCode has a question');
             case 'PermissionReplied':
             case 'QuestionAnswered': {
-                if (typeof payload.request_id !== 'string' || !this.pending.delete(payload.request_id) || current !== 'needs-input') {
+                if (
+                    typeof payload.request_id !== 'string' ||
+                    !this.pending.delete(payload.request_id) ||
+                    current !== 'needs-input'
+                ) {
                     return null;
                 }
                 const next = [...this.pending.values()][0];
-                return next === undefined ? { status: 'working', detail: null } : { status: 'needs-input', detail: next };
+                return next === undefined
+                    ? { status: 'working', detail: null }
+                    : { status: 'needs-input', detail: next };
             }
             case 'TurnEnd':
                 this.pending.clear();
@@ -114,7 +129,10 @@ export class OpencodeStatus {
                 if (payload.outcome === 'failed') {
                     return {
                         status: 'done',
-                        detail: oneLine(`Failed: ${typeof payload.message === 'string' ? payload.message : 'unknown error'}`, 280),
+                        detail: oneLine(
+                            `Failed: ${typeof payload.message === 'string' ? payload.message : 'unknown error'}`,
+                            280,
+                        ),
                     };
                 }
                 return { status: 'done', detail: oneLine(payload.message, 280) };

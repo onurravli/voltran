@@ -1,4 +1,10 @@
-import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import {
+    useEffect,
+    useState,
+    type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
+    type ReactNode,
+} from 'react';
 import { ContextMenu } from '@base-ui/react/context-menu';
 import { Menu } from '@base-ui/react/menu';
 import type { MenuItem } from '../menus.ts';
@@ -89,7 +95,9 @@ function MenuEntries({ items }: { items: MenuItem[] }) {
     return items.map((item) => {
         const separated = item.separated ? ' menu__item--separated' : '';
         if ('swatches' in item) {
-            const selected = item.swatches.find((swatch) => swatch.value.toLowerCase() === item.selected.toLowerCase())?.value ?? null;
+            const selected =
+                item.swatches.find((swatch) => swatch.value.toLowerCase() === item.selected.toLowerCase())?.value ??
+                null;
             return (
                 <Menu.RadioGroup
                     key={item.label}
@@ -128,7 +136,11 @@ function MenuEntries({ items }: { items: MenuItem[] }) {
                             alignOffset={-5}
                             collisionPadding={VIEWPORT_MARGIN}
                         >
-                            <Menu.Popup className="menu menu--floating" aria-label={item.label} onContextMenu={keepContextMenu}>
+                            <Menu.Popup
+                                className="menu menu--floating"
+                                aria-label={item.label}
+                                onContextMenu={keepContextMenu}
+                            >
                                 <MenuEntries items={item.items} />
                             </Menu.Popup>
                         </Menu.Positioner>
@@ -161,7 +173,13 @@ export function MoreMenu({ label, items, small = false }: { label: string; items
                 <MoreIcon size={small ? 14 : 16} />
             </Menu.Trigger>
             <Menu.Portal>
-                <Menu.Positioner className="menu-layer" side="bottom" align="end" sideOffset={MENU_GAP} collisionPadding={VIEWPORT_MARGIN}>
+                <Menu.Positioner
+                    className="menu-layer"
+                    side="bottom"
+                    align="end"
+                    sideOffset={MENU_GAP}
+                    collisionPadding={VIEWPORT_MARGIN}
+                >
                     <Menu.Popup className="menu menu--floating" aria-label={label} onContextMenu={keepContextMenu}>
                         <LazyEntries items={items} />
                     </Menu.Popup>
@@ -181,7 +199,14 @@ function openFromKeyboard(event: ReactKeyboardEvent<HTMLElement>): void {
     event.stopPropagation();
     const row = event.target as HTMLElement;
     const rect = row.getBoundingClientRect();
-    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 12, clientY: rect.bottom }));
+    row.dispatchEvent(
+        new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + 12,
+            clientY: rect.bottom,
+        }),
+    );
 }
 
 // The trigger is display: contents, so wrapping a row changes nothing about its layout. Items are
@@ -199,12 +224,20 @@ export function ContextMenuArea({
 }) {
     return (
         <ContextMenu.Root>
-            <ContextMenu.Trigger className={render ? undefined : 'context-area'} render={render} onKeyDown={openFromKeyboard}>
+            <ContextMenu.Trigger
+                className={render ? undefined : 'context-area'}
+                render={render}
+                onKeyDown={openFromKeyboard}
+            >
                 {children}
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
                 <ContextMenu.Positioner className="menu-layer" collisionPadding={VIEWPORT_MARGIN}>
-                    <ContextMenu.Popup className="menu menu--floating" aria-label={label} onContextMenu={keepContextMenu}>
+                    <ContextMenu.Popup
+                        className="menu menu--floating"
+                        aria-label={label}
+                        onContextMenu={keepContextMenu}
+                    >
                         <LazyEntries items={items} />
                     </ContextMenu.Popup>
                 </ContextMenu.Positioner>

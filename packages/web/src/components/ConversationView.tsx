@@ -10,7 +10,13 @@ import {
     type DragEvent as ReactDragEvent,
     type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { MAX_ATTACHMENT_BYTES, type ConversationEntry, type PaneView, type SlashCommand, type ToolDetail } from '@voltran/shared';
+import {
+    MAX_ATTACHMENT_BYTES,
+    type ConversationEntry,
+    type PaneView,
+    type SlashCommand,
+    type ToolDetail,
+} from '@voltran/shared';
 import { api } from '../api.ts';
 import { formatDuration, groupTurns, lineDiff, type ConversationItem, type Turn } from '../conversation.ts';
 import { renderMarkdown } from '../markdown.ts';
@@ -56,7 +62,10 @@ function message(error: unknown): string {
 
 // Reads the conversation from where the last read stopped, until the daemon has nothing more; a call
 // that arrives while one runs makes it read once more instead of running alongside.
-function useConversation(paneId: string, status: string): { entries: ConversationEntry[]; loaded: boolean; error: string | null } {
+function useConversation(
+    paneId: string,
+    status: string,
+): { entries: ConversationEntry[]; loaded: boolean; error: string | null } {
     const [entries, setEntries] = useState<ConversationEntry[]>([]);
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -244,7 +253,11 @@ function Item({ item, running }: { item: ConversationItem; running: boolean }) {
                 </details>
             );
         case 'notice':
-            return <div className={`conversation__notice${item.entry.tone === 'error' ? ' is-error' : ''}`}>{item.entry.text}</div>;
+            return (
+                <div className={`conversation__notice${item.entry.tone === 'error' ? ' is-error' : ''}`}>
+                    {item.entry.text}
+                </div>
+            );
         case 'tools':
             return (
                 <div className="tools">
@@ -275,14 +288,18 @@ function TurnView({ turn, live }: { turn: Turn; live: boolean }) {
                 <div className="turn__prompt">
                     {prompt.text}
                     {prompt.images > 0 ? (
-                        <span className="turn__images">{prompt.images === 1 ? '1 image' : `${prompt.images} images`}</span>
+                        <span className="turn__images">
+                            {prompt.images === 1 ? '1 image' : `${prompt.images} images`}
+                        </span>
                     ) : null}
                 </div>
             ) : null}
             {turn.items.map((item, index) => (
                 <Item key={index} item={item} running={live} />
             ))}
-            {!live && turn.items.length > 0 && stats.length > 0 ? <div className="turn__stats">{stats.join(' · ')}</div> : null}
+            {!live && turn.items.length > 0 && stats.length > 0 ? (
+                <div className="turn__stats">{stats.join(' · ')}</div>
+            ) : null}
         </section>
     );
 }
@@ -353,7 +370,12 @@ function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | n
     const attach = (files: File[]): void => {
         for (const file of files) {
             if (file.size > MAX_ATTACHMENT_BYTES) {
-                useUi.getState().showToast(`${file.name || 'The image'} is larger than ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB`, 'error');
+                useUi
+                    .getState()
+                    .showToast(
+                        `${file.name || 'The image'} is larger than ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB`,
+                        'error',
+                    );
                 continue;
             }
             const id = nextAttachmentId++;
@@ -492,7 +514,9 @@ function Composer({ pane, focusToken }: { pane: PaneView; focusToken: number | n
                                 className="composer__image-remove"
                                 aria-label="Remove image"
                                 title="Remove image"
-                                onClick={() => updateImages((current) => current.filter((other) => other.id !== image.id))}
+                                onClick={() =>
+                                    updateImages((current) => current.filter((other) => other.id !== image.id))
+                                }
                             >
                                 ×
                             </button>
@@ -579,7 +603,8 @@ export function ConversationView({ pane, focusToken }: { pane: PaneView; focusTo
                             className="button button--small button--ghost conversation__earlier"
                             onClick={() => setShown((count) => count + TURNS_PER_PAGE)}
                         >
-                            Show {Math.min(hidden, TURNS_PER_PAGE)} earlier {Math.min(hidden, TURNS_PER_PAGE) === 1 ? 'turn' : 'turns'}
+                            Show {Math.min(hidden, TURNS_PER_PAGE)} earlier{' '}
+                            {Math.min(hidden, TURNS_PER_PAGE) === 1 ? 'turn' : 'turns'}
                         </button>
                     ) : null}
                     {turns.slice(hidden).map((turn, index, list) => (
@@ -597,7 +622,11 @@ export function ConversationView({ pane, focusToken }: { pane: PaneView; focusTo
             {pane.status === 'needs-input' ? (
                 <div className="conversation__attention">
                     <span>{pane.detail ?? 'Claude is waiting for you.'} Answer in the terminal.</span>
-                    <button type="button" className="button button--small" onClick={() => useUi.getState().toggleConversation(pane.id)}>
+                    <button
+                        type="button"
+                        className="button button--small"
+                        onClick={() => useUi.getState().toggleConversation(pane.id)}
+                    >
                         Show terminal ({keys('⌃⌥C')})
                     </button>
                 </div>

@@ -1,5 +1,7 @@
 import { bugReportUrl, type AppState, type PaneView, type Session } from '@voltran/shared';
 import { api } from './api.ts';
+import { SETTINGS_TAB, unsavedIn } from './editor.ts';
+import { editorFor } from './editor-session.ts';
 import { isPrimaryChord, keyLabel } from './keymap.ts';
 import { revealPane } from './notify.ts';
 import { attentionPanes, reportError, selectedWorkspace, shownPaneIds, useUi } from './store.ts';
@@ -27,10 +29,17 @@ export function orderedSessions(app: AppState | null, showArchived: boolean): Se
 }
 
 function stepSession(delta: number): void {
-    const { app, showArchived, selectedSessionId, selectedWorkspaceId, selectSession, selectWorkspace } = useUi.getState();
+    const { app, showArchived, selectedSessionId, selectedWorkspaceId, selectSession, selectWorkspace } =
+        useUi.getState();
     const views = [
-        ...(app?.workspaces ?? []).map((workspace) => ({ id: workspace.id, select: () => selectWorkspace(workspace.id) })),
-        ...orderedSessions(app, showArchived).map((session) => ({ id: session.id, select: () => selectSession(session.id) })),
+        ...(app?.workspaces ?? []).map((workspace) => ({
+            id: workspace.id,
+            select: () => selectWorkspace(workspace.id),
+        })),
+        ...orderedSessions(app, showArchived).map((session) => ({
+            id: session.id,
+            select: () => selectSession(session.id),
+        })),
     ];
     if (views.length === 0) {
         return;
@@ -69,14 +78,21 @@ function splitFocused(direction: 'horizontal' | 'vertical'): void {
     const state = useUi.getState();
     const workspace = selectedWorkspace(state);
     const focused = visibleFocusedPane();
-    const sessionId = workspace ? state.app?.panes.find((pane) => pane.id === focused)?.sessionId : state.selectedSessionId;
+    const sessionId = workspace
+        ? state.app?.panes.find((pane) => pane.id === focused)?.sessionId
+        : state.selectedSessionId;
     if (!sessionId) {
         if (workspace) {
             state.showToast('Click a pane first; the new one joins its session');
         }
         return;
     }
-    api.createPane(sessionId, { adapter: 'shell', splitFrom: focused ?? undefined, direction, workspaceId: workspace?.id })
+    api.createPane(sessionId, {
+        adapter: 'shell',
+        splitFrom: focused ?? undefined,
+        direction,
+        workspaceId: workspace?.id,
+    })
         .then((pane) => useUi.getState().focusPane(pane.id))
         .catch(reportError);
 }
@@ -95,7 +111,12 @@ export function reportProblem(): void {
             if (tab) {
                 tab.opener = null;
             } else {
-                useUi.getState().showToast('The browser blocked the bug report. Allow pop-ups, or run `voltran doctor --report`.', 'error');
+                useUi
+                    .getState()
+                    .showToast(
+                        'The browser blocked the bug report. Allow pop-ups, or run `voltran doctor --report`.',
+                        'error',
+                    );
             }
         })
         .catch(reportError);
@@ -103,7 +124,23 @@ export function reportProblem(): void {
 
 // The editor runs in a pane next to the focused one; without an open session there is nowhere to put
 // it, so the file opens in the system's editor instead.
+// Voltran's settings in the editor pane of the session in view, opened next to the focused pane when
+// there is none yet. With no session open, the system's own editor opens the file.
 export function editSettings(): void {
+    const { app, selectedSessionId } = useUi.getState();
+    const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
+    if (!session || session.archived) {
+        openSettingsInApp();
+        return;
+    }
+    void editorPane().then((pane) => {
+        if (pane) {
+            editorFor(pane.id, pane.sessionId).open(SETTINGS_TAB);
+        }
+    });
+}
+
+export function editSettingsInTerminal(): void {
     const { app, selectedSessionId } = useUi.getState();
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
     if (!session || session.archived) {
@@ -123,7 +160,11 @@ export function editSettings(): void {
                     return;
                 }
                 stop();
-                if (state.focusedPaneId === null && returnTo && state.app.panes.some((entry) => entry.id === returnTo)) {
+                if (
+                    state.focusedPaneId === null &&
+                    returnTo &&
+                    state.app.panes.some((entry) => entry.id === returnTo)
+                ) {
                     state.focusPane(returnTo);
                 }
             });
@@ -177,8 +218,19 @@ export function toggleZen(): void {
 
 // An exited pane has no process left to stop, so closing it does not ask first.
 export function closePane(pane: PaneView): void {
-    if (pane.status === 'exited') {
+    const unsaved = pane.adapter === 'editor' ? unsavedIn(pane.id) : 0;
+    if (pane.status === 'exited' || (pane.adapter === 'editor' && unsaved === 0)) {
         api.deletePane(pane.id).catch(reportError);
+        return;
+    }
+    if (unsaved > 0) {
+        useUi.getState().openDialog({
+            kind: 'confirm',
+            title: `Close ${pane.title}?`,
+            body: `${unsaved === 1 ? 'A file has' : `${unsaved} files have`} unsaved changes, which are lost.`,
+            action: 'Close without saving',
+            onConfirm: () => api.deletePane(pane.id),
+        });
         return;
     }
     useUi.getState().openDialog({
@@ -221,11 +273,58 @@ function toggleFocusedNotes(): void {
     const state = useUi.getState();
     const paneId = visibleFocusedPane();
     const pane = state.app?.panes.find((entry) => entry.id === paneId);
-    if (!pane || pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes') {
+    if (
+        !pane ||
+        pane.adapter === 'subagent' ||
+        pane.adapter === 'preview' ||
+        pane.adapter === 'changes' ||
+        pane.adapter === 'editor'
+    ) {
         state.showToast('Focus a terminal pane to see its notes');
         return;
     }
     state.toggleNotes(pane.id);
+}
+
+// The editor of the session the focused pane belongs to, opened to its right the first time.
+function openEditor(): void {
+    void editorPane();
+}
+
+// The editor pane of the focused pane's session, if one is on screen, or a new one to its right.
+async function editorPane(): Promise<{ id: string; sessionId: string } | null> {
+    const state = useUi.getState();
+    const workspace = selectedWorkspace(state);
+    const focused = visibleFocusedPane();
+    const sessionId =
+        state.app?.panes.find((pane) => pane.id === focused)?.sessionId ?? (workspace ? null : state.selectedSessionId);
+    if (!sessionId) {
+        state.showToast(
+            workspace ? 'Click a pane first; the editor opens its session’s files' : 'Open a session first',
+        );
+        return null;
+    }
+    const shown = shownPaneIds(state);
+    const existing = state.app?.panes.find(
+        (pane) => pane.adapter === 'editor' && pane.sessionId === sessionId && shown.includes(pane.id),
+    );
+    if (existing) {
+        state.focusPane(existing.id);
+        return existing;
+    }
+    try {
+        const pane = await api.createPane(sessionId, {
+            adapter: 'editor',
+            splitFrom: focused ?? undefined,
+            direction: 'horizontal',
+            workspaceId: workspace?.id,
+        });
+        useUi.getState().focusPane(pane.id);
+        return pane;
+    } catch (error) {
+        reportError(error);
+        return null;
+    }
 }
 
 function toggleFocusedConversation(): void {
@@ -249,7 +348,12 @@ export const SHORTCUTS: Shortcut[] = [
         label: `Zen mode: the focused pane, full screen, nothing else (${keys('⇧Esc')} leaves)`,
         run: toggleZen,
     },
-    { code: 'KeyN', keys: keys('⌃⌥N'), label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
+    {
+        code: 'KeyN',
+        keys: keys('⌃⌥N'),
+        label: 'Start a new session',
+        run: () => useUi.getState().openDialog({ kind: 'session' }),
+    },
     { code: 'ArrowUp', keys: keys('⌃⌥↑'), label: 'Previous workspace or session', run: () => stepSession(-1) },
     { code: 'ArrowDown', keys: keys('⌃⌥↓'), label: 'Next workspace or session', run: () => stepSession(1) },
     { code: 'ArrowLeft', keys: keys('⌃⌥←'), label: 'Previous pane on screen', run: () => stepPane(-1) },
@@ -260,7 +364,12 @@ export const SHORTCUTS: Shortcut[] = [
         label: 'Split the focused pane to the right with a shell',
         run: () => splitFocused('horizontal'),
     },
-    { code: 'Minus', keys: keys('⌃⌥-'), label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
+    {
+        code: 'Minus',
+        keys: keys('⌃⌥-'),
+        label: 'Split the focused pane downward with a shell',
+        run: () => splitFocused('vertical'),
+    },
     {
         code: 'Enter',
         keys: keys('⌃⌥↩'),
@@ -272,7 +381,12 @@ export const SHORTCUTS: Shortcut[] = [
             }
         },
     },
-    { code: 'KeyW', keys: keys('⌃⌥W'), label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
+    {
+        code: 'KeyW',
+        keys: keys('⌃⌥W'),
+        label: 'Close the focused pane, or take it out of the workspace',
+        run: closeFocused,
+    },
     { code: 'KeyE', keys: keys('⌃⌥E'), label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
     {
         code: 'KeyC',
@@ -280,8 +394,24 @@ export const SHORTCUTS: Shortcut[] = [
         label: 'Switch the focused Claude Code pane between its conversation and its terminal',
         run: toggleFocusedConversation,
     },
-    { code: 'KeyG', keys: keys('⌃⌥G'), label: 'Show or hide the git changes of the focused session', run: toggleChanges },
-    { code: 'Slash', keys: keys('⌃⌥/'), label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
+    {
+        code: 'KeyG',
+        keys: keys('⌃⌥G'),
+        label: 'Show or hide the git changes of the focused session',
+        run: toggleChanges,
+    },
+    {
+        code: 'KeyO',
+        keys: keys('⌃⌥O'),
+        label: 'Open the files of the focused session in an editor to its right',
+        run: openEditor,
+    },
+    {
+        code: 'Slash',
+        keys: keys('⌃⌥/'),
+        label: 'Show keyboard shortcuts',
+        run: () => useUi.getState().openDialog({ kind: 'shortcuts' }),
+    },
 ];
 
 const BY_CODE = new Map(SHORTCUTS.map((shortcut) => [shortcut.code, shortcut]));
@@ -316,10 +446,20 @@ export const FIND_SHORTCUT = { keys: keys('⌘F'), label: 'Find in the focused t
 
 export const FIND_STEP_KEYS = IS_MAC ? { next: '⌘G', previous: '⇧⌘G' } : { next: 'F3', previous: 'Shift+F3' };
 
-export const FIND_KEYS = [FIND_SHORTCUT, { keys: `${FIND_STEP_KEYS.next} / ${FIND_STEP_KEYS.previous}`, label: 'Next / previous match' }];
+export const FIND_KEYS = [
+    FIND_SHORTCUT,
+    { keys: `${FIND_STEP_KEYS.next} / ${FIND_STEP_KEYS.previous}`, label: 'Next / previous match' },
+];
 
 function isZenExitKey(event: KeyboardEvent): boolean {
-    return event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && useUi.getState().zen;
+    return (
+        event.key === 'Escape' &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        useUi.getState().zen
+    );
 }
 
 export function isAppShortcut(event: KeyboardEvent): boolean {

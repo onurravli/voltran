@@ -3,7 +3,10 @@ import { spawnSync } from 'node:child_process';
 const TYPECHECKED = /(\.(ts|tsx|mts|mjs|js)|(^|\/)(tsconfig[^/]*|package)\.json)$/;
 
 function git(args) {
-    const result = spawnSync('git', ['-c', 'core.quotepath=off', ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    const result = spawnSync('git', ['-c', 'core.quotepath=off', ...args], {
+        encoding: 'utf8',
+        maxBuffer: 256 * 1024 * 1024,
+    });
     if (result.error) {
         throw result.error;
     }

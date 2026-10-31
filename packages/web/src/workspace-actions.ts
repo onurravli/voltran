@@ -12,7 +12,8 @@ export interface PaneHost {
 }
 
 export function saveHostLayout(host: PaneHost, layout: Layout | null): void {
-    const saved = host.kind === 'session' ? api.updateSession(host.id, { layout }) : api.updateWorkspace(host.id, { layout });
+    const saved =
+        host.kind === 'session' ? api.updateSession(host.id, { layout }) : api.updateWorkspace(host.id, { layout });
     saved.catch(reportError);
 }
 
@@ -34,7 +35,12 @@ export function endDrag(): void {
     state.setReordering(null);
 }
 
-export function dropIntoWorkspace(workspaceId: string, dragged: Dragged, targetId: string | null, edge: DropEdge): void {
+export function dropIntoWorkspace(
+    workspaceId: string,
+    dragged: Dragged,
+    targetId: string | null,
+    edge: DropEdge,
+): void {
     const { app, showToast } = useUi.getState();
     const workspace = app?.workspaces.find((entry) => entry.id === workspaceId);
     if (!app || !workspace) {

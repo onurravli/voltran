@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_WORKSPACE_PANES, paneIds, type AppState, type Layout, type PaneView, type Session, type Workspace } from '@voltran/shared';
+import {
+    MAX_WORKSPACE_PANES,
+    paneIds,
+    type AppState,
+    type Layout,
+    type PaneView,
+    type Session,
+    type Workspace,
+} from '@voltran/shared';
 import { dropOnWorkspace, nextWorkspaceTitle, workspaceStatus } from './workspaces.ts';
 
 const leaf = (paneId: string): Layout => ({ type: 'pane', paneId });
@@ -29,13 +37,27 @@ const session = (id: string, layout: Layout | null): Session => ({
     createdAt: 0,
     updatedAt: 0,
 });
-const pane = (id: string, sessionId: string, status: PaneView['status'] = 'idle'): PaneView => ({ id, sessionId, status }) as PaneView;
-const workspace = (layout: Layout | null, title = 'w'): Workspace => ({ id: 'w', title, layout, createdAt: 0, updatedAt: 0 });
+const pane = (id: string, sessionId: string, status: PaneView['status'] = 'idle'): PaneView =>
+    ({ id, sessionId, status }) as PaneView;
+const workspace = (layout: Layout | null, title = 'w'): Workspace => ({
+    id: 'w',
+    title,
+    layout,
+    createdAt: 0,
+    updatedAt: 0,
+});
 
 const app = {
     projects: [],
     sessions: [session('a', row('a1', 'a2')), session('b', leaf('b1')), session('c', column('c1', 'c2', 'c3'))],
-    panes: [pane('a1', 'a'), pane('a2', 'a'), pane('b1', 'b', 'needs-input'), pane('c1', 'c'), pane('c2', 'c', 'working'), pane('c3', 'c')],
+    panes: [
+        pane('a1', 'a'),
+        pane('a2', 'a'),
+        pane('b1', 'b', 'needs-input'),
+        pane('c1', 'c'),
+        pane('c2', 'c', 'working'),
+        pane('c3', 'c'),
+    ],
     workspaces: [],
     git: {},
     adapters: [],
@@ -44,7 +66,10 @@ const app = {
 
 describe('dropOnWorkspace', () => {
     it('starts an empty workspace with the dropped pane or session', () => {
-        expect(dropOnWorkspace(app, null, { kind: 'pane', paneId: 'b1' }, null, 'swap')).toEqual({ kind: 'changed', layout: leaf('b1') });
+        expect(dropOnWorkspace(app, null, { kind: 'pane', paneId: 'b1' }, null, 'swap')).toEqual({
+            kind: 'changed',
+            layout: leaf('b1'),
+        });
         expect(dropOnWorkspace(app, null, { kind: 'session', sessionId: 'c' }, null, 'swap')).toEqual({
             kind: 'changed',
             layout: column('c1', 'c2', 'c3'),
@@ -64,7 +89,12 @@ describe('dropOnWorkspace', () => {
                 type: 'split',
                 direction: 'horizontal',
                 children: [
-                    { type: 'split', direction: 'vertical', children: [leaf('a1'), column('c1', 'c3')], sizes: [50, 50] },
+                    {
+                        type: 'split',
+                        direction: 'vertical',
+                        children: [leaf('a1'), column('c1', 'c3')],
+                        sizes: [50, 50],
+                    },
                     leaf('c2'),
                 ],
                 sizes: [50, 50],
@@ -78,18 +108,26 @@ describe('dropOnWorkspace', () => {
     it('moves a pane the workspace already shows instead of adding it twice', () => {
         const result = dropOnWorkspace(app, row('a1', 'b1'), { kind: 'pane', paneId: 'b1' }, 'a1', 'swap');
         expect(result).toEqual({ kind: 'changed', layout: row('b1', 'a1') });
-        expect(dropOnWorkspace(app, row('a1', 'b1'), { kind: 'pane', paneId: 'b1' }, null, 'swap')).toEqual({ kind: 'unchanged' });
+        expect(dropOnWorkspace(app, row('a1', 'b1'), { kind: 'pane', paneId: 'b1' }, null, 'swap')).toEqual({
+            kind: 'unchanged',
+        });
     });
 
     it('ignores panes and sessions that no longer exist', () => {
-        expect(dropOnWorkspace(app, leaf('a1'), { kind: 'pane', paneId: 'gone' }, 'a1', 'left')).toEqual({ kind: 'unchanged' });
-        expect(dropOnWorkspace(app, leaf('a1'), { kind: 'session', sessionId: 'gone' }, 'a1', 'left')).toEqual({ kind: 'unchanged' });
+        expect(dropOnWorkspace(app, leaf('a1'), { kind: 'pane', paneId: 'gone' }, 'a1', 'left')).toEqual({
+            kind: 'unchanged',
+        });
+        expect(dropOnWorkspace(app, leaf('a1'), { kind: 'session', sessionId: 'gone' }, 'a1', 'left')).toEqual({
+            kind: 'unchanged',
+        });
     });
 
     it('refuses to grow past the limit', () => {
         const ids = Array.from({ length: MAX_WORKSPACE_PANES - 1 }, (_, index) => `x${index}`);
         expect(dropOnWorkspace(app, row(...ids), { kind: 'pane', paneId: 'b1' }, null, 'swap').kind).toBe('changed');
-        expect(dropOnWorkspace(app, row(...ids), { kind: 'session', sessionId: 'a' }, null, 'swap')).toEqual({ kind: 'full' });
+        expect(dropOnWorkspace(app, row(...ids), { kind: 'session', sessionId: 'a' }, null, 'swap')).toEqual({
+            kind: 'full',
+        });
     });
 });
 

@@ -1,4 +1,17 @@
-export const TYPES = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'release', 'revert', 'style', 'test'];
+export const TYPES = [
+    'build',
+    'chore',
+    'ci',
+    'docs',
+    'feat',
+    'fix',
+    'perf',
+    'refactor',
+    'release',
+    'revert',
+    'style',
+    'test',
+];
 export const MAX_HEADER_LENGTH = 100;
 
 const HEADER = /^(?<type>[^\s():!]+)(?:\((?<scope>[^()]*)\))?(?<breaking>!)?: (?<subject>.*)$/;

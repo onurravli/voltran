@@ -32,7 +32,9 @@ describe('groupTurns', () => {
             ['turn-7', 'Thanks', ['tools'], null, 9000, 9500],
         ]);
         const tools = turns[1].items[1];
-        expect(tools.kind === 'tools' && tools.tools.map(({ tool, result }) => [tool.id, result?.text ?? null])).toEqual([
+        expect(
+            tools.kind === 'tools' && tools.tools.map(({ tool, result }) => [tool.id, result?.text ?? null]),
+        ).toEqual([
             ['t1', 'code'],
             ['t2', null],
         ]);
@@ -41,7 +43,13 @@ describe('groupTurns', () => {
 
 describe('formatDuration', () => {
     it('reads like a stopwatch', () => {
-        expect([900, 9_340, 42_000, 121_000, 3_725_000].map(formatDuration)).toEqual(['0.9s', '9.3s', '42s', '2m 01s', '1h 02m']);
+        expect([900, 9_340, 42_000, 121_000, 3_725_000].map(formatDuration)).toEqual([
+            '0.9s',
+            '9.3s',
+            '42s',
+            '2m 01s',
+            '1h 02m',
+        ]);
     });
 });
 

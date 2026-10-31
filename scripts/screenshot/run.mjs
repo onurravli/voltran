@@ -1,5 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+    chmodSync,
+    copyFileSync,
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -8,7 +18,11 @@ import { chromium } from 'playwright-core';
 const HERE = dirname(new URL(import.meta.url).pathname);
 const ROOT = join(HERE, '..', '..');
 const OUT = process.argv[2] ?? join(ROOT, 'docs');
-const CHROME_PATHS = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'];
+const CHROME_PATHS = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+];
 
 const run = (command, args, options = {}) => {
     const result = spawnSync(command, args, { stdio: 'inherit', ...options });
@@ -60,7 +74,10 @@ function setup() {
         );
     }
     copyFileSync(realpathSync(process.execPath), join(D, 'libexec', 'stripe'));
-    executable(join(bin, 'stripe'), `#!/bin/sh\nexec '${join(D, 'libexec', 'stripe')}' '${join(HERE, 'stripe.mjs')}' "$@"\n`);
+    executable(
+        join(bin, 'stripe'),
+        `#!/bin/sh\nexec '${join(D, 'libexec', 'stripe')}' '${join(HERE, 'stripe.mjs')}' "$@"\n`,
+    );
     executable(
         join(bin, 'gh'),
         `#!/bin/sh
@@ -120,8 +137,16 @@ const split = (direction, children, sizes) => ({ type: 'split', direction, child
 
 async function populate() {
     const code = (name) => join(D, 'code', name);
-    const checkout = await api('POST', '/api/projects', { name: 'checkout-api', path: code('checkout-api'), color: '#7aa2f7' });
-    const web = await api('POST', '/api/projects', { name: 'web-dashboard', path: code('web-dashboard'), color: '#bb9af7' });
+    const checkout = await api('POST', '/api/projects', {
+        name: 'checkout-api',
+        path: code('checkout-api'),
+        color: '#7aa2f7',
+    });
+    const web = await api('POST', '/api/projects', {
+        name: 'web-dashboard',
+        path: code('web-dashboard'),
+        color: '#bb9af7',
+    });
     const infra = await api('POST', '/api/projects', { name: 'infra', path: code('infra'), color: '#73daca' });
     const sessions = {};
     sessions.goUpgrade = await api('POST', '/api/sessions', {
@@ -142,7 +167,11 @@ async function populate() {
         panes: [
             { adapter: 'claude', command: '--scene checkout-api' },
             { adapter: 'shell' },
-            { adapter: 'command', title: 'stripe listen', command: 'stripe listen --forward-to localhost:8080/webhooks/stripe' },
+            {
+                adapter: 'command',
+                title: 'stripe listen',
+                command: 'stripe listen --forward-to localhost:8080/webhooks/stripe',
+            },
         ],
     });
     sessions.appRouter = await api('POST', '/api/sessions', {
@@ -176,7 +205,9 @@ async function stage(ids) {
     // The open window answers the new pane with a layout of its own.
     await sleep(2000);
     const state = await api('GET', '/api/state');
-    const subagent = state.panes.find((pane) => pane.sessionId === ids.sessions.webhooks && pane.adapter === 'subagent');
+    const subagent = state.panes.find(
+        (pane) => pane.sessionId === ids.sessions.webhooks && pane.adapter === 'subagent',
+    );
     await api('PATCH', `/api/sessions/${ids.sessions.webhooks}`, {
         layout: split(
             'horizontal',
@@ -234,7 +265,11 @@ async function shoot(ids) {
     // Chrome does not capture the WebGL terminal canvas at a device scale of 2.
     const browser = await chromium.launch({ executablePath: chrome, args: ['--disable-webgl', '--disable-webgl2'] });
     try {
-        const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2, colorScheme: 'dark' });
+        const context = await browser.newContext({
+            viewport: { width: 1600, height: 1000 },
+            deviceScaleFactor: 2,
+            colorScheme: 'dark',
+        });
         await context.addInitScript((id) => {
             if (!localStorage.getItem('voltran.ui')) {
                 localStorage.setItem('voltran.ui', JSON.stringify({ selectedSessionId: id }));
@@ -269,7 +304,11 @@ async function shoot(ids) {
         const claude = page.locator('.pane').first();
         await claude.locator('.pane__view-toggle').click();
         await page.waitForTimeout(3000);
-        await claude.locator('details.tool summary').filter({ hasText: 'Edit' }).filter({ hasText: 'webhooks/handler.go' }).click();
+        await claude
+            .locator('details.tool summary')
+            .filter({ hasText: 'Edit' })
+            .filter({ hasText: 'webhooks/handler.go' })
+            .click();
         await page.waitForTimeout(500);
         await page.mouse.click(5, 5);
         const dark = await page.screenshot();
@@ -277,7 +316,10 @@ async function shoot(ids) {
         await page.waitForTimeout(2000);
         const light = await page.screenshot();
         const composer = await context.newPage();
-        const png = await composer.evaluate(composite, { dark: dark.toString('base64'), light: light.toString('base64') });
+        const png = await composer.evaluate(composite, {
+            dark: dark.toString('base64'),
+            light: light.toString('base64'),
+        });
         writeFileSync(join(OUT, 'screenshot.png'), Buffer.from(png, 'base64'));
     } finally {
         await browser.close();

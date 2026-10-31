@@ -20,7 +20,35 @@ describe('parseSettings', () => {
             terminal: { fontFamily: 'Menlo', fontSize: 15 },
             ui: { fontFamily: 'Inter', fontSize: 14 },
             sidebar: { position: 'right' },
-            editor: { command: 'nvim -p' },
+            editor: {
+                command: 'nvim -p',
+                fontFamily: 'Fira Code',
+                fontSize: 14,
+                tabSize: 2,
+                wordWrap: true,
+                minimap: true,
+                lineNumbers: 'relative',
+                lineHeight: 1.5,
+                fontLigatures: true,
+                cursorStyle: 'block',
+                cursorBlinking: 'solid',
+                renderWhitespace: 'all',
+                renderLineHighlight: 'line',
+                rulers: [80, 120],
+                insertSpaces: false,
+                detectIndentation: false,
+                bracketPairColorization: false,
+                autoClosingBrackets: false,
+                quickSuggestions: false,
+                folding: false,
+                stickyScroll: true,
+                smoothScrolling: true,
+                scrollBeyondLastLine: true,
+                trimTrailingWhitespace: true,
+                insertFinalNewline: true,
+                autoSave: 'afterDelay',
+                autoSaveDelay: 500,
+            },
             git: { pullRequests: false },
         };
         expect(parseSettings(raw)).toEqual({ settings: raw, problems: [] });
@@ -58,14 +86,61 @@ describe('parseSettings', () => {
         ]);
     });
 
+    it('checks the rest of the editor options', () => {
+        const { settings, problems } = parseSettings({
+            editor: {
+                lineHeight: 5,
+                cursorStyle: 'beam',
+                renderWhitespace: true,
+                rulers: [80, 0],
+                autoSave: 'always',
+                autoSaveDelay: 10,
+            },
+        });
+        expect(settings).toEqual(DEFAULT_SETTINGS);
+        expect(problems).toEqual([
+            '"editor.lineHeight" must be null for the font\'s own, or a multiple of the font size from 1 to 3',
+            '"editor.cursorStyle" must be "line", "block" or "underline"',
+            '"editor.renderWhitespace" must be "none", "boundary", "selection", "trailing" or "all"',
+            '"editor.rulers" must be a list of at most 10 columns, each a whole number from 1 to 500',
+            '"editor.autoSave" must be "off", "afterDelay" or "onFocusChange"',
+            '"editor.autoSaveDelay" must be a whole number from 100 to 60000',
+        ]);
+        expect(
+            parseSettings({ editor: { rulers: Array.from({ length: 11 }, (_, index) => index + 1) } }).problems,
+        ).toHaveLength(1);
+    });
+
+    it("lets the editor pane follow the terminal's font, and checks its own options", () => {
+        expect(parseSettings({ editor: { fontFamily: '', fontSize: null } })).toEqual({
+            settings: DEFAULT_SETTINGS,
+            problems: [],
+        });
+        const { settings, problems } = parseSettings({
+            editor: { fontSize: 40, tabSize: 0, wordWrap: 'on', minimap: 1, lineNumbers: 'interval' },
+        });
+        expect(settings).toEqual(DEFAULT_SETTINGS);
+        expect(problems).toEqual([
+            `"editor.fontSize" must be null for the terminal's size, or a whole number from 9 to ${MAX_FONT_SIZE}`,
+            '"editor.tabSize" must be a whole number from 1 to 8',
+            '"editor.wordWrap" must be true or false',
+            '"editor.minimap" must be true or false',
+            '"editor.lineNumbers" must be "on", "relative" or "off"',
+        ]);
+    });
+
     it('accepts an empty editor command, which means the default editor, and rejects a long one', () => {
         expect(parseSettings({ editor: { command: '' } })).toEqual({ settings: DEFAULT_SETTINGS, problems: [] });
-        expect(parseSettings({ editor: { command: 'x'.repeat(MAX_EDITOR_COMMAND_LENGTH + 1) } }).problems).toHaveLength(1);
+        expect(parseSettings({ editor: { command: 'x'.repeat(MAX_EDITOR_COMMAND_LENGTH + 1) } }).problems).toHaveLength(
+            1,
+        );
     });
 
     it('rejects font sizes outside the range and fractions', () => {
         for (const fontSize of [8, MAX_FONT_SIZE + 1, 13.5, Number.NaN]) {
-            expect(parseSettings({ terminal: { fontSize } }).settings.terminal.fontSize).toBe(DEFAULT_SETTINGS.terminal.fontSize);
+            expect(parseSettings({ terminal: { fontSize } }).settings.terminal.fontSize).toBe(
+                DEFAULT_SETTINGS.terminal.fontSize,
+            );
         }
     });
 
@@ -88,18 +163,26 @@ describe('parseSettings', () => {
 
     it('treats anything but an object as no settings', () => {
         for (const raw of [null, [], 'dark', 3]) {
-            expect(parseSettings(raw)).toEqual({ settings: DEFAULT_SETTINGS, problems: ['the settings must be an object'] });
+            expect(parseSettings(raw)).toEqual({
+                settings: DEFAULT_SETTINGS,
+                problems: ['the settings must be an object'],
+            });
         }
     });
 });
 
 describe('parseSettingsPatch', () => {
     it('keeps only what was sent', () => {
-        expect(parseSettingsPatch({ terminal: { fontSize: 14 } })).toEqual({ patch: { terminal: { fontSize: 14 } }, problems: [] });
+        expect(parseSettingsPatch({ terminal: { fontSize: 14 } })).toEqual({
+            patch: { terminal: { fontSize: 14 } },
+            problems: [],
+        });
     });
 
     it('reports invalid values instead of dropping them silently', () => {
-        expect(parseSettingsPatch({ sidebar: { position: 'top' } }).problems).toEqual(['"sidebar.position" must be "left" or "right"']);
+        expect(parseSettingsPatch({ sidebar: { position: 'top' } }).problems).toEqual([
+            '"sidebar.position" must be "left" or "right"',
+        ]);
     });
 });
 

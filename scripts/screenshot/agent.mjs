@@ -35,7 +35,9 @@ const cols = () => process.stdout.columns || 100;
 const settingsFile = argValue('--settings');
 let hookSettings = null;
 try {
-    hookSettings = settingsFile ? JSON.parse(settingsFile.startsWith('{') ? settingsFile : readFileSync(settingsFile, 'utf8')) : null;
+    hookSettings = settingsFile
+        ? JSON.parse(settingsFile.startsWith('{') ? settingsFile : readFileSync(settingsFile, 'utf8'))
+        : null;
 } catch {}
 function claudeHook(event, payload) {
     const command = hookSettings?.hooks?.[event]?.[0]?.hooks?.[0]?.command;
@@ -163,10 +165,17 @@ SCENES['checkout-api'] = {
             ...userPrompt(
                 'Stripe webhooks that fail with a 5xx from our handler are dropped for good. Retry them with exponential backoff and park the ones that run out of attempts in a dead-letter table. Keep the handler idempotent.',
             ),
-            ...said("I'll start by looking at how webhook delivery works today, and map every place that could retry an event."),
+            ...said(
+                "I'll start by looking at how webhook delivery works today, and map every place that could retry an event.",
+            ),
             ...tool('Search', 'pattern: "Deliver\\(|Process\\(", path: "internal"', [`Found ${bold('7')} files`]),
             ...tool('Read', 'internal/webhooks/handler.go', [`Read ${bold('31')} lines`]),
-            ...tool(`${purple('Explore')}`, 'Map every webhook retry path', [grey('Running in the background (↓ to manage)')], purple),
+            ...tool(
+                `${purple('Explore')}`,
+                'Map every webhook retry path',
+                [grey('Running in the background (↓ to manage)')],
+                purple,
+            ),
             ...said(
                 "Delivery returns the processor's error and nothing retries it, so a single 5xx loses the event. I'll add the backoff to the handler and park events after 8 attempts.",
             ),
@@ -190,7 +199,9 @@ SCENES['checkout-api'] = {
             ...tool('Write', 'migrations/0007_webhook_dead_letters.sql', [
                 `Wrote ${bold('7')} lines to ${bold('migrations/0007_webhook_dead_letters.sql')}`,
             ]),
-            ...tool('Bash', 'go test ./internal/webhooks/... -run Backoff', ['ok      github.com/lumenpay/api/internal/webhooks   0.412s']),
+            ...tool('Bash', 'go test ./internal/webhooks/... -run Backoff', [
+                'ok      github.com/lumenpay/api/internal/webhooks   0.412s',
+            ]),
             `${orange('✽')} ${orange('Wiring the dead-letter store…')} ${grey(`(3m 41s · esc to interrupt)`)}`,
             `  ${grey('⎿')}  ${grey('Next: Add a replay command for parked events')}`,
             '',
@@ -217,17 +228,30 @@ SCENES['checkout-api'] = {
             ...ctx.base,
             tool_name: 'Agent',
             tool_use_id: 'toolu_01Explore',
-            tool_input: { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true, prompt: '…' },
+            tool_input: {
+                description: 'Map every webhook retry path',
+                subagent_type: 'Explore',
+                run_in_background: true,
+                prompt: '…',
+            },
         });
         claudeHook('SubagentStart', { ...ctx.base, agent_id: agentId, agent_type: 'Explore' });
         claudeHook('PostToolUse', {
             ...ctx.base,
             tool_name: 'Agent',
             tool_use_id: 'toolu_01Explore',
-            tool_input: { description: 'Map every webhook retry path', subagent_type: 'Explore', run_in_background: true },
+            tool_input: {
+                description: 'Map every webhook retry path',
+                subagent_type: 'Explore',
+                run_in_background: true,
+            },
             tool_response: { agentId, status: 'async_launched' },
         });
-        claudeHook('PreToolUse', { ...ctx.base, tool_name: 'Edit', tool_input: { file_path: `${shownCwd}/internal/webhooks/handler.go` } });
+        claudeHook('PreToolUse', {
+            ...ctx.base,
+            tool_name: 'Edit',
+            tool_input: { file_path: `${shownCwd}/internal/webhooks/handler.go` },
+        });
         if (process.env.VOLTRAN_NOTES) writeFileSync(process.env.VOLTRAN_NOTES, NOTES);
     },
 };
@@ -237,10 +261,16 @@ SCENES['refunds-rate-limit'] = {
     lines() {
         return [
             ...claudeHeader(this.model),
-            ...userPrompt('Add a per-merchant rate limit to POST /v1/refunds: 20 requests a minute, 429 with Retry-After above it.'),
+            ...userPrompt(
+                'Add a per-merchant rate limit to POST /v1/refunds: 20 requests a minute, 429 with Retry-After above it.',
+            ),
             ...tool('Read', 'internal/refunds/refunds.go', [`Read ${bold('24')} lines`]),
-            ...tool('Write', 'internal/refunds/ratelimit.go', [`Wrote ${bold('58')} lines to ${bold('internal/refunds/ratelimit.go')}`]),
-            ...tool('Bash', 'go test ./internal/refunds/...', ['ok      github.com/lumenpay/api/internal/refunds   0.388s']),
+            ...tool('Write', 'internal/refunds/ratelimit.go', [
+                `Wrote ${bold('58')} lines to ${bold('internal/refunds/ratelimit.go')}`,
+            ]),
+            ...tool('Bash', 'go test ./internal/refunds/...', [
+                'ok      github.com/lumenpay/api/internal/refunds   0.388s',
+            ]),
             ...said(
                 'Done. Refunds are now limited to 20 a minute per merchant with a token bucket keyed by merchant id; requests above it get 429 and a Retry-After header in seconds. Tests cover the burst, the refill and the header.',
             ),
@@ -265,7 +295,9 @@ SCENES['flaky-invoices'] = {
         return [
             ...claudeHeader(this.model),
             ...userPrompt('invoice-table.test.tsx fails about one run in five on CI. Find out why and fix it.'),
-            ...tool('Bash', 'pnpm vitest run components/InvoiceTable --repeat 20', [`${red('2 failed')} | ${green('18 passed')}`]),
+            ...tool('Bash', 'pnpm vitest run components/InvoiceTable --repeat 20', [
+                `${red('2 failed')} | ${green('18 passed')}`,
+            ]),
             ...said(
                 'The test sorts by "Due date" and reads the first row before the sort has re-rendered. I want to run the suite in CI mode to confirm.',
             ),
@@ -301,8 +333,10 @@ function CHECKOUT_TRANSCRIPT() {
     const at = (sec) => new Date(t0 + sec * 1000).toISOString();
     const lines = [];
     let n = 0;
-    const user = (content, sec) => lines.push({ type: 'user', timestamp: at(sec), cwd: shownCwd, message: { role: 'user', content } });
-    const asst = (content, sec) => lines.push({ type: 'assistant', timestamp: at(sec), message: { role: 'assistant', model, content } });
+    const user = (content, sec) =>
+        lines.push({ type: 'user', timestamp: at(sec), cwd: shownCwd, message: { role: 'user', content } });
+    const asst = (content, sec) =>
+        lines.push({ type: 'assistant', timestamp: at(sec), message: { role: 'assistant', model, content } });
     const say = (text, sec) => asst([{ type: 'text', text }], sec);
     const call = (name, input, result, sec, pending = false) => {
         const id = `toolu_01${String(++n).padStart(2, '0')}`;
@@ -396,7 +430,8 @@ function writeSubagent(ctx, agentId) {
     const id = () => `toolu_${String(++n).padStart(2, '0')}`;
     const lines = [];
     const user = (content, s) => lines.push({ type: 'user', timestamp: at(s), message: { role: 'user', content } });
-    const asst = (content, s) => lines.push({ type: 'assistant', timestamp: at(s), message: { role: 'assistant', content } });
+    const asst = (content, s) =>
+        lines.push({ type: 'assistant', timestamp: at(s), message: { role: 'assistant', content } });
     const call = (name, input, result, s) => {
         const t = id();
         asst([{ type: 'tool_use', id: t, name, input }], s);
@@ -547,7 +582,11 @@ setTimeout(() => {
     } else if (kind === 'opencode') {
         opencodeHook('Ready', {});
         opencodeHook('PromptSubmit', { prompt: 'Move app/settings/billing from the pages router to the App Router' });
-        opencodeHook('Permission', { request_id: 'per_7Kq2', action: 'bash', resources: ['pnpm vitest run app/settings --reporter=dot'] });
+        opencodeHook('Permission', {
+            request_id: 'per_7Kq2',
+            action: 'bash',
+            resources: ['pnpm vitest run app/settings --reporter=dot'],
+        });
     } else if (kind === 'codex') {
         setTimeout(
             () =>

@@ -28,7 +28,10 @@ describe('filterItems', () => {
         expect(labels('s')[0]).toBe('Start a new session');
         expect(labels('size')).toEqual(['Font size: bigger', 'Font size: smaller']);
         expect(labels('ession')).toEqual(['Start a new session']);
-        expect(labels('pane')).toEqual(['Jump to the next pane that needs you', 'Split the focused pane to the right with a shell']);
+        expect(labels('pane')).toEqual([
+            'Jump to the next pane that needs you',
+            'Split the focused pane to the right with a shell',
+        ]);
     });
 });
 
@@ -52,7 +55,11 @@ const pane = (id: string, sessionId: string, title: string, status: PaneView['st
 const app = {
     projects: [{ id: 'project', name: 'checkout', path: '/tmp', color: '#7aa2f7', createdAt: 0 }],
     sessions: [session('one', 'Fix flaky total'), session('two', 'Old spike', true)],
-    panes: [pane('a', 'one', 'Claude', 'needs-input'), pane('b', 'one', 'tests', 'running'), pane('c', 'two', 'zsh', 'idle')],
+    panes: [
+        pane('a', 'one', 'Claude', 'needs-input'),
+        pane('b', 'one', 'tests', 'running'),
+        pane('c', 'two', 'zsh', 'idle'),
+    ],
     workspaces: [],
     git: {},
     adapters: [],
@@ -77,7 +84,9 @@ describe('destinations', () => {
     it('lists workspaces first and opens them by id', () => {
         const withWorkspace = {
             ...app,
-            workspaces: [{ id: 'w', title: 'Release', layout: { type: 'pane', paneId: 'a' }, createdAt: 0, updatedAt: 0 }],
+            workspaces: [
+                { id: 'w', title: 'Release', layout: { type: 'pane', paneId: 'a' }, createdAt: 0, updatedAt: 0 },
+            ],
         } as AppState;
         const [first] = destinations(withWorkspace);
         expect([first.kind, first.label, first.workspaceId, first.sessionId, first.status]).toEqual([

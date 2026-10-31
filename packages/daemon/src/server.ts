@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { extname, join, normalize, sep } from 'node:path';
+import { basename, dirname, extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import {
     MAX_ATTACHMENT_BYTES,
@@ -15,6 +15,7 @@ import {
     type ServerEvent,
 } from '@voltran/shared';
 import { voltranVersion, writeNewToken, type Config } from './config.ts';
+import { FilesError, MAX_EDIT_BYTES, ProjectFiles } from './files.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
 import { editorCommand, type SettingsFile } from './settings.ts';
@@ -54,7 +55,9 @@ const INLINE_SCRIPT = /<script>([\s\S]*?)<\/script>/g;
 // The page holds a credential that can run commands, so it runs no script but its own files and the
 // inline scripts index.html carries, by hash. xterm adds <style> elements, so styles may be inline.
 export function contentSecurityPolicy(html: string): string {
-    const hashes = [...html.matchAll(INLINE_SCRIPT)].map((match) => `'sha256-${createHash('sha256').update(match[1]).digest('base64')}'`);
+    const hashes = [...html.matchAll(INLINE_SCRIPT)].map(
+        (match) => `'sha256-${createHash('sha256').update(match[1]).digest('base64')}'`,
+    );
     return [
         "default-src 'self'",
         `script-src 'self' ${hashes.join(' ')}`.trim(),
@@ -146,7 +149,8 @@ async function readJson<T>(req: IncomingMessage, limit = JSON_LIMIT): Promise<T>
 }
 
 export function openInEditor(path: string): void {
-    const opener = process.platform === 'darwin' ? ['open', '-t', path] : process.platform === 'win32' ? null : ['xdg-open', path];
+    const opener =
+        process.platform === 'darwin' ? ['open', '-t', path] : process.platform === 'win32' ? null : ['xdg-open', path];
     if (!opener) {
         return;
     }
@@ -164,7 +168,9 @@ export function createVoltranServer(options: ServerOptions): Server {
         routes.push({ method, pattern, handler });
     };
 
-    route('GET', '/api/health', (_req, res) => sendJson(res, 200, { ok: true, pid: process.pid, version: voltranVersion() }));
+    route('GET', '/api/health', (_req, res) =>
+        sendJson(res, 200, { ok: true, pid: process.pid, version: voltranVersion() }),
+    );
     route('GET', '/api/diagnostics', async (_req, res) => {
         if (!options.diagnose) {
             throw new HttpError(404, 'diagnostics are not available');
@@ -173,7 +179,9 @@ export function createVoltranServer(options: ServerOptions): Server {
     });
     route('GET', '/api/state', (_req, res) => sendJson(res, 200, hub.state()));
     route('POST', '/api/login-code', (_req, res) => sendJson(res, 200, { code: guard.issueLoginCode() }));
-    route('GET', '/api/windows', (_req, res) => sendJson(res, 200, { open: hub.openWindows(), previous: options.previousWindows }));
+    route('GET', '/api/windows', (_req, res) =>
+        sendJson(res, 200, { open: hub.openWindows(), previous: options.previousWindows }),
+    );
     route('POST', '/api/shutdown', (_req, res) => {
         sendJson(res, 202, { ok: true });
         setImmediate(options.onShutdown);
@@ -208,6 +216,37 @@ export function createVoltranServer(options: ServerOptions): Server {
         options.openFile(settings.path);
         sendJson(res, 202, { path: settings.path });
     });
+    // The settings file in the editor pane. The route names no path: it reads and writes only the
+    // daemon's own settings file, through a link to wherever that leads, such as a dotfiles folder.
+    const settingsFile = (): { root: string; name: string } => {
+        settings.create();
+        const real = realpathSync(settings.path);
+        return { root: dirname(real), name: basename(real) };
+    };
+    const settingsEditor = new ProjectFiles({ run: async () => ({ ok: false, stdout: '' }), trash: () => false });
+    const asHttp = <T>(action: () => T): T => {
+        try {
+            return action();
+        } catch (error) {
+            throw error instanceof FilesError
+                ? new HttpError(error.status, error.message.replace(/^\S+/, 'settings.json'))
+                : error;
+        }
+    };
+    route('GET', '/api/settings/file', (req, res) => {
+        const { root, name } = settingsFile();
+        const file = asHttp(() => settingsEditor.read(root, name, requestUrl(req).searchParams.get('known')));
+        sendJson(res, 200, { ...file, path: 'settings.json' });
+    });
+    route('PUT', '/api/settings/file', async (req, res) => {
+        const params = requestUrl(req).searchParams;
+        const text = (await readBytes(req, JSON_LIMIT)).toString('utf8');
+        const { root, name } = settingsFile();
+        const saved = asHttp(() =>
+            settingsEditor.write(root, name, text, params.get('base'), params.get('force') === '1'),
+        );
+        sendJson(res, 200, { ...saved, path: 'settings.json' });
+    });
     route('POST', '/api/settings/edit', async (req, res) => {
         const body = await readJson<EditSettingsBody | null>(req);
         const pane = hub.createPane(
@@ -226,15 +265,21 @@ export function createVoltranServer(options: ServerOptions): Server {
     });
 
     route('POST', '/api/projects', async (req, res) => sendJson(res, 201, hub.createProject(await readJson(req))));
-    route('PATCH', '/api/projects/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateProject(id, await readJson(req))));
+    route('PATCH', '/api/projects/:id', async (req, res, [id]) =>
+        sendJson(res, 200, hub.updateProject(id, await readJson(req))),
+    );
     route('GET', '/api/projects/:id/git', async (_req, res, [id]) => sendJson(res, 200, await hub.projectGit(id)));
     route('DELETE', '/api/projects/:id', async (_req, res, [id]) => {
         await hub.deleteProject(id);
         sendJson(res, 200, { ok: true });
     });
 
-    route('POST', '/api/sessions', async (req, res) => sendJson(res, 201, await hub.createSession(await readJson(req))));
-    route('PATCH', '/api/sessions/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateSession(id, await readJson(req))));
+    route('POST', '/api/sessions', async (req, res) =>
+        sendJson(res, 201, await hub.createSession(await readJson(req))),
+    );
+    route('PATCH', '/api/sessions/:id', async (req, res, [id]) =>
+        sendJson(res, 200, hub.updateSession(id, await readJson(req))),
+    );
     route('DELETE', '/api/sessions/:id', async (req, res, [id]) => {
         const worktree = requestUrl(req).searchParams.get('worktree');
         if (worktree !== null && worktree !== 'keep' && worktree !== 'remove') {
@@ -243,25 +288,63 @@ export function createVoltranServer(options: ServerOptions): Server {
         await hub.deleteSession(id, worktree);
         sendJson(res, 200, { ok: true });
     });
-    route('GET', '/api/sessions/:id/changes', async (_req, res, [id]) => sendJson(res, 200, await hub.sessionChanges(id)));
+    route('GET', '/api/sessions/:id/changes', async (_req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionChanges(id)),
+    );
     route('GET', '/api/sessions/:id/contents', async (req, res, [id]) =>
         sendJson(res, 200, await hub.sessionFileContents(id, requestUrl(req).searchParams.get('path') ?? '')),
+    );
+    route('GET', '/api/sessions/:id/files/tree', async (req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionTree(id, requestUrl(req).searchParams.getAll('path'))),
+    );
+    route('GET', '/api/sessions/:id/files/all', async (_req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionFileList(id)),
+    );
+    route('GET', '/api/sessions/:id/files/read', async (req, res, [id]) => {
+        const params = requestUrl(req).searchParams;
+        sendJson(res, 200, await hub.readSessionFile(id, params.get('path') ?? '', params.get('known')));
+    });
+    route('PUT', '/api/sessions/:id/files/write', async (req, res, [id]) => {
+        const params = requestUrl(req).searchParams;
+        const text = (await readBytes(req, MAX_EDIT_BYTES)).toString('utf8');
+        sendJson(
+            res,
+            200,
+            await hub.writeSessionFile(
+                id,
+                params.get('path') ?? '',
+                text,
+                params.get('base'),
+                params.get('force') === '1',
+            ),
+        );
+    });
+    route('POST', '/api/sessions/:id/files/action', async (req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionFileAction(id, await readJson(req))),
     );
     route('POST', '/api/sessions/:id/reveal', (_req, res, [id]) => {
         hub.revealSession(id);
         sendJson(res, 200, { ok: true });
     });
-    route('POST', '/api/sessions/:id/panes', async (req, res, [id]) => sendJson(res, 201, hub.createPane(id, await readJson(req))));
+    route('POST', '/api/sessions/:id/panes', async (req, res, [id]) =>
+        sendJson(res, 201, hub.createPane(id, await readJson(req))),
+    );
 
     route('POST', '/api/workspaces', async (req, res) => sendJson(res, 201, hub.createWorkspace(await readJson(req))));
-    route('PATCH', '/api/workspaces/:id', async (req, res, [id]) => sendJson(res, 200, hub.updateWorkspace(id, await readJson(req))));
+    route('PATCH', '/api/workspaces/:id', async (req, res, [id]) =>
+        sendJson(res, 200, hub.updateWorkspace(id, await readJson(req))),
+    );
     route('DELETE', '/api/workspaces/:id', (_req, res, [id]) => {
         hub.deleteWorkspace(id);
         sendJson(res, 200, { ok: true });
     });
 
-    route('PATCH', '/api/panes/:id', async (req, res, [id]) => sendJson(res, 200, hub.updatePane(id, await readJson(req))));
-    route('POST', '/api/panes/:id/move', async (req, res, [id]) => sendJson(res, 200, hub.movePane(id, await readJson(req))));
+    route('PATCH', '/api/panes/:id', async (req, res, [id]) =>
+        sendJson(res, 200, hub.updatePane(id, await readJson(req))),
+    );
+    route('POST', '/api/panes/:id/move', async (req, res, [id]) =>
+        sendJson(res, 200, hub.movePane(id, await readJson(req))),
+    );
     route('DELETE', '/api/panes/:id', (_req, res, [id]) => {
         hub.deletePane(id);
         sendJson(res, 200, { ok: true });
@@ -274,7 +357,9 @@ export function createVoltranServer(options: ServerOptions): Server {
         hub.killPane(id);
         sendJson(res, 200, { ok: true });
     });
-    route('POST', '/api/panes/:id/subagents/:agent/view', (_req, res, [id, agent]) => sendJson(res, 200, hub.viewSubagent(id, agent)));
+    route('POST', '/api/panes/:id/subagents/:agent/view', (_req, res, [id, agent]) =>
+        sendJson(res, 200, hub.viewSubagent(id, agent)),
+    );
     route('POST', '/api/panes/:id/seen', (_req, res, [id]) => {
         hub.seenPane(id);
         sendJson(res, 200, { ok: true });
@@ -288,8 +373,12 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, 201, hub.attach(id, await readBytes(req, MAX_ATTACHMENT_BYTES))),
     );
     route('GET', '/api/panes/:id/notes', (_req, res, [id]) => sendJson(res, 200, hub.paneNotes(id)));
-    route('PUT', '/api/panes/:id/notes', async (req, res, [id]) => sendJson(res, 200, hub.saveNotes(id, await readJson(req))));
-    route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) => sendJson(res, 200, hub.lockNotes(id, await readJson(req))));
+    route('PUT', '/api/panes/:id/notes', async (req, res, [id]) =>
+        sendJson(res, 200, hub.saveNotes(id, await readJson(req))),
+    );
+    route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) =>
+        sendJson(res, 200, hub.lockNotes(id, await readJson(req))),
+    );
     route('POST', '/api/panes/:id/notes/unlock', async (req, res, [id]) => {
         hub.unlockNotes(id, await readJson(req));
         sendJson(res, 200, { ok: true });
@@ -298,7 +387,12 @@ export function createVoltranServer(options: ServerOptions): Server {
     const hookPattern = /^\/api\/hooks\/([^/]+)\/([A-Za-z]+)$/;
     const hookNotesPattern = /^\/api\/hooks\/([^/]+)\/notes$/;
 
-    const handleHook = async (req: IncomingMessage, res: ServerResponse, paneId: string, event: string): Promise<void> => {
+    const handleHook = async (
+        req: IncomingMessage,
+        res: ServerResponse,
+        paneId: string,
+        event: string,
+    ): Promise<void> => {
         const secret = bearerToken(req);
         if (!secret) {
             sendJson(res, 401, { error: 'missing hook secret' });
@@ -322,13 +416,18 @@ export function createVoltranServer(options: ServerOptions): Server {
     const serveStatic = (req: IncomingMessage, res: ServerResponse, pathname: string): void => {
         const index = join(config.webDist, 'index.html');
         if (!existsSync(index)) {
-            sendText(res, 503, 'Voltran UI is not built. Run `npm run build` in the voltran repo, or use `npm run dev:web`.');
+            sendText(
+                res,
+                503,
+                'Voltran UI is not built. Run `npm run build` in the voltran repo, or use `npm run dev:web`.',
+            );
             return;
         }
         const relative = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '');
         const candidate = join(config.webDist, relative);
         const insideDist = candidate === config.webDist || candidate.startsWith(config.webDist + sep);
-        const file = insideDist && relative && existsSync(candidate) && statSync(candidate).isFile() ? candidate : index;
+        const file =
+            insideDist && relative && existsSync(candidate) && statSync(candidate).isFile() ? candidate : index;
         const type = MIME[extname(file)] ?? 'application/octet-stream';
         const headers: Record<string, string> = { ...SECURITY_HEADERS, 'Content-Type': type };
         if (file !== index && relative.startsWith('assets/')) {
@@ -446,7 +545,13 @@ function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
 }
 
 // Returns what closes every open socket, for when the credentials they were opened with stop working.
-function attachWebSockets(server: Server, hub: Hub, guard: Guard, settings: SettingsFile, version: VersionWatch | undefined): () => void {
+function attachWebSockets(
+    server: Server,
+    hub: Hub,
+    guard: Guard,
+    settings: SettingsFile,
+    version: VersionWatch | undefined,
+): () => void {
     const wss = new WebSocketServer({
         noServer: true,
         maxPayload: WS_MAX_PAYLOAD,

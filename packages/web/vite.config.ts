@@ -8,7 +8,9 @@ const packagesDir = fileURLToPath(new URL('..', import.meta.url));
 
 export default defineConfig(({ command }) => {
     const version =
-        command === 'build' ? { ui: sourceHash(packagesDir, UI_SOURCES), protocol: sourceHash(packagesDir, PROTOCOL_SOURCES) } : null;
+        command === 'build'
+            ? { ui: sourceHash(packagesDir, UI_SOURCES), protocol: sourceHash(packagesDir, PROTOCOL_SOURCES) }
+            : null;
     return {
         plugins: [
             react(),
@@ -35,7 +37,7 @@ export default defineConfig(({ command }) => {
         build: {
             outDir: 'dist',
             emptyOutDir: true,
-            chunkSizeWarningLimit: 3000,
+            chunkSizeWarningLimit: 3400,
         },
     };
 });

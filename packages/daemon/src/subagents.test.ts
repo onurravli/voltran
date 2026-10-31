@@ -12,14 +12,17 @@ const agentResult = (toolUseId: string, agentId: string, status: string, descrip
     tool_response: { status, agentId, agentType: 'general-purpose', description },
 });
 
-const descriptions = (tracker: SubagentTracker): string[] => tracker.list().map((agent) => `${agent.id}:${agent.description}`);
+const descriptions = (tracker: SubagentTracker): string[] =>
+    tracker.list().map((agent) => `${agent.id}:${agent.description}`);
 
 describe('SubagentTracker', () => {
     it('follows a foreground subagent from its Agent call to its stop', () => {
         const tracker = new SubagentTracker();
         expect(tracker.handle('PreToolUse', agentCall('t1', 'say hi'), 1)).toBe(false);
         expect(tracker.handle('SubagentStart', { agent_id: 'a1', agent_type: 'general-purpose' }, 2)).toBe(true);
-        expect(tracker.list()).toEqual([{ id: 'a1', type: 'general-purpose', description: 'say hi', background: false, startedAt: 2 }]);
+        expect(tracker.list()).toEqual([
+            { id: 'a1', type: 'general-purpose', description: 'say hi', background: false, startedAt: 2 },
+        ]);
 
         expect(tracker.handle('SubagentStop', { agent_id: 'a1', last_assistant_message: 'hi' }, 3)).toBe(true);
         expect(tracker.handle('PostToolUse', agentResult('t1', 'a1', 'completed', 'say hi'), 4)).toBe(false);
@@ -31,7 +34,11 @@ describe('SubagentTracker', () => {
         tracker.handle('PreToolUse', agentCall('t2', 'say bye', true), 1);
         tracker.handle('SubagentStart', { agent_id: 'a2', agent_type: 'general-purpose' }, 2);
         tracker.handle('PostToolUse', agentResult('t2', 'a2', 'async_launched', 'say bye', true), 2);
-        tracker.handle('Stop', { background_tasks: [{ id: 'a2', type: 'subagent', status: 'running', description: 'say bye' }] }, 3);
+        tracker.handle(
+            'Stop',
+            { background_tasks: [{ id: 'a2', type: 'subagent', status: 'running', description: 'say bye' }] },
+            3,
+        );
         expect(tracker.list()).toMatchObject([{ id: 'a2', description: 'say bye', background: true }]);
 
         expect(tracker.handle('SubagentStop', { agent_id: 'a2' }, 9)).toBe(true);
@@ -131,7 +138,11 @@ describe('SubagentTracker', () => {
         tracker.handle('PreToolUse', agentCall('t1', 'guessed', false, 'Explore'), 1);
         tracker.handle('SubagentStart', { agent_id: 'a1', agent_type: 'Explore' }, 2);
         expect(descriptions(tracker)).toEqual(['a1:stored a1']);
-        expect(tracker.transcript('a1', 3)).toEqual({ path: '/t/agent-a1.jsonl', description: 'stored a1', finished: false });
+        expect(tracker.transcript('a1', 3)).toEqual({
+            path: '/t/agent-a1.jsonl',
+            description: 'stored a1',
+            finished: false,
+        });
         expect(tracker.transcript('unknown', 3)).toBeNull();
     });
 

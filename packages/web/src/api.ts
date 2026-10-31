@@ -6,6 +6,10 @@ import type {
     CreateWorkspaceBody,
     Diagnostics,
     EditSettingsBody,
+    EditorFile,
+    FileAction,
+    FileActionResult,
+    FileTree,
     FileContents,
     MovePaneBody,
     NotesLockBody,
@@ -13,7 +17,9 @@ import type {
     Pane,
     PaneNotes,
     Project,
+    ProjectFileList,
     ProjectGit,
+    SavedFile,
     SaveNotesBody,
     Session,
     SessionChanges,
@@ -76,7 +82,11 @@ export async function signInFromUrl(): Promise<string | null> {
     }
     // On failure the window stays signed out and says how to sign in.
     await storeSession(
-        fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) }),
+        fetch('/api/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+        }),
     );
     return params.get('session');
 }
@@ -106,10 +116,11 @@ export function keepSessionFresh(): void {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
+    const raw = body === undefined || body instanceof Blob;
     const init: RequestInit = {
         method,
-        headers: { ...authHeaders(), ...(body === undefined || body instanceof Blob ? {} : { 'Content-Type': 'application/json' }) },
-        body: body === undefined || body instanceof Blob ? body : JSON.stringify(body),
+        headers: { ...authHeaders(), ...(raw ? {} : { 'Content-Type': 'application/json' }) },
+        body: raw ? body : JSON.stringify(body),
         keepalive,
     };
 
@@ -131,7 +142,9 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
     }
     if (!response.ok) {
         const message =
-            parsed && typeof parsed === 'object' && 'error' in parsed ? String(parsed.error) : `Request failed (${response.status})`;
+            parsed && typeof parsed === 'object' && 'error' in parsed
+                ? String(parsed.error)
+                : `Request failed (${response.status})`;
         throw new ApiError(response.status, message);
     }
     return parsed as T;
@@ -147,9 +160,11 @@ export const api = {
     deleteSession: (id: string, worktree?: WorktreeChoice) =>
         request<void>('DELETE', `/api/sessions/${id}${worktree ? `?worktree=${worktree}` : ''}`),
     createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/api/workspaces', body),
-    updateWorkspace: (id: string, body: UpdateWorkspaceBody) => request<Workspace>('PATCH', `/api/workspaces/${id}`, body),
+    updateWorkspace: (id: string, body: UpdateWorkspaceBody) =>
+        request<Workspace>('PATCH', `/api/workspaces/${id}`, body),
     deleteWorkspace: (id: string) => request<void>('DELETE', `/api/workspaces/${id}`),
-    createPane: (sessionId: string, body: CreatePaneBody) => request<Pane>('POST', `/api/sessions/${sessionId}/panes`, body),
+    createPane: (sessionId: string, body: CreatePaneBody) =>
+        request<Pane>('POST', `/api/sessions/${sessionId}/panes`, body),
     updatePane: (id: string, body: UpdatePaneBody) => request<Pane>('PATCH', `/api/panes/${id}`, body),
     deletePane: (id: string) => request<void>('DELETE', `/api/panes/${id}`),
     movePane: (id: string, body: MovePaneBody) => request<Pane>('POST', `/api/panes/${id}/move`, body),
@@ -160,7 +175,8 @@ export const api = {
     attach: (paneId: string, image: Blob) =>
         request<{ path: string }>('POST', `/api/panes/${encodeURIComponent(paneId)}/attachments`, image),
     paneNotes: (id: string) => request<PaneNotes>('GET', `/api/panes/${id}/notes`),
-    saveNotes: (id: string, body: SaveNotesBody, keepalive = false) => request<PaneNotes>('PUT', `/api/panes/${id}/notes`, body, keepalive),
+    saveNotes: (id: string, body: SaveNotesBody, keepalive = false) =>
+        request<PaneNotes>('PUT', `/api/panes/${id}/notes`, body, keepalive),
     lockNotes: (id: string, body: NotesLockBody) => request<NotesMeta>('POST', `/api/panes/${id}/notes/lock`, body),
     unlockNotes: (id: string, body: NotesLockBody) => request<void>('POST', `/api/panes/${id}/notes/unlock`, body),
     updateSettings: (patch: SettingsPatch) => request<SettingsState>('PATCH', '/api/settings', patch),
@@ -171,6 +187,33 @@ export const api = {
     changes: (sessionId: string) => request<SessionChanges>('GET', `/api/sessions/${sessionId}/changes`),
     contents: (sessionId: string, path: string) =>
         request<FileContents>('GET', `/api/sessions/${sessionId}/contents?path=${encodeURIComponent(path)}`),
+    fileTree: (sessionId: string, paths: string[]) =>
+        request<FileTree>(
+            'GET',
+            `/api/sessions/${sessionId}/files/tree?${new URLSearchParams(paths.map((path) => ['path', path]))}`,
+        ),
+    allFiles: (sessionId: string) => request<ProjectFileList>('GET', `/api/sessions/${sessionId}/files/all`),
+    readFile: (sessionId: string, path: string, known: string | null) =>
+        request<EditorFile>(
+            'GET',
+            `/api/sessions/${sessionId}/files/read?${new URLSearchParams(known ? { path, known } : { path })}`,
+        ),
+    writeFile: (sessionId: string, path: string, text: string, base: string | null, force = false) =>
+        request<SavedFile>(
+            'PUT',
+            `/api/sessions/${sessionId}/files/write?${new URLSearchParams({ path, ...(base ? { base } : {}), ...(force ? { force: '1' } : {}) })}`,
+            new Blob([text], { type: 'text/plain;charset=utf-8' }),
+        ),
+    readSettingsFile: (known: string | null) =>
+        request<EditorFile>('GET', `/api/settings/file${known ? `?${new URLSearchParams({ known })}` : ''}`),
+    writeSettingsFile: (text: string, base: string | null, force = false) =>
+        request<SavedFile>(
+            'PUT',
+            `/api/settings/file?${new URLSearchParams({ ...(base ? { base } : {}), ...(force ? { force: '1' } : {}) })}`,
+            new Blob([text], { type: 'text/plain;charset=utf-8' }),
+        ),
+    fileAction: (sessionId: string, action: FileAction) =>
+        request<FileActionResult>('POST', `/api/sessions/${sessionId}/files/action`, action),
     conversation: (paneId: string, source: string | null, from: number) =>
         request<ConversationChunk>(
             'GET',

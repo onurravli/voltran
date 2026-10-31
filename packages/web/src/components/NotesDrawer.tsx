@@ -21,7 +21,11 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
         return () => {
             void editor.flush();
             markNotesSeen(pane.id);
-            if (!document.activeElement || document.activeElement === document.body || element?.contains(document.activeElement)) {
+            if (
+                !document.activeElement ||
+                document.activeElement === document.body ||
+                element?.contains(document.activeElement)
+            ) {
                 peekTerminal(pane.id)?.focus();
             }
         };
@@ -78,7 +82,11 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
                         <button type="button" className="button button--small" onClick={() => editor.keepMine()}>
                             Keep mine
                         </button>
-                        <button type="button" className="button button--small button--ghost" onClick={() => editor.takeTheirs()}>
+                        <button
+                            type="button"
+                            className="button button--small button--ghost"
+                            onClick={() => editor.takeTheirs()}
+                        >
                             Load theirs
                         </button>
                     </div>

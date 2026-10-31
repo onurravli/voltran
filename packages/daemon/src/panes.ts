@@ -20,7 +20,13 @@ import {
 import { safeEqual } from './security.ts';
 import { ActivityTracker, claudeTransition, codexTransition, OpencodeStatus, type StatusChange } from './status.ts';
 import { SubagentTracker, type SubagentLocation, type SubagentTranscript } from './subagents.ts';
-import { findClaudeTranscript, isClaudeSessionId, isClaudeTranscript, readSubagentMeta, subagentTranscriptPath } from './transcripts.ts';
+import {
+    findClaudeTranscript,
+    isClaudeSessionId,
+    isClaudeTranscript,
+    readSubagentMeta,
+    subagentTranscriptPath,
+} from './transcripts.ts';
 
 export interface PaneClient {
     sendText(text: string): void;
@@ -163,7 +169,12 @@ export class PaneManager {
                 return;
             }
             const snapshot = runtime.serializer.serialize({ scrollback: SCROLLBACK_LINES });
-            this.sendMessage(client, { type: 'snapshot', data: snapshot, cols: runtime.term.cols, rows: runtime.term.rows });
+            this.sendMessage(client, {
+                type: 'snapshot',
+                data: snapshot,
+                cols: runtime.term.cols,
+                rows: runtime.term.rows,
+            });
             for (const entry of attachment.queue) {
                 if (typeof entry === 'string') {
                     client.sendBinary(Buffer.from(entry, 'utf8'));
@@ -338,9 +349,16 @@ export class PaneManager {
 
     // The plugin reports subagents' sessions only for their prompts, so any other session it names is
     // one the user opened in the pane, which is the one to resume.
-    private opencodeHook(runtime: Runtime, status: OpencodeStatus, event: OpencodeEvent, payload: Record<string, unknown>): void {
+    private opencodeHook(
+        runtime: Runtime,
+        status: OpencodeStatus,
+        event: OpencodeEvent,
+        payload: Record<string, unknown>,
+    ): void {
         const sessionId =
-            typeof payload.session_id === 'string' && OPENCODE_SESSION_ID.test(payload.session_id) ? payload.session_id : null;
+            typeof payload.session_id === 'string' && OPENCODE_SESSION_ID.test(payload.session_id)
+                ? payload.session_id
+                : null;
         let recordChanged = false;
         if (sessionId && sessionId !== runtime.pane.agentSessionId) {
             this.updateRecord(runtime, { agentSessionId: sessionId, agentResumable: true });
@@ -417,13 +435,21 @@ export class PaneManager {
         }
     }
 
-    private updateRecord(runtime: Runtime, patch: Partial<Pick<Pane, 'ended' | 'agentSessionId' | 'agentResumable'>>): void {
+    private updateRecord(
+        runtime: Runtime,
+        patch: Partial<Pick<Pane, 'ended' | 'agentSessionId' | 'agentResumable'>>,
+    ): void {
         runtime.pane = { ...runtime.pane, ...patch };
         this.options.onPaneRecord(runtime.pane);
     }
 
     private createRuntime(pane: Pane): Runtime {
-        const term = new headless.Terminal({ cols: 120, rows: 32, scrollback: SCROLLBACK_LINES, allowProposedApi: true });
+        const term = new headless.Terminal({
+            cols: 120,
+            rows: 32,
+            scrollback: SCROLLBACK_LINES,
+            allowProposedApi: true,
+        });
         const serializer = new serialize.SerializeAddon();
         term.loadAddon(serializer);
 
@@ -626,7 +652,10 @@ export class PaneManager {
     }
 
     private isFollowedTranscript(transcriptPath: string | null): boolean {
-        return transcriptPath !== null && [...this.runtimes.values()].some((runtime) => runtime.subagents.isFollowing(transcriptPath));
+        return (
+            transcriptPath !== null &&
+            [...this.runtimes.values()].some((runtime) => runtime.subagents.isFollowing(transcriptPath))
+        );
     }
 
     // Tells the panes viewing a subagent that stopped to read the rest of its transcript and mark it
@@ -712,7 +741,11 @@ export class PaneManager {
             }
             const adapter = adapterFor(runtime.pane.adapter);
             const quietFor = now - runtime.lastOutputAt;
-            if ((adapter.statusSource === 'hooks' || runtime.hooked) && runtime.state.status === 'working' && quietFor > silenceMs) {
+            if (
+                (adapter.statusSource === 'hooks' || runtime.hooked) &&
+                runtime.state.status === 'working' &&
+                quietFor > silenceMs
+            ) {
                 this.setStatus(runtime, { status: 'idle', detail: 'No activity, possibly interrupted' });
             }
             // Prompts shown before the agent's first hook (folder trust, login, update notices) would

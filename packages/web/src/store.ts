@@ -160,16 +160,29 @@ function readPersisted(): Persisted {
             return {
                 selectedSessionId: typeof parsed.selectedSessionId === 'string' ? parsed.selectedSessionId : null,
                 selectedWorkspaceId: typeof parsed.selectedWorkspaceId === 'string' ? parsed.selectedWorkspaceId : null,
-                collapsedProjects: parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object' ? parsed.collapsedProjects : {},
-                expandedSessions: parsed.expandedSessions && typeof parsed.expandedSessions === 'object' ? parsed.expandedSessions : {},
+                collapsedProjects:
+                    parsed.collapsedProjects && typeof parsed.collapsedProjects === 'object'
+                        ? parsed.collapsedProjects
+                        : {},
+                expandedSessions:
+                    parsed.expandedSessions && typeof parsed.expandedSessions === 'object'
+                        ? parsed.expandedSessions
+                        : {},
                 notesOpen: parsed.notesOpen && typeof parsed.notesOpen === 'object' ? parsed.notesOpen : {},
-                conversationOpen: parsed.conversationOpen && typeof parsed.conversationOpen === 'object' ? parsed.conversationOpen : {},
-                worktreeProjects: parsed.worktreeProjects && typeof parsed.worktreeProjects === 'object' ? parsed.worktreeProjects : {},
+                conversationOpen:
+                    parsed.conversationOpen && typeof parsed.conversationOpen === 'object'
+                        ? parsed.conversationOpen
+                        : {},
+                worktreeProjects:
+                    parsed.worktreeProjects && typeof parsed.worktreeProjects === 'object'
+                        ? parsed.worktreeProjects
+                        : {},
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
                 sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
                 sidebarPosition:
-                    SIDEBAR_POSITIONS.find((position) => position === parsed.sidebarPosition) ?? DEFAULT_SETTINGS.sidebar.position,
+                    SIDEBAR_POSITIONS.find((position) => position === parsed.sidebarPosition) ??
+                    DEFAULT_SETTINGS.sidebar.position,
                 terminalFont: parseFont(parsed.terminalFont),
                 uiFont: parseUiFont(parsed.uiFont),
                 ...parseThemeChoice(parsed),
@@ -250,9 +263,12 @@ export const useUi = create<UiState>((set, get) => ({
     installable: false,
 
     setApp: (app) => {
-        const { selectedSessionId, selectedWorkspaceId, focusedPaneId, maximizedPaneId, notesOpen, conversationOpen } = get();
-        const workspaceExists = selectedWorkspaceId !== null && app.workspaces.some((workspace) => workspace.id === selectedWorkspaceId);
-        const sessionExists = selectedSessionId !== null && app.sessions.some((session) => session.id === selectedSessionId);
+        const { selectedSessionId, selectedWorkspaceId, focusedPaneId, maximizedPaneId, notesOpen, conversationOpen } =
+            get();
+        const workspaceExists =
+            selectedWorkspaceId !== null && app.workspaces.some((workspace) => workspace.id === selectedWorkspaceId);
+        const sessionExists =
+            selectedSessionId !== null && app.sessions.some((session) => session.id === selectedSessionId);
         const paneIds = new Set(app.panes.map((pane) => pane.id));
         const live = (open: Record<string, boolean>): Record<string, boolean> =>
             Object.keys(open).some((id) => !paneIds.has(id))
@@ -263,7 +279,11 @@ export const useUi = create<UiState>((set, get) => ({
             notesOpen: live(notesOpen),
             conversationOpen: live(conversationOpen),
             selectedWorkspaceId: workspaceExists ? selectedWorkspaceId : null,
-            selectedSessionId: workspaceExists ? null : sessionExists ? selectedSessionId : (firstOpenSession(app)?.id ?? null),
+            selectedSessionId: workspaceExists
+                ? null
+                : sessionExists
+                  ? selectedSessionId
+                  : (firstOpenSession(app)?.id ?? null),
             focusedPaneId: focusedPaneId && paneIds.has(focusedPaneId) ? focusedPaneId : null,
             maximizedPaneId: maximizedPaneId && paneIds.has(maximizedPaneId) ? maximizedPaneId : null,
         };
@@ -286,11 +306,23 @@ export const useUi = create<UiState>((set, get) => ({
     setVersion: (version) => set({ version }),
     setConnection: (connection) => set({ connection }),
     selectSession: (id) => {
-        const next = { selectedSessionId: id, selectedWorkspaceId: null, maximizedPaneId: null, findPaneId: null, changesSessionId: null };
+        const next = {
+            selectedSessionId: id,
+            selectedWorkspaceId: null,
+            maximizedPaneId: null,
+            findPaneId: null,
+            changesSessionId: null,
+        };
         set({ ...next, ...enterView({ ...get(), ...next }) });
     },
     selectWorkspace: (id) => {
-        const next = { selectedWorkspaceId: id, selectedSessionId: null, maximizedPaneId: null, findPaneId: null, changesSessionId: null };
+        const next = {
+            selectedWorkspaceId: id,
+            selectedSessionId: null,
+            maximizedPaneId: null,
+            findPaneId: null,
+            changesSessionId: null,
+        };
         set({ ...next, ...enterView({ ...get(), ...next }) });
     },
     revealSession: (id) => {
@@ -317,20 +349,29 @@ export const useUi = create<UiState>((set, get) => ({
     openFind: (paneId) => set({ findPaneId: paneId, findToken: get().findToken + 1 }),
     closeFind: () => set({ findPaneId: null }),
     stepFind: (direction) => set({ findStep: { direction, token: (get().findStep?.token ?? 0) + 1 } }),
-    toggleProject: (id) => set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
-    toggleSessionPanes: (id) => set({ expandedSessions: { ...get().expandedSessions, [id]: !get().expandedSessions[id] } }),
+    toggleProject: (id) =>
+        set({ collapsedProjects: { ...get().collapsedProjects, [id]: !get().collapsedProjects[id] } }),
+    toggleSessionPanes: (id) =>
+        set({ expandedSessions: { ...get().expandedSessions, [id]: !get().expandedSessions[id] } }),
     toggleNotes: (paneId) => {
         markNotesSeen(paneId);
         const { [paneId]: open, ...rest } = get().notesOpen;
         set(
             open
                 ? { notesOpen: rest, notesFocus: null }
-                : { notesOpen: { ...rest, [paneId]: true }, notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 } },
+                : {
+                      notesOpen: { ...rest, [paneId]: true },
+                      notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 },
+                  },
         );
     },
     toggleConversation: (paneId) => {
         const { [paneId]: open, ...rest } = get().conversationOpen;
-        set({ conversationOpen: open ? rest : { ...rest, [paneId]: true }, focusedPaneId: paneId, focusToken: get().focusToken + 1 });
+        set({
+            conversationOpen: open ? rest : { ...rest, [paneId]: true },
+            focusedPaneId: paneId,
+            focusToken: get().focusToken + 1,
+        });
     },
     setWorktreeChoice: (projectId, on) => {
         const rest = Object.fromEntries(Object.entries(get().worktreeProjects).filter(([id]) => id !== projectId));
@@ -364,7 +405,10 @@ export const useUi = create<UiState>((set, get) => ({
         set({
             settingsFile: state,
             appearance: settings.appearance,
-            themeIds: { dark: parseThemeId(settings.theme.dark, 'dark'), light: parseThemeId(settings.theme.light, 'light') },
+            themeIds: {
+                dark: parseThemeId(settings.theme.dark, 'dark'),
+                light: parseThemeId(settings.theme.light, 'light'),
+            },
             terminalFont: parseFont({ family: settings.terminal.fontFamily, size: settings.terminal.fontSize }),
             uiFont: parseUiFont({ family: settings.ui.fontFamily, size: settings.ui.fontSize }),
             sidebarPosition: settings.sidebar.position,
@@ -449,7 +493,9 @@ function firstOpenSession(app: AppState): Session | undefined {
 }
 
 export function selectedWorkspace(state: UiState): Workspace | undefined {
-    return state.selectedWorkspaceId ? state.app?.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId) : undefined;
+    return state.selectedWorkspaceId
+        ? state.app?.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)
+        : undefined;
 }
 
 // A view opens on the pane it had focused last, so switching back and forth keeps your place.
@@ -467,7 +513,9 @@ function nearestPane(before: string[], gone: string, after: string[]): string | 
         return null;
     }
     for (let distance = 1; distance < before.length; distance++) {
-        const near = [before[index + distance], before[index - distance]].find((id) => id !== undefined && after.includes(id));
+        const near = [before[index + distance], before[index - distance]].find(
+            (id) => id !== undefined && after.includes(id),
+        );
         if (near) {
             return near;
         }
@@ -498,7 +546,8 @@ export function attentionPanes(app: AppState | null): PaneView[] {
         .filter((pane) => needsAttention(pane.status) && !archived.has(pane.sessionId))
         .sort((a, b) => {
             const rank =
-                ATTENTION_ORDER[a.status as keyof typeof ATTENTION_ORDER] - ATTENTION_ORDER[b.status as keyof typeof ATTENTION_ORDER];
+                ATTENTION_ORDER[a.status as keyof typeof ATTENTION_ORDER] -
+                ATTENTION_ORDER[b.status as keyof typeof ATTENTION_ORDER];
             return rank !== 0 ? rank : a.statusAt - b.statusAt;
         });
 }

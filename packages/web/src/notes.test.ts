@@ -6,7 +6,12 @@ const META: NotesMeta = { size: 0, updatedAt: null, updatedBy: null, lock: 'user
 
 function fakeApi(initial: PaneNotes = { content: 'start\n', version: 'v0' }) {
     const calls: string[] = [];
-    const state = { server: { ...initial }, lockError: null as Error | null, saveError: null as Error | null, saves: 0 };
+    const state = {
+        server: { ...initial },
+        lockError: null as Error | null,
+        saveError: null as Error | null,
+        saves: 0,
+    };
     const notesApi: NotesApi = {
         read: async () => {
             calls.push('read');
@@ -106,7 +111,12 @@ describe('NotesEditor', () => {
 
         editor.input('my draft');
         await vi.advanceTimersByTimeAsync(0);
-        expect(editor.getSnapshot()).toMatchObject({ text: 'my draft', dirty: true, holding: false, conflict: state.lockError.message });
+        expect(editor.getSnapshot()).toMatchObject({
+            text: 'my draft',
+            dirty: true,
+            holding: false,
+            conflict: state.lockError.message,
+        });
         expect(calls).toEqual(['lock v0', 'read']);
 
         state.lockError = null;
@@ -132,7 +142,12 @@ describe('NotesEditor', () => {
         await vi.advanceTimersByTimeAsync(0);
         state.saveError = new Error('These notes are not locked for editing in this window.');
         await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
-        expect(editor.getSnapshot()).toMatchObject({ text: 'draft', dirty: true, holding: false, conflict: state.saveError.message });
+        expect(editor.getSnapshot()).toMatchObject({
+            text: 'draft',
+            dirty: true,
+            holding: false,
+            conflict: state.saveError.message,
+        });
     });
 
     it('saves at once and gives the lock back when the user leaves the notes', async () => {

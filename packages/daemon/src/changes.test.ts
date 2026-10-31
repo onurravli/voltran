@@ -64,6 +64,8 @@ describe('SessionChangesReader', () => {
 
         const changes = await reader().list(join(root, 'sub'));
         expect(changes.root).toBe(root);
+        expect(changes.prefix).toBe('sub/');
+        expect((await reader().list(root)).prefix).toBe('');
         expect(changes.files.map((file) => `${file.state} ${file.path}`)).toEqual([
             'untracked blob.bin',
             'untracked fresh.txt',
@@ -101,8 +103,16 @@ describe('SessionChangesReader', () => {
         git('commit', '-q', '-m', 'first');
         writeFileSync(join(root, 'big.txt'), 'small\n');
         writeFileSync(join(root, 'was-binary'), 'text now\n');
-        expect(await reader().contents(root, 'big.txt')).toMatchObject({ original: null, modified: 'small\n', tooLarge: true });
-        expect(await reader().contents(root, 'was-binary')).toMatchObject({ original: null, modified: 'text now\n', binary: true });
+        expect(await reader().contents(root, 'big.txt')).toMatchObject({
+            original: null,
+            modified: 'small\n',
+            tooLarge: true,
+        });
+        expect(await reader().contents(root, 'was-binary')).toMatchObject({
+            original: null,
+            modified: 'text now\n',
+            binary: true,
+        });
     });
 
     it('reads only files that have changes', async () => {

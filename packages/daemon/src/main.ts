@@ -121,7 +121,12 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         onShutdown: shutdown,
         onRestart: restart,
         diagnose: () =>
-            diagnose({ config, shell: options.shell, path: options.path, daemon: { pid: process.pid, version: voltranVersion() } }),
+            diagnose({
+                config,
+                shell: options.shell,
+                path: options.path,
+                daemon: { pid: process.pid, version: voltranVersion() },
+            }),
     });
     return { config, token, hub, server, shutdown };
 }
@@ -146,7 +151,9 @@ export async function startDaemon(): Promise<void> {
 
     daemon.server.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE') {
-            console.error(`[voltran] port ${config.port} is already in use. Is Voltran already running? Try \`voltran status\`.`);
+            console.error(
+                `[voltran] port ${config.port} is already in use. Is Voltran already running? Try \`voltran status\`.`,
+            );
         } else {
             console.error('[voltran] server error:', error);
         }
@@ -163,7 +170,8 @@ export async function startDaemon(): Promise<void> {
     process.on('SIGHUP', daemon.shutdown);
 }
 
-const invokedDirectly = process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+const invokedDirectly =
+    process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 
 if (invokedDirectly) {
     startDaemon().catch((error: unknown) => {

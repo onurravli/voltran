@@ -96,7 +96,9 @@ export class Guard {
         }
         const issued = Number(match[2]);
         const age = Date.now() - issued;
-        return safeEqual(match[3], this.sign(match[1], issued)) && age > -CLOCK_SKEW_MS && age < BROWSER_SESSION_MAX_AGE_MS;
+        return (
+            safeEqual(match[3], this.sign(match[1], issued)) && age > -CLOCK_SKEW_MS && age < BROWSER_SESSION_MAX_AGE_MS
+        );
     }
 
     private sign(id: string, issued: number): string {

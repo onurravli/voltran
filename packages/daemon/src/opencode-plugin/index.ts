@@ -48,7 +48,10 @@ export class Reporter {
                 if (child || item.type !== 'user') {
                     return null;
                 }
-                return { event: 'PromptSubmit', payload: { session_id: sessionId, prompt: text(record(item.payload).text) } };
+                return {
+                    event: 'PromptSubmit',
+                    payload: { session_id: sessionId, prompt: text(record(item.payload).text) },
+                };
             }
             case 'session.execution.started':
                 if (child) {
@@ -62,7 +65,9 @@ export class Reporter {
                 }
                 return null;
             case 'session.tool.input.started':
-                return child ? null : { event: 'ToolStart', payload: { session_id: sessionId, tool_name: text(data.name) } };
+                return child
+                    ? null
+                    : { event: 'ToolStart', payload: { session_id: sessionId, tool_name: text(data.name) } };
             case 'session.tool.success':
             case 'session.tool.failed':
                 return child ? null : { event: 'ToolEnd', payload: { session_id: sessionId } };
@@ -91,7 +96,10 @@ export class Reporter {
                           .map(text)
                           .filter((value) => value !== null)
                     : [];
-                return { event: 'Permission', payload: { request_id: text(data.id), action: text(data.action), resources } };
+                return {
+                    event: 'Permission',
+                    payload: { request_id: text(data.id), action: text(data.action), resources },
+                };
             }
             case 'permission.replied':
             case 'permission.rejected':

@@ -78,7 +78,7 @@ Ubuntu and macOS with Node 24; every run must pass.
 `npm run format` rewrites your files to match, and the editor integration can do it on save. Beyond
 what it checks, match the code around your change:
 
-- 4-space indent, single quotes, at most 140 columns, and every file ends with a newline.
+- 4-space indent, single quotes, at most 120 columns, and every file ends with a newline.
 - A rule that does not fit one place gets a `biome-ignore` comment that says why, rather than being
   turned off for everyone.
 - A commit that only reformats goes into `.git-blame-ignore-revs`, which GitHub's blame view skips;

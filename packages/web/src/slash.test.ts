@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest';
 import type { SlashCommand } from '@voltran/shared';
 import { commandOf, matchCommands, slashQuery } from './slash.ts';
 
-const command = (name: string, terminal = false): SlashCommand => ({ name, description: '', source: 'builtin', terminal });
-const COMMANDS = [command('compact'), command('config', true), command('model', true), command('vercel:deploy'), command('code-review')];
+const command = (name: string, terminal = false): SlashCommand => ({
+    name,
+    description: '',
+    source: 'builtin',
+    terminal,
+});
+const COMMANDS = [
+    command('compact'),
+    command('config', true),
+    command('model', true),
+    command('vercel:deploy'),
+    command('code-review'),
+];
 
 describe('slashQuery', () => {
     it('opens the menu only while a command name is being typed', () => {

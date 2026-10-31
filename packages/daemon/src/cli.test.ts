@@ -47,7 +47,11 @@ describe('autostartProgram', () => {
 
 describe('parseNewArgs', () => {
     it('starts one Claude Code pane in the current folder by default', () => {
-        expect(parseNewArgs([], '/work/app')).toEqual({ path: '/work/app', panes: [{ adapter: 'claude' }], windowArgs: [] });
+        expect(parseNewArgs([], '/work/app')).toEqual({
+            path: '/work/app',
+            panes: [{ adapter: 'claude' }],
+            windowArgs: [],
+        });
     });
 
     it('keeps panes in order with their arguments as typed', () => {
@@ -86,7 +90,10 @@ describe('parseNewArgs', () => {
 
     it('reads a worktree branch and an optional base', () => {
         expect(parseNewArgs(['--worktree', 'feat/pipeline'], '/w').worktree).toEqual({ branch: 'feat/pipeline' });
-        expect(parseNewArgs(['--worktree=feat/pipeline:main'], '/w').worktree).toEqual({ branch: 'feat/pipeline', base: 'main' });
+        expect(parseNewArgs(['--worktree=feat/pipeline:main'], '/w').worktree).toEqual({
+            branch: 'feat/pipeline',
+            base: 'main',
+        });
     });
 
     it('rejects what it cannot run', () => {
