@@ -21,8 +21,8 @@
     "monaco-editor": "0.57.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-resizable-panels": "^4.14.8",
-    "zustand": "^5.0.0"
+    "react-resizable-panels": "^4.15.0",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
