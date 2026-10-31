@@ -24,7 +24,7 @@ npm run dev:web                  # Vite on :4774, proxies /api and /ws to the da
 node bin/voltran.mjs up|down|status|add|new|autostart   # the CLI, same as `voltran` after npm link
 ```
 
-Biome formats and lints the code (`biome.json`: 4-space indent, single quotes, 140 columns; the
+Biome formats and lints the code (`biome.json`: 4-space indent, single quotes, 120 columns; the
 recommended rules minus those that fight deliberate patterns, such as control characters in terminal
 regexes). Beyond that, match the surrounding code: no comments except for a constraint the code
 cannot show (a `biome-ignore` names its reason), every file ends with a newline. Commit
