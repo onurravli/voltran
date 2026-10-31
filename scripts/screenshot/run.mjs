@@ -70,7 +70,7 @@ function setup() {
     for (const kind of ['claude', 'opencode', 'codex']) {
         executable(
             join(bin, kind),
-            `#!/bin/sh\nVOLTRAN_DEMO='${D}' exec '${process.execPath}' '${join(HERE, 'agent.mjs')}' ${kind} "$@"\n`,
+            `#!/bin/sh\nVOLTRAN_DEMO='${D}' VOLTRAN_DEMO_HOME='${process.env.VOLTRAN_DEMO_HOME ?? ''}' exec '${process.execPath}' '${join(HERE, 'agent.mjs')}' ${kind} "$@"\n`,
         );
     }
     copyFileSync(realpathSync(process.execPath), join(D, 'libexec', 'stripe'));
@@ -172,6 +172,7 @@ async function populate() {
                 title: 'stripe listen',
                 command: 'stripe listen --forward-to localhost:8080/webhooks/stripe',
             },
+            { adapter: 'editor' },
         ],
     });
     sessions.appRouter = await api('POST', '/api/sessions', {
@@ -196,23 +197,19 @@ async function populate() {
             state.panes.filter((pane) => pane.sessionId === session.id).map((pane) => pane.id),
         ]),
     );
+    const webhooks = state.panes.filter((pane) => pane.sessionId === sessions.webhooks.id);
+    const byAdapter = (adapter) => webhooks.find((pane) => pane.adapter === adapter).id;
+    panes.webhooks = [byAdapter('claude'), byAdapter('shell'), byAdapter('command'), byAdapter('editor')];
     return { sessions: Object.fromEntries(Object.entries(sessions).map(([key, session]) => [key, session.id])), panes };
 }
 
 async function stage(ids) {
-    const [claude, shell, stripe] = ids.panes.webhooks;
-    await api('POST', `/api/panes/${claude}/subagents/a3f9c27e15b84d06/view`);
-    // The open window answers the new pane with a layout of its own.
-    await sleep(2000);
-    const state = await api('GET', '/api/state');
-    const subagent = state.panes.find(
-        (pane) => pane.sessionId === ids.sessions.webhooks && pane.adapter === 'subagent',
-    );
+    const [claude, shell, stripe, editor] = ids.panes.webhooks;
     await api('PATCH', `/api/sessions/${ids.sessions.webhooks}`, {
         layout: split(
             'horizontal',
-            [leaf(claude), split('vertical', [leaf(subagent.id), leaf(shell), leaf(stripe)], [38, 34, 28])],
-            [56, 44],
+            [leaf(claude), split('vertical', [leaf(editor), leaf(shell), leaf(stripe)], [50, 30, 20])],
+            [50, 50],
         ),
     });
     const workspace = await api('POST', '/api/workspaces', { title: 'Release 2.4' });
@@ -270,11 +267,25 @@ async function shoot(ids) {
             deviceScaleFactor: 2,
             colorScheme: 'dark',
         });
-        await context.addInitScript((id) => {
-            if (!localStorage.getItem('voltran.ui')) {
-                localStorage.setItem('voltran.ui', JSON.stringify({ selectedSessionId: id }));
-            }
-        }, ids.sessions.webhooks);
+        // Keyboard labels follow the platform, and the README shows the Mac ones.
+        await context.addInitScript(() => Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }));
+        await context.addInitScript(
+            ({ session, editor }) => {
+                if (!localStorage.getItem('voltran.ui')) {
+                    localStorage.setItem('voltran.ui', JSON.stringify({ selectedSessionId: session }));
+                    localStorage.setItem(
+                        `voltran.editor.${editor}`,
+                        JSON.stringify({
+                            tabs: ['internal/webhooks/handler.go', 'internal/webhooks/retry.go'],
+                            active: 'internal/webhooks/handler.go',
+                            expanded: ['internal', 'internal/webhooks'],
+                            treeWidth: 190,
+                        }),
+                    );
+                }
+            },
+            { session: ids.sessions.webhooks, editor: ids.panes.webhooks[3] },
+        );
         const page = await context.newPage();
         await page.goto(`${base}/auth?code=${code}`);
         await page.waitForTimeout(1500);
@@ -301,6 +312,16 @@ async function shoot(ids) {
         await page.waitForTimeout(8000);
         await page.reload();
         await page.waitForTimeout(3000);
+        const editorBox = await page
+            .locator('.pane')
+            .filter({ hasText: 'Editor' })
+            .locator('.monaco-editor')
+            .boundingBox();
+        await page.mouse.click(editorBox.x + editorBox.width / 2, editorBox.y + editorBox.height / 2);
+        await page.keyboard.press('Control+G');
+        await page.keyboard.type('40');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(500);
         const claude = page.locator('.pane').first();
         await claude.locator('.pane__view-toggle').click();
         await page.waitForTimeout(3000);

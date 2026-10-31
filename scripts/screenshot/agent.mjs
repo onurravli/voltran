@@ -12,7 +12,7 @@ const argValue = (name) => {
 };
 const scene = argValue('--scene') ?? basename(process.cwd());
 const cwd = process.cwd();
-const home = homedir();
+const home = process.env.VOLTRAN_DEMO_HOME || homedir();
 const shownCwd = cwd.replace(join(DEMO, 'code'), join(home, 'code'));
 const tilde = shownCwd.replace(home, '~');
 
@@ -41,6 +41,10 @@ try {
 } catch {}
 function claudeHook(event, payload) {
     const command = hookSettings?.hooks?.[event]?.[0]?.hooks?.[0]?.command;
+    if (command) spawnSync('sh', ['-c', command], { input: JSON.stringify(payload) });
+}
+function claudeStatusLine(payload) {
+    const command = hookSettings?.statusLine?.command;
     if (command) spawnSync('sh', ['-c', command], { input: JSON.stringify(payload) });
 }
 function opencodeHook(event, payload) {
@@ -251,6 +255,14 @@ SCENES['checkout-api'] = {
             ...ctx.base,
             tool_name: 'Edit',
             tool_input: { file_path: `${shownCwd}/internal/webhooks/handler.go` },
+        });
+        const inSeconds = (seconds) => Math.floor(Date.now() / 1000) + seconds;
+        claudeStatusLine({
+            ...ctx.base,
+            rate_limits: {
+                five_hour: { used_percentage: 64, resets_at: inSeconds(2 * 3600 + 14 * 60) },
+                seven_day: { used_percentage: 31, resets_at: inSeconds(3 * 86400 + 5 * 3600) },
+            },
         });
         if (process.env.VOLTRAN_NOTES) writeFileSync(process.env.VOLTRAN_NOTES, NOTES);
     },

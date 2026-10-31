@@ -205,7 +205,7 @@ remote "$A" checkout-api
 echo '// TODO' >> internal/store/store.go
 commit "$A" "Daniel Osei" daniel@lumenpay.dev "2026-09-18T15:42:00+03:00" "store: add refunds repository"
 commit "$A" "Maya Lindqvist" maya@lumenpay.dev "2026-10-06T11:03:00+03:00" "refunds: reject amounts above the captured total" || true
-sed -i '' 's|// TODO|func (s *Store) Ping() error { return s.db.Ping() }|' internal/store/store.go
+sed -i.orig 's|// TODO|func (s *Store) Ping() error { return s.db.Ping() }|' internal/store/store.go && rm internal/store/store.go.orig
 commit "$A" "Onur Ravli" onur@onurravli.com "2026-10-14T17:21:00+03:00" "store: expose Ping for the health check"
 git push -q
 git checkout -q -b fix/webhook-retries
@@ -470,11 +470,11 @@ module "db" {
 }
 EOF
 cp envs/staging/main.tf envs/production/main.tf
-sed -i '' 's/checkout-staging/checkout-production/; s/db.t4g.medium/db.r7g.xlarge/; s/100/500/' envs/production/main.tf
+sed -i.orig 's/checkout-staging/checkout-production/; s/db.t4g.medium/db.r7g.xlarge/; s/100/500/' envs/production/main.tf && rm envs/production/main.tf.orig
 commit "$I" "Daniel Osei" daniel@lumenpay.dev "2026-07-30T09:40:00+03:00" "RDS module for checkout"
 remote "$I" infra
 git checkout -q -b chore/rds-postgres-16
-sed -i '' 's/"15.8"/"16.4"/' modules/rds/main.tf
+sed -i.orig 's/"15.8"/"16.4"/' modules/rds/main.tf && rm modules/rds/main.tf.orig
 cat >> modules/rds/main.tf <<'EOF'
 
 resource "aws_db_parameter_group" "this" {
