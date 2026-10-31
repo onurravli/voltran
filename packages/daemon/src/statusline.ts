@@ -40,7 +40,10 @@ export function mergeUsage(current: Usage | null, payload: Record<string, unknow
     const reported = limits as Record<string, unknown>;
     const fiveHour = newerWindow(current?.fiveHour ?? null, windowOf(reported.five_hour));
     const sevenDay = newerWindow(current?.sevenDay ?? null, windowOf(reported.seven_day));
-    if ((!fiveHour && !sevenDay) || (current && sameWindow(fiveHour, current.fiveHour) && sameWindow(sevenDay, current.sevenDay))) {
+    if (
+        (!fiveHour && !sevenDay) ||
+        (current && sameWindow(fiveHour, current.fiveHour) && sameWindow(sevenDay, current.sevenDay))
+    ) {
         return current;
     }
     return { fiveHour, sevenDay };
@@ -49,8 +52,10 @@ export function mergeUsage(current: Usage | null, payload: Record<string, unknow
 function statusLineIn(file: string): string | null {
     try {
         const settings: unknown = JSON.parse(readFileSync(file, 'utf8'));
-        const statusLine = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).statusLine : undefined;
-        const command = statusLine && typeof statusLine === 'object' ? (statusLine as Record<string, unknown>).command : undefined;
+        const statusLine =
+            settings && typeof settings === 'object' ? (settings as Record<string, unknown>).statusLine : undefined;
+        const command =
+            statusLine && typeof statusLine === 'object' ? (statusLine as Record<string, unknown>).command : undefined;
         return typeof command === 'string' && command.trim() ? command : null;
     } catch {
         return null;

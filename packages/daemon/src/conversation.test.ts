@@ -54,28 +54,50 @@ describe('parseClaudeLine', () => {
                 },
             }),
         ).toEqual([{ kind: 'prompt', text: 'Compare them', images: 2, at: null }]);
-        expect(parseClaudeLine({ type: 'user', message: { content: [{ type: 'text', text: 'What does [Image #1] mean?' }] } })).toEqual([
-            { kind: 'prompt', text: 'What does [Image #1] mean?', images: 0, at: null },
-        ]);
+        expect(
+            parseClaudeLine({
+                type: 'user',
+                message: { content: [{ type: 'text', text: 'What does [Image #1] mean?' }] },
+            }),
+        ).toEqual([{ kind: 'prompt', text: 'What does [Image #1] mean?', images: 0, at: null }]);
         expect(
             parseClaudeLine(
                 assistant([
                     { type: 'thinking', thinking: '' },
                     { type: 'thinking', thinking: 'Look first.' },
                     { type: 'text', text: 'A **diagram**.' },
-                    { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls\npwd', description: 'List files' } },
+                    {
+                        type: 'tool_use',
+                        id: 't1',
+                        name: 'Bash',
+                        input: { command: 'ls\npwd', description: 'List files' },
+                    },
                 ]),
             ),
         ).toEqual([
             { kind: 'thinking', text: 'Look first.', at: null },
             { kind: 'text', text: 'A **diagram**.', model: 'claude-test', at: null },
-            { kind: 'tool', id: 't1', name: 'Bash', summary: 'List files', detail: { kind: 'command', command: 'ls\npwd' }, at: null },
+            {
+                kind: 'tool',
+                id: 't1',
+                name: 'Bash',
+                summary: 'List files',
+                detail: { kind: 'command', command: 'ls\npwd' },
+                at: null,
+            },
         ]);
         expect(
             parseClaudeLine({
                 type: 'user',
                 message: {
-                    content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: [{ type: 'text', text: 'denied' }] }],
+                    content: [
+                        {
+                            type: 'tool_result',
+                            tool_use_id: 't1',
+                            is_error: true,
+                            content: [{ type: 'text', text: 'denied' }],
+                        },
+                    ],
                 },
             }),
         ).toEqual([{ kind: 'result', toolUseId: 't1', text: 'denied', error: true, at: null }]);
@@ -87,7 +109,9 @@ describe('parseClaudeLine', () => {
         expect(tool('Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' })).toMatchObject({
             detail: { kind: 'edit', path: '/r/a.ts', changes: [{ before: 'a', after: 'b' }] },
         });
-        expect(tool('MultiEdit', { file_path: '/r/a.ts', edits: [{ old_string: 'a', new_string: 'b' }, null] })).toMatchObject({
+        expect(
+            tool('MultiEdit', { file_path: '/r/a.ts', edits: [{ old_string: 'a', new_string: 'b' }, null] }),
+        ).toMatchObject({
             detail: { kind: 'edit', changes: [{ before: 'a', after: 'b' }] },
         });
         expect(tool('Write', { file_path: '/r/b.ts', content: 'x' })).toMatchObject({
@@ -109,7 +133,10 @@ describe('parseClaudeLine', () => {
                 ],
             },
         });
-        expect(tool('WebSearch', { query: 'q' })).toMatchObject({ summary: 'q', detail: { kind: 'input', text: '{\n  "query": "q"\n}' } });
+        expect(tool('WebSearch', { query: 'q' })).toMatchObject({
+            summary: 'q',
+            detail: { kind: 'input', text: '{\n  "query": "q"\n}' },
+        });
         expect(tool('Edit', {})).toMatchObject({ detail: null });
     });
 
@@ -126,33 +153,56 @@ describe('parseClaudeLine', () => {
         expect(
             parseClaudeLine({
                 type: 'user',
-                message: { content: '<local-command-stdout>Set model to \u001b[1mopus\u001b[22m</local-command-stdout>' },
+                message: {
+                    content: '<local-command-stdout>Set model to \u001b[1mopus\u001b[22m</local-command-stdout>',
+                },
             }),
         ).toEqual([{ kind: 'notice', text: 'Set model to opus', tone: 'info', at: null }]);
         expect(parseClaudeLine({ type: 'user', message: { content: '<bash-input>git status</bash-input>' } })).toEqual([
             { kind: 'prompt', text: '! git status', images: 0, at: null },
         ]);
         expect(
-            parseClaudeLine({ type: 'user', message: { content: '<bash-stdout></bash-stdout><bash-stderr>not a repo</bash-stderr>' } }),
+            parseClaudeLine({
+                type: 'user',
+                message: { content: '<bash-stdout></bash-stdout><bash-stderr>not a repo</bash-stderr>' },
+            }),
         ).toEqual([{ kind: 'notice', text: 'not a repo', tone: 'error', at: null }]);
         expect(
-            parseClaudeLine({ type: 'user', message: { content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } }),
+            parseClaudeLine({
+                type: 'user',
+                message: { content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] },
+            }),
         ).toEqual([{ kind: 'notice', text: 'Interrupted', tone: 'info', at: null }]);
     });
 
     it('skips what Claude adds for itself and marks compaction and failed requests', () => {
-        expect(parseClaudeLine({ type: 'user', isMeta: true, message: { content: '<system-reminder>x</system-reminder>' } })).toEqual([]);
-        expect(parseClaudeLine({ type: 'user', isCompactSummary: true, message: { content: 'Summary of the conversation' } })).toEqual([]);
+        expect(
+            parseClaudeLine({
+                type: 'user',
+                isMeta: true,
+                message: { content: '<system-reminder>x</system-reminder>' },
+            }),
+        ).toEqual([]);
+        expect(
+            parseClaudeLine({
+                type: 'user',
+                isCompactSummary: true,
+                message: { content: 'Summary of the conversation' },
+            }),
+        ).toEqual([]);
         expect(parseClaudeLine({ type: 'attachment', attachment: {} })).toEqual([]);
         expect(parseClaudeLine({ type: 'system', subtype: 'compact_boundary' })).toEqual([
             { kind: 'notice', text: 'Conversation compacted', tone: 'info', at: null },
         ]);
-        expect(parseClaudeLine(assistant([{ type: 'text', text: 'API Error: overloaded' }], { isApiErrorMessage: true }))).toEqual([
-            { kind: 'notice', text: 'API Error: overloaded', tone: 'error', at: null },
-        ]);
-        expect(parseClaudeLine({ type: 'assistant', message: { model: '<synthetic>', content: 'No response requested.' } })).toEqual([
-            { kind: 'text', text: 'No response requested.', model: null, at: null },
-        ]);
+        expect(
+            parseClaudeLine(assistant([{ type: 'text', text: 'API Error: overloaded' }], { isApiErrorMessage: true })),
+        ).toEqual([{ kind: 'notice', text: 'API Error: overloaded', tone: 'error', at: null }]);
+        expect(
+            parseClaudeLine({
+                type: 'assistant',
+                message: { model: '<synthetic>', content: 'No response requested.' },
+            }),
+        ).toEqual([{ kind: 'text', text: 'No response requested.', model: null, at: null }]);
         expect(parseClaudeLine('nope')).toBeNull();
         expect(parseClaudeLine({ type: 'user' })).toBeNull();
     });
@@ -173,7 +223,10 @@ describe('readClaudeConversation', () => {
 
     it('says when a long transcript has more to read', () => {
         const path = join(folder(), `${SESSION}.jsonl`);
-        const result = { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't', content: 'x'.repeat(100_000) }] } };
+        const result = {
+            type: 'user',
+            message: { content: [{ type: 'tool_result', tool_use_id: 't', content: 'x'.repeat(100_000) }] },
+        };
         writeFileSync(path, line(result).repeat(15));
         let chunk = readClaudeConversation(path, SESSION, 0)!;
         let entries = chunk.entries.length;

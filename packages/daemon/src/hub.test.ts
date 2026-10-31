@@ -78,7 +78,11 @@ describe('Hub', () => {
         const session = await hub.createSession({ projectId: project.id, title: 'new', panes: [{ adapter: 'shell' }] });
         const events: string[] = [];
         hub.subscribe((event) =>
-            events.push(event.type === 'state' ? `state:${event.state.sessions.some((entry) => entry.id === session.id)}` : event.type),
+            events.push(
+                event.type === 'state'
+                    ? `state:${event.state.sessions.some((entry) => entry.id === session.id)}`
+                    : event.type,
+            ),
         );
         hub.revealSession(session.id);
         expect(events.slice(-2)).toEqual(['state:true', 'reveal']);
@@ -127,7 +131,11 @@ describe('Hub', () => {
             store.close();
         });
         const project = hub.createProject({ path: dir });
-        const session = await hub.createSession({ projectId: project.id, title: 'review', panes: [{ adapter: 'changes' }] });
+        const session = await hub.createSession({
+            projectId: project.id,
+            title: 'review',
+            panes: [{ adapter: 'changes' }],
+        });
         const pane = hub.state().panes.find((entry) => entry.sessionId === session.id)!;
         expect(pane).toMatchObject({ adapter: 'changes', title: 'Changes', command: null, status: 'idle', pid: null });
         expect(await hub.sessionFileContents(session.id, 'app.ts')).toMatchObject({
@@ -138,7 +146,8 @@ describe('Hub', () => {
     });
 
     describe('worktrees', () => {
-        const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+        const git = (cwd: string, ...args: string[]): string =>
+            execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
         function repository(): { dir: string; repo: string; hub: Hub; store: Store } {
             const dir = realpathSync(mkdtempSync(join(tmpdir(), 'voltran-worktrees-')));
@@ -147,7 +156,18 @@ describe('Hub', () => {
             writeFileSync(join(repo, 'packages', 'web', 'index.ts'), 'export {};\n');
             git(repo, 'init', '-q', '-b', 'main');
             git(repo, 'add', '-A');
-            git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'first');
+            git(
+                repo,
+                '-c',
+                'user.name=Test',
+                '-c',
+                'user.email=test@example.com',
+                'commit',
+                '-q',
+                '--no-gpg-sign',
+                '-m',
+                'first',
+            );
             const opened = open(dir);
             cleanups.push(async () => {
                 await opened.hub.shutdown();
@@ -183,14 +203,22 @@ describe('Hub', () => {
         it('starts a session in a new worktree on a new branch, in the same subfolder as the project', async () => {
             const { dir, repo, hub } = repository();
             const project = hub.createProject({ name: 'Web App', path: join(repo, 'packages', 'web') });
-            const session = await hub.createSession({ projectId: project.id, title: 'Fix login', worktree: { branch: 'fix/login' } });
+            const session = await hub.createSession({
+                projectId: project.id,
+                title: 'Fix login',
+                worktree: { branch: 'fix/login' },
+            });
             expect(session.worktree).toBe(join(dir, 'worktrees', 'web-app', 'fix-login'));
             expect(session.cwd).toBe(join(dir, 'worktrees', 'web-app', 'fix-login', 'packages', 'web'));
             expect(existsSync(join(session.cwd, 'index.ts'))).toBe(true);
             expect(git(session.cwd, 'branch', '--show-current')).toBe('fix/login');
             expect(git(repo, 'branch', '--show-current')).toBe('main');
 
-            const again = await hub.createSession({ projectId: project.id, title: 'Fix login again', worktree: { branch: 'fix-login' } });
+            const again = await hub.createSession({
+                projectId: project.id,
+                title: 'Fix login again',
+                worktree: { branch: 'fix-login' },
+            });
             expect(again.worktree).toBe(join(dir, 'worktrees', 'web-app', 'fix-login-2'));
         });
 
@@ -198,18 +226,34 @@ describe('Hub', () => {
             const { repo, hub } = repository();
             git(repo, 'branch', 'feature');
             const project = hub.createProject({ path: repo });
-            const session = await hub.createSession({ projectId: project.id, title: 'Feature', worktree: { branch: 'feature' } });
+            const session = await hub.createSession({
+                projectId: project.id,
+                title: 'Feature',
+                worktree: { branch: 'feature' },
+            });
             expect(git(session.cwd, 'branch', '--show-current')).toBe('feature');
-            expect((await refused(hub.createSession({ projectId: project.id, title: 'Main', worktree: { branch: 'main' } }))).status).toBe(
-                409,
-            );
             expect(
-                (await refused(hub.createSession({ projectId: project.id, title: 'Bad', worktree: { branch: 'bad..name' } }))).message,
+                (
+                    await refused(
+                        hub.createSession({ projectId: project.id, title: 'Main', worktree: { branch: 'main' } }),
+                    )
+                ).status,
+            ).toBe(409);
+            expect(
+                (
+                    await refused(
+                        hub.createSession({ projectId: project.id, title: 'Bad', worktree: { branch: 'bad..name' } }),
+                    )
+                ).message,
             ).toContain('not a valid branch name');
             expect(
                 (
                     await refused(
-                        hub.createSession({ projectId: project.id, title: 'Bad base', worktree: { branch: 'new', base: 'nowhere' } }),
+                        hub.createSession({
+                            projectId: project.id,
+                            title: 'Bad base',
+                            worktree: { branch: 'new', base: 'nowhere' },
+                        }),
                     )
                 ).message,
             ).toContain('not a branch or commit');
@@ -219,7 +263,11 @@ describe('Hub', () => {
         it('removes a clean worktree with its session and keeps the branch', async () => {
             const { repo, hub } = repository();
             const project = hub.createProject({ path: repo });
-            const session = await hub.createSession({ projectId: project.id, title: 'Clean', worktree: { branch: 'clean' } });
+            const session = await hub.createSession({
+                projectId: project.id,
+                title: 'Clean',
+                worktree: { branch: 'clean' },
+            });
             await hub.deleteSession(session.id);
             expect(existsSync(session.worktree!)).toBe(false);
             expect(git(repo, 'worktree', 'list')).not.toContain(session.worktree!);
@@ -229,7 +277,11 @@ describe('Hub', () => {
         it('asks before deleting a worktree with changes, then keeps or removes it', async () => {
             const { repo, hub } = repository();
             const project = hub.createProject({ path: repo });
-            const kept = await hub.createSession({ projectId: project.id, title: 'Kept', worktree: { branch: 'kept' } });
+            const kept = await hub.createSession({
+                projectId: project.id,
+                title: 'Kept',
+                worktree: { branch: 'kept' },
+            });
             writeFileSync(join(kept.cwd, 'new.ts'), 'export {};\n');
             const error = await refused(hub.deleteSession(kept.id));
             expect(error.status).toBe(409);
@@ -238,7 +290,11 @@ describe('Hub', () => {
             await hub.deleteSession(kept.id, 'keep');
             expect(existsSync(join(kept.cwd, 'new.ts'))).toBe(true);
 
-            const removed = await hub.createSession({ projectId: project.id, title: 'Removed', worktree: { branch: 'removed' } });
+            const removed = await hub.createSession({
+                projectId: project.id,
+                title: 'Removed',
+                worktree: { branch: 'removed' },
+            });
             writeFileSync(join(removed.cwd, 'packages', 'web', 'index.ts'), 'changed\n');
             await hub.deleteSession(removed.id, 'remove');
             expect(existsSync(removed.worktree!)).toBe(false);
@@ -249,10 +305,25 @@ describe('Hub', () => {
             const marker = join(dir, 'filter-ran');
             writeFileSync(join(repo, '.gitattributes'), '*.ts filter=x\n');
             git(repo, 'add', '-A');
-            git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'attributes');
+            git(
+                repo,
+                '-c',
+                'user.name=Test',
+                '-c',
+                'user.email=test@example.com',
+                'commit',
+                '-q',
+                '--no-gpg-sign',
+                '-m',
+                'attributes',
+            );
             git(repo, 'config', 'filter.x.clean', `touch '${marker}'; cat`);
             const project = hub.createProject({ path: repo });
-            const session = await hub.createSession({ projectId: project.id, title: 'Filtered', worktree: { branch: 'filtered' } });
+            const session = await hub.createSession({
+                projectId: project.id,
+                title: 'Filtered',
+                worktree: { branch: 'filtered' },
+            });
             utimesSync(join(session.cwd, 'packages', 'web', 'index.ts'), new Date(), new Date(Date.now() + 60_000));
             await hub.deleteSession(session.id);
             expect(existsSync(session.worktree!)).toBe(false);
@@ -267,9 +338,24 @@ describe('Hub', () => {
             writeFileSync(join(inner, 'a.ts'), 'export {};\n');
             git(inner, 'init', '-q', '-b', 'main');
             git(inner, 'add', '-A');
-            git(inner, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--no-gpg-sign', '-m', 'inner');
+            git(
+                inner,
+                '-c',
+                'user.name=Test',
+                '-c',
+                'user.email=test@example.com',
+                'commit',
+                '-q',
+                '--no-gpg-sign',
+                '-m',
+                'inner',
+            );
             const project = hub.createProject({ path: repo });
-            const session = await hub.createSession({ projectId: project.id, title: 'Submodule', worktree: { branch: 'submodule' } });
+            const session = await hub.createSession({
+                projectId: project.id,
+                title: 'Submodule',
+                worktree: { branch: 'submodule' },
+            });
             git(session.worktree!, '-c', 'protocol.file.allow=always', 'submodule', '-q', 'add', inner, 'inner');
             git(
                 session.worktree!,
@@ -287,15 +373,25 @@ describe('Hub', () => {
             git(join(session.worktree!, 'inner'), 'config', 'filter.sub.clean', `touch '${marker}'; cat`);
             utimesSync(join(session.worktree!, 'inner', 'a.ts'), new Date(), new Date(Date.now() + 60_000));
 
-            expect((await refused(hub.deleteSession(session.id))).message).toBe('its worktree has 1 uncommitted change');
+            expect((await refused(hub.deleteSession(session.id))).message).toBe(
+                'its worktree has 1 uncommitted change',
+            );
             expect(existsSync(marker)).toBe(false);
         });
 
         it('keeps the worktrees with changes when the project is deleted', async () => {
             const { repo, hub } = repository();
             const project = hub.createProject({ path: repo });
-            const clean = await hub.createSession({ projectId: project.id, title: 'Clean', worktree: { branch: 'clean' } });
-            const dirty = await hub.createSession({ projectId: project.id, title: 'Dirty', worktree: { branch: 'dirty' } });
+            const clean = await hub.createSession({
+                projectId: project.id,
+                title: 'Clean',
+                worktree: { branch: 'clean' },
+            });
+            const dirty = await hub.createSession({
+                projectId: project.id,
+                title: 'Dirty',
+                worktree: { branch: 'dirty' },
+            });
             writeFileSync(join(dirty.cwd, 'wip.ts'), 'export {};\n');
             await hub.deleteProject(project.id);
             expect(existsSync(clean.worktree!)).toBe(false);
@@ -359,7 +455,13 @@ describe('Hub', () => {
             expect(sessionTitles(hub, web.id)).toEqual(['two', 'one', 'three', 'four']);
             expect(sessionTitles(hub, api.id)).toEqual(['elsewhere']);
             hub.updateProject(api.id, { moveBefore: web.id });
-            expect(hub.state().sessions.map((entry) => entry.title)).toEqual(['elsewhere', 'two', 'one', 'three', 'four']);
+            expect(hub.state().sessions.map((entry) => entry.title)).toEqual([
+                'elsewhere',
+                'two',
+                'one',
+                'three',
+                'four',
+            ]);
         });
 
         it('refuses to move in front of anything but a sibling', async () => {

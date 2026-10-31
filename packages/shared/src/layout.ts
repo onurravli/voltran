@@ -16,7 +16,12 @@ export function paneIds(layout: Layout | null): string[] {
     return layout.children.flatMap(paneIds);
 }
 
-export function insertPane(layout: Layout | null, paneId: string, targetId?: string, direction: LayoutDirection = 'horizontal'): Layout {
+export function insertPane(
+    layout: Layout | null,
+    paneId: string,
+    targetId?: string,
+    direction: LayoutDirection = 'horizontal',
+): Layout {
     if (!layout) {
         return leaf(paneId);
     }
@@ -34,7 +39,13 @@ function append(layout: Layout, inserted: Layout, direction: LayoutDirection): L
     return { type: 'split', direction, children: [layout, inserted], sizes: [50, 50] };
 }
 
-function insertNextTo(node: Layout, inserted: Layout, targetId: string, direction: LayoutDirection, before = false): Layout {
+function insertNextTo(
+    node: Layout,
+    inserted: Layout,
+    targetId: string,
+    direction: LayoutDirection,
+    before = false,
+): Layout {
     if (node.type === 'pane') {
         if (node.paneId !== targetId) {
             return node;
@@ -52,7 +63,10 @@ function insertNextTo(node: Layout, inserted: Layout, targetId: string, directio
         return { ...node, children, sizes };
     }
 
-    return { ...node, children: node.children.map((child) => insertNextTo(child, inserted, targetId, direction, before)) };
+    return {
+        ...node,
+        children: node.children.map((child) => insertNextTo(child, inserted, targetId, direction, before)),
+    };
 }
 
 export type DropEdge = 'left' | 'right' | 'top' | 'bottom' | 'swap';
@@ -114,7 +128,11 @@ export function removePane(layout: Layout | null, paneId: string): Layout | null
     if (kept.length === 1) {
         return kept[0].child;
     }
-    return { ...layout, children: kept.map((entry) => entry.child), sizes: normalizeSizes(kept.map((entry) => entry.size)) };
+    return {
+        ...layout,
+        children: kept.map((entry) => entry.child),
+        sizes: normalizeSizes(kept.map((entry) => entry.size)),
+    };
 }
 
 export function normalizeSizes(sizes: number[]): number[] {

@@ -60,12 +60,16 @@ describe('parseSettings', () => {
 
     it('accepts an empty editor command, which means the default editor, and rejects a long one', () => {
         expect(parseSettings({ editor: { command: '' } })).toEqual({ settings: DEFAULT_SETTINGS, problems: [] });
-        expect(parseSettings({ editor: { command: 'x'.repeat(MAX_EDITOR_COMMAND_LENGTH + 1) } }).problems).toHaveLength(1);
+        expect(parseSettings({ editor: { command: 'x'.repeat(MAX_EDITOR_COMMAND_LENGTH + 1) } }).problems).toHaveLength(
+            1,
+        );
     });
 
     it('rejects font sizes outside the range and fractions', () => {
         for (const fontSize of [8, MAX_FONT_SIZE + 1, 13.5, Number.NaN]) {
-            expect(parseSettings({ terminal: { fontSize } }).settings.terminal.fontSize).toBe(DEFAULT_SETTINGS.terminal.fontSize);
+            expect(parseSettings({ terminal: { fontSize } }).settings.terminal.fontSize).toBe(
+                DEFAULT_SETTINGS.terminal.fontSize,
+            );
         }
     });
 
@@ -88,18 +92,26 @@ describe('parseSettings', () => {
 
     it('treats anything but an object as no settings', () => {
         for (const raw of [null, [], 'dark', 3]) {
-            expect(parseSettings(raw)).toEqual({ settings: DEFAULT_SETTINGS, problems: ['the settings must be an object'] });
+            expect(parseSettings(raw)).toEqual({
+                settings: DEFAULT_SETTINGS,
+                problems: ['the settings must be an object'],
+            });
         }
     });
 });
 
 describe('parseSettingsPatch', () => {
     it('keeps only what was sent', () => {
-        expect(parseSettingsPatch({ terminal: { fontSize: 14 } })).toEqual({ patch: { terminal: { fontSize: 14 } }, problems: [] });
+        expect(parseSettingsPatch({ terminal: { fontSize: 14 } })).toEqual({
+            patch: { terminal: { fontSize: 14 } },
+            problems: [],
+        });
     });
 
     it('reports invalid values instead of dropping them silently', () => {
-        expect(parseSettingsPatch({ sidebar: { position: 'top' } }).problems).toEqual(['"sidebar.position" must be "left" or "right"']);
+        expect(parseSettingsPatch({ sidebar: { position: 'top' } }).problems).toEqual([
+            '"sidebar.position" must be "left" or "right"',
+        ]);
     });
 });
 

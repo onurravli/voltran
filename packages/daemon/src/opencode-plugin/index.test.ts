@@ -34,11 +34,22 @@ describe('Reporter', () => {
         const reporter = new Reporter();
         expect(reporter.report(event('session.created', { sessionID: 'ses_child', parentID: 'ses_main' }))).toBeNull();
         expect(reporter.report(event('session.execution.started', { sessionID: 'ses_child' }))).toBeNull();
-        expect(reporter.report(event('session.tool.input.started', { sessionID: 'ses_child', name: 'shell' }))).toBeNull();
         expect(
-            reporter.report(event('permission.asked', { id: 'per_1', sessionID: 'ses_child', action: 'shell', resources: ['ls -A'] })),
+            reporter.report(event('session.tool.input.started', { sessionID: 'ses_child', name: 'shell' })),
+        ).toBeNull();
+        expect(
+            reporter.report(
+                event('permission.asked', {
+                    id: 'per_1',
+                    sessionID: 'ses_child',
+                    action: 'shell',
+                    resources: ['ls -A'],
+                }),
+            ),
         ).toEqual({ event: 'Permission', payload: { request_id: 'per_1', action: 'shell', resources: ['ls -A'] } });
-        expect(reporter.report(event('permission.replied', { sessionID: 'ses_child', requestID: 'per_1', reply: 'once' }))).toEqual({
+        expect(
+            reporter.report(event('permission.replied', { sessionID: 'ses_child', requestID: 'per_1', reply: 'once' })),
+        ).toEqual({
             event: 'PermissionReplied',
             payload: { request_id: 'per_1' },
         });
@@ -61,11 +72,17 @@ describe('Reporter', () => {
             event: 'QuestionAnswered',
             payload: { request_id: 'frm_1' },
         });
-        expect(reporter.report(event('session.execution.failed', { sessionID: 'ses_main', error: { message: 'rate limited' } }))).toEqual({
+        expect(
+            reporter.report(
+                event('session.execution.failed', { sessionID: 'ses_main', error: { message: 'rate limited' } }),
+            ),
+        ).toEqual({
             event: 'TurnEnd',
             payload: { session_id: 'ses_main', outcome: 'failed', message: 'rate limited' },
         });
-        expect(reporter.report(event('session.execution.interrupted', { sessionID: 'ses_main', reason: 'user' }))).toEqual({
+        expect(
+            reporter.report(event('session.execution.interrupted', { sessionID: 'ses_main', reason: 'user' })),
+        ).toEqual({
             event: 'TurnEnd',
             payload: { session_id: 'ses_main', outcome: 'interrupted', message: null },
         });
@@ -75,7 +92,10 @@ describe('Reporter', () => {
         const reporter = new Reporter();
         expect(
             reporter.report(
-                event('session.inbox.enqueued', { sessionID: 'ses_main', item: { type: 'synthetic', payload: { text: 'x' } } }),
+                event('session.inbox.enqueued', {
+                    sessionID: 'ses_main',
+                    item: { type: 'synthetic', payload: { text: 'x' } },
+                }),
             ),
         ).toBeNull();
         expect(reporter.report(event('vcs.branch.updated', { branch: 'main' }))).toBeNull();

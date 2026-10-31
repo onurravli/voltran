@@ -164,10 +164,20 @@ const MARK_STROKES = [
 // The five strokes fly in from around the V and lock together, once, when the mark first appears.
 export function VoltranMark({ size = 22, form = false }: { size?: number; form?: boolean }) {
     return (
-        <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className={form ? 'mark mark--form' : 'mark'}>
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 32 32"
+            aria-hidden="true"
+            className={form ? 'mark mark--form' : 'mark'}
+        >
             <g stroke="currentColor" strokeLinecap="round" strokeWidth="3.4">
                 {MARK_STROKES.map((stroke, index) => (
-                    <path key={stroke.d} d={stroke.d} style={{ '--from': stroke.from, '--order': index } as React.CSSProperties} />
+                    <path
+                        key={stroke.d}
+                        d={stroke.d}
+                        style={{ '--from': stroke.from, '--order': index } as React.CSSProperties}
+                    />
                 ))}
             </g>
         </svg>

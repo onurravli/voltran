@@ -249,7 +249,9 @@ export function opencodeArgsProblem(text: string): string | null {
 }
 
 function ownedFlagProblem(args: string[], flags: string[]): string | null {
-    const owned = args.find((arg) => flags.some((flag) => arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`))));
+    const owned = args.find((arg) =>
+        flags.some((flag) => arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`))),
+    );
     return owned ? `${owned.split('=')[0]} is set by Voltran` : null;
 }
 
@@ -326,14 +328,19 @@ const END = '__VOLTRAN_PATH_END__';
 // pyenv or ~/.local/bin are only on the PATH the user's interactive login shell builds.
 export function resolveShellPath(shell: string, fallback: string, timeoutMs = 5000): Promise<string> {
     return new Promise((resolvePath) => {
-        execFile(shell, ['-ilc', `printf '%s%s%s' '${START}' "$PATH" '${END}'`], { timeout: timeoutMs }, (error, stdout) => {
-            if (error) {
-                resolvePath(fallback);
-                return;
-            }
-            const match = stdout.match(new RegExp(`${START}(.*)${END}`, 's'));
-            resolvePath(match?.[1] ? match[1] : fallback);
-        });
+        execFile(
+            shell,
+            ['-ilc', `printf '%s%s%s' '${START}' "$PATH" '${END}'`],
+            { timeout: timeoutMs },
+            (error, stdout) => {
+                if (error) {
+                    resolvePath(fallback);
+                    return;
+                }
+                const match = stdout.match(new RegExp(`${START}(.*)${END}`, 's'));
+                resolvePath(match?.[1] ? match[1] : fallback);
+            },
+        );
     });
 }
 
@@ -371,7 +378,11 @@ const SESSION_SCOPED_ENV = [
     'VOLTRAN_STATUSLINE',
 ];
 
-export function childEnv(base: NodeJS.ProcessEnv, path: string, extra: Record<string, string> = {}): Record<string, string> {
+export function childEnv(
+    base: NodeJS.ProcessEnv,
+    path: string,
+    extra: Record<string, string> = {},
+): Record<string, string> {
     const env: Record<string, string> = {};
     for (const [key, value] of Object.entries(base)) {
         if (value === undefined || key.startsWith('npm_') || SESSION_SCOPED_ENV.includes(key)) {

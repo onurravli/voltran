@@ -15,7 +15,12 @@ describe('checkCommitMessage', () => {
     });
 
     it("lets git's own messages through", () => {
-        for (const message of ["Merge branch 'main' into feature", 'Revert "feat: x"', 'fixup! fix: y', 'squash! feat: z']) {
+        for (const message of [
+            "Merge branch 'main' into feature",
+            'Revert "feat: x"',
+            'fixup! fix: y',
+            'squash! feat: z',
+        ]) {
             expect(checkCommitMessage(message)).toEqual([]);
         }
     });

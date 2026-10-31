@@ -1,4 +1,11 @@
-import { PROJECT_COLORS, type PaneSpec, type PaneView, type Project, type Session, type Workspace } from '@voltran/shared';
+import {
+    PROJECT_COLORS,
+    type PaneSpec,
+    type PaneView,
+    type Project,
+    type Session,
+    type Workspace,
+} from '@voltran/shared';
 import { api } from './api.ts';
 import { shortPath } from './labels.ts';
 import { revealPane } from './notify.ts';
@@ -60,7 +67,12 @@ function addPaneItems(sessionId: string): MenuItem[] {
             disabled: !adapter.available,
             onSelect: () => create({ adapter: adapter.id }),
         })),
-        { label: 'Changes', note: inGit ? undefined : 'not in git', disabled: !inGit, onSelect: () => create({ adapter: 'changes' }) },
+        {
+            label: 'Changes',
+            note: inGit ? undefined : 'not in git',
+            disabled: !inGit,
+            onSelect: () => create({ adapter: 'changes' }),
+        },
     ];
 }
 
@@ -125,7 +137,8 @@ export function removeProject(project: Project): void {
 export function deleteSession(session: Session): void {
     const { app, openDialog } = useUi.getState();
     const git = app?.git[session.cwd];
-    const stops = 'Every process in this session stops and its scrollback is deleted. Agent conversations stay in their own history.';
+    const stops =
+        'Every process in this session stops and its scrollback is deleted. Agent conversations stay in their own history.';
     const changes = git?.changed ?? 0;
     const branch = git?.branch ? `the branch ${git.branch}` : 'its branch';
     if (session.worktree && changes > 0) {
@@ -142,7 +155,9 @@ export function deleteSession(session: Session): void {
     openDialog({
         kind: 'confirm',
         title: `Delete ${session.title}?`,
-        body: session.worktree ? `${stops} Its worktree at ${shortPath(session.worktree)} is removed; ${branch} stays.` : stops,
+        body: session.worktree
+            ? `${stops} Its worktree at ${shortPath(session.worktree)} is removed; ${branch} stays.`
+            : stops,
         action: 'Delete session',
         onConfirm: () => api.deleteSession(session.id),
     });
@@ -202,9 +217,18 @@ export function sessionMenu(
         { label: 'Copy folder path', onSelect: () => copy(session.cwd, 'folder path') },
         ...(branch ? [{ label: 'Copy branch name', onSelect: () => copy(branch, 'branch name') }] : []),
         ...(sidebar && panes.length > 0
-            ? [{ label: ui.expandedSessions[session.id] ? 'Hide panes' : 'Show panes', onSelect: () => ui.toggleSessionPanes(session.id) }]
+            ? [
+                  {
+                      label: ui.expandedSessions[session.id] ? 'Hide panes' : 'Show panes',
+                      onSelect: () => ui.toggleSessionPanes(session.id),
+                  },
+              ]
             : []),
-        { label: 'Add to workspace', items: workspaceItems({ kind: 'session', sessionId: session.id }), disabled: panes.length === 0 },
+        {
+            label: 'Add to workspace',
+            items: workspaceItems({ kind: 'session', sessionId: session.id }),
+            disabled: panes.length === 0,
+        },
         ...(finished.length > 0
             ? [
                   {
@@ -213,7 +237,9 @@ export function sessionMenu(
                   },
               ]
             : []),
-        ...(sidebar ? moveItems(siblings, session.id, (moveBefore) => api.updateSession(session.id, { moveBefore })) : []),
+        ...(sidebar
+            ? moveItems(siblings, session.id, (moveBefore) => api.updateSession(session.id, { moveBefore }))
+            : []),
         session.archived
             ? {
                   label: 'Restore session',
@@ -266,7 +292,9 @@ export function paneMenu(pane: PaneView): MenuItem[] {
     const maximized = ui.maximizedPaneId === pane.id;
     const notesOpen = Boolean(ui.notesOpen[pane.id]);
     const conversationOpen = Boolean(ui.conversationOpen[pane.id]);
-    const others = ui.app.sessions.filter((entry) => entry.projectId === session.projectId && entry.id !== session.id && !entry.archived);
+    const others = ui.app.sessions.filter(
+        (entry) => entry.projectId === session.projectId && entry.id !== session.id && !entry.archived,
+    );
     return [
         { label: 'Show', onSelect: () => revealPane(session.id, pane.id) },
         { label: maximized ? 'Restore size' : 'Maximize', onSelect: () => maximize(pane, !maximized) },
@@ -287,7 +315,9 @@ export function paneMenu(pane: PaneView): MenuItem[] {
             disabled: session.archived,
             onSelect: () => api.restartPane(pane.id).catch(reportError),
         },
-        ...(pane.pid !== null ? [{ label: 'Stop process', onSelect: () => api.killPane(pane.id).catch(reportError) }] : []),
+        ...(pane.pid !== null
+            ? [{ label: 'Stop process', onSelect: () => api.killPane(pane.id).catch(reportError) }]
+            : []),
         {
             label: 'Move to session',
             disabled: others.length === 0,
@@ -301,14 +331,23 @@ export function paneMenu(pane: PaneView): MenuItem[] {
             })),
         },
         { label: 'Add to workspace', items: workspaceItems({ kind: 'pane', paneId: pane.id }) },
-        ...(pane.status === 'done' ? [{ label: 'Mark as seen', onSelect: () => api.seenPane(pane.id).catch(reportError) }] : []),
-        { label: pane.status === 'exited' ? 'Close pane' : 'Close pane…', danger: true, separated: true, onSelect: () => closePane(pane) },
+        ...(pane.status === 'done'
+            ? [{ label: 'Mark as seen', onSelect: () => api.seenPane(pane.id).catch(reportError) }]
+            : []),
+        {
+            label: pane.status === 'exited' ? 'Close pane' : 'Close pane…',
+            danger: true,
+            separated: true,
+            onSelect: () => closePane(pane),
+        },
     ];
 }
 
 export function workspaceMenu(workspace: Workspace, rename: () => void, where: 'sidebar' | 'header'): MenuItem[] {
     return [
-        ...(where === 'sidebar' ? [{ label: 'Open', onSelect: () => useUi.getState().selectWorkspace(workspace.id) }] : []),
+        ...(where === 'sidebar'
+            ? [{ label: 'Open', onSelect: () => useUi.getState().selectWorkspace(workspace.id) }]
+            : []),
         { label: 'Rename', onSelect: rename },
         { label: 'Delete workspace…', danger: true, separated: true, onSelect: () => deleteWorkspace(workspace) },
     ];

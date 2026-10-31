@@ -59,7 +59,9 @@ describe('workspaces', () => {
             .locator('.session-row', { hasText: 'beta session' })
             .dragTo(paneBox(page, 'alpha 1').locator('.pane__body'), { targetPosition: { x: 20, y: 200 } });
         await until(async () => (await workspaceShows()).length === 3, 'the session in the workspace');
-        expect(new Set(await workspaceShows())).toEqual(new Set([alpha.panes[0].id, ...beta.panes.map((pane) => pane.id)]));
+        expect(new Set(await workspaceShows())).toEqual(
+            new Set([alpha.panes[0].id, ...beta.panes.map((pane) => pane.id)]),
+        );
         await until(async () => (await page.locator('.pane').count()) === 3, 'three panes on screen');
         await expect(page.locator('.pane__origin', { hasText: 'beta / beta session' }).count()).resolves.toBe(2);
 

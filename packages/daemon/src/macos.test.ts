@@ -34,7 +34,9 @@ const readPlist = (text: string): unknown => {
     const dir = tempDir();
     writeFileSync(join(dir, 'agent.plist'), text);
     execFileSync('plutil', ['-lint', join(dir, 'agent.plist')]);
-    return JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', join(dir, 'agent.plist')], { encoding: 'utf8' }));
+    return JSON.parse(
+        execFileSync('plutil', ['-convert', 'json', '-o', '-', join(dir, 'agent.plist')], { encoding: 'utf8' }),
+    );
 };
 
 describe.skipIf(process.platform !== 'darwin')('macOS integration', () => {
@@ -59,7 +61,10 @@ describe.skipIf(process.platform !== 'darwin')('macOS integration', () => {
         });
         writeFileSync(join(appsDir, 'Icon\r'), '');
 
-        expect(installedChromeApp('http://127.0.0.1:4747', appsDir, userDataDir)).toEqual({ id: 'abc', profileDirectory: 'Profile 2' });
+        expect(installedChromeApp('http://127.0.0.1:4747', appsDir, userDataDir)).toEqual({
+            id: 'abc',
+            profileDirectory: 'Profile 2',
+        });
         expect(installedChromeApp('http://127.0.0.1:4848', appsDir, userDataDir)).toBeNull();
         expect(installedChromeApp('http://127.0.0.1:4747', join(appsDir, 'missing'), userDataDir)).toBeNull();
     });
@@ -78,13 +83,18 @@ describe.skipIf(process.platform !== 'darwin')('macOS integration', () => {
 
         expect(find()).toBeNull();
 
-        localState({ abc: { installed_profiles: ['Default', 'Profile 1'], last_active_profiles: ['Profile 3', 'Profile 1'] } });
+        localState({
+            abc: { installed_profiles: ['Default', 'Profile 1'], last_active_profiles: ['Profile 3', 'Profile 1'] },
+        });
         expect(find()).toEqual({ id: 'abc', profileDirectory: 'Profile 1' });
 
         localState({ abc: { installed_profiles: ['Default'], last_active_profiles: [] } });
         expect(find()).toEqual({ id: 'abc', profileDirectory: 'Default' });
 
-        localState({ abc: { installed_profiles: [7, '-', '', '../Default'] }, other: { installed_profiles: ['Default'] } });
+        localState({
+            abc: { installed_profiles: [7, '-', '', '../Default'] },
+            other: { installed_profiles: ['Default'] },
+        });
         expect(find()).toBeNull();
 
         writeFileSync(join(userDataDir, 'Local State'), '{');

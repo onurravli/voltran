@@ -162,17 +162,22 @@ export class Store {
     }
 
     panesOfSession(sessionId: string): Pane[] {
-        return (this.db.prepare('select * from panes where session_id = ? order by created_at').all(sessionId) as Row[]).map(toPane);
+        return (
+            this.db.prepare('select * from panes where session_id = ? order by created_at').all(sessionId) as Row[]
+        ).map(toPane);
     }
 
     sessionsOfProject(projectId: string): Session[] {
-        return (this.db.prepare('select * from sessions where project_id = ? order by position, created_at').all(projectId) as Row[]).map(
-            toSession,
-        );
+        return (
+            this.db
+                .prepare('select * from sessions where project_id = ? order by position, created_at')
+                .all(projectId) as Row[]
+        ).map(toSession);
     }
 
     insertProject(project: Project): void {
-        const position = (this.db.prepare('select coalesce(max(position), -1) + 1 as next from projects').get() as Row).next;
+        const position = (this.db.prepare('select coalesce(max(position), -1) + 1 as next from projects').get() as Row)
+            .next;
         this.db
             .prepare('insert into projects (id, name, path, color, position, created_at) values (?, ?, ?, ?, ?, ?)')
             .run(project.id, project.name, project.path, project.color, Number(position), project.createdAt);
@@ -226,14 +231,19 @@ export class Store {
             );
     }
 
-    updateSession(id: string, patch: Partial<Pick<Session, 'title' | 'titleSource' | 'link' | 'archived' | 'layout'>>): void {
+    updateSession(
+        id: string,
+        patch: Partial<Pick<Session, 'title' | 'titleSource' | 'link' | 'archived' | 'layout'>>,
+    ): void {
         const current = this.getSession(id);
         if (!current) {
             return;
         }
         const next = { ...current, ...patch, updatedAt: Date.now() };
         this.db
-            .prepare('update sessions set title = ?, title_source = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?')
+            .prepare(
+                'update sessions set title = ?, title_source = ?, link = ?, archived = ?, layout = ?, updated_at = ? where id = ?',
+            )
             .run(
                 next.title,
                 next.titleSource,
@@ -296,7 +306,15 @@ export class Store {
             .prepare(
                 'update panes set session_id = ?, title = ?, command = ?, agent_session_id = ?, agent_resumable = ?, ended = ? where id = ?',
             )
-            .run(next.sessionId, next.title, next.command, next.agentSessionId, next.agentResumable ? 1 : 0, next.ended ? 1 : 0, id);
+            .run(
+                next.sessionId,
+                next.title,
+                next.command,
+                next.agentSessionId,
+                next.agentResumable ? 1 : 0,
+                next.ended ? 1 : 0,
+                id,
+            );
     }
 
     deletePane(id: string): void {

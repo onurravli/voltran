@@ -14,10 +14,19 @@ export function worktreeRunner(env: NodeJS.ProcessEnv): WorktreeRunner {
     const commandEnv = { ...env, GIT_TERMINAL_PROMPT: '0', NO_COLOR: '1' };
     return (args, cwd) =>
         new Promise((resolve) => {
-            execFile('git', args, { cwd, env: commandEnv, timeout: COMMAND_TIMEOUT_MS, encoding: 'utf8' }, (error, stdout, stderr) => {
-                const missing = (error as NodeJS.ErrnoException | null)?.code === 'ENOENT';
-                resolve({ ok: !error, stdout: String(stdout ?? ''), stderr: missing ? 'git is not installed' : String(stderr ?? '') });
-            });
+            execFile(
+                'git',
+                args,
+                { cwd, env: commandEnv, timeout: COMMAND_TIMEOUT_MS, encoding: 'utf8' },
+                (error, stdout, stderr) => {
+                    const missing = (error as NodeJS.ErrnoException | null)?.code === 'ENOENT';
+                    resolve({
+                        ok: !error,
+                        stdout: String(stdout ?? ''),
+                        stderr: missing ? 'git is not installed' : String(stderr ?? ''),
+                    });
+                },
+            );
         });
 }
 
@@ -66,13 +75,19 @@ export class Worktrees {
         };
     }
 
-    async create(folder: string, projectName: string, branch: string, base: string | undefined): Promise<CreatedWorktree> {
+    async create(
+        folder: string,
+        projectName: string,
+        branch: string,
+        base: string | undefined,
+    ): Promise<CreatedWorktree> {
         if (branch.startsWith('-') || !(await this.run(['check-ref-format', '--branch', branch], folder)).ok) {
             throw new WorktreeError(`"${branch}" is not a valid branch name`);
         }
         if (
             base !== undefined &&
-            (base.startsWith('-') || !(await this.run(['rev-parse', '--verify', '--quiet', `${base}^{commit}`], folder)).ok)
+            (base.startsWith('-') ||
+                !(await this.run(['rev-parse', '--verify', '--quiet', `${base}^{commit}`], folder)).ok)
         ) {
             throw new WorktreeError(`"${base}" is not a branch or commit in this repository`);
         }
@@ -83,7 +98,9 @@ export class Worktrees {
         const exists = (await this.run(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], folder)).ok;
         const root = this.freeFolder(projectName, branch);
         mkdirSync(join(root, '..'), { recursive: true, mode: 0o700 });
-        const args = exists ? ['worktree', 'add', root, branch] : ['worktree', 'add', '-b', branch, root, base ?? 'HEAD'];
+        const args = exists
+            ? ['worktree', 'add', root, branch]
+            : ['worktree', 'add', '-b', branch, root, base ?? 'HEAD'];
         const added = await this.run(args, folder);
         if (!added.ok) {
             throw new WorktreeError(gitMessage(added.stderr, `git could not create a worktree for ${branch}`));
@@ -100,15 +117,28 @@ export class Worktrees {
         }
         const filters = repositoryFilterOverrides((await this.run(FILTER_CONFIG_ARGS, root)).stdout);
         if (!filters) {
-            throw new WorktreeError(`the repository of ${root} names a filter Voltran cannot switch off, so it did not read the status`);
+            throw new WorktreeError(
+                `the repository of ${root} names a filter Voltran cannot switch off, so it did not read the status`,
+            );
         }
         const status = await this.run(
-            [...filters, '--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '-z', ...SUBMODULE_ARGS],
+            [
+                ...filters,
+                '--no-optional-locks',
+                '-c',
+                'core.fsmonitor=false',
+                'status',
+                '--porcelain',
+                '-z',
+                ...SUBMODULE_ARGS,
+            ],
             root,
         );
         const index = await this.run(['ls-files', '--stage', '-z'], root);
         if (!status.ok || !index.ok) {
-            throw new WorktreeError(gitMessage(status.ok ? index.stderr : status.stderr, `git could not read the status of ${root}`));
+            throw new WorktreeError(
+                gitMessage(status.ok ? index.stderr : status.stderr, `git could not read the status of ${root}`),
+            );
         }
         const submodules = index.stdout
             .split('\0')

@@ -40,7 +40,9 @@ function toolDetail(name: string, input: Record<string, unknown>): ToolDetail | 
             const changes = edits
                 .filter((edit): edit is Record<string, unknown> => Boolean(edit) && typeof edit === 'object')
                 .map((edit) => ({ before: text(str(edit.old_string)), after: text(str(edit.new_string)) }));
-            return str(input.file_path) ? { kind: 'edit', path: text(str(input.file_path), MAX_NAME * 4), changes } : null;
+            return str(input.file_path)
+                ? { kind: 'edit', path: text(str(input.file_path), MAX_NAME * 4), changes }
+                : null;
         }
         case 'Write':
             return str(input.file_path)
@@ -84,7 +86,14 @@ function userText(raw: string, images: number, at: number | null): ConversationE
             .filter(Boolean)
             .join('\n');
         return output
-            ? [{ kind: 'notice', text: text(output, MAX_RESULT), tone: stderr?.trim() && !stdout?.trim() ? 'error' : 'info', at }]
+            ? [
+                  {
+                      kind: 'notice',
+                      text: text(output, MAX_RESULT),
+                      tone: stderr?.trim() && !stdout?.trim() ? 'error' : 'info',
+                      at,
+                  },
+              ]
             : [];
     }
     if (/^\[Request interrupted by user/.test(raw.trim())) {
@@ -117,11 +126,13 @@ export function parseClaudeLine(line: unknown): ConversationEntry[] | null {
     ) {
         return [];
     }
-    const message = record.message && typeof record.message === 'object' ? (record.message as Record<string, unknown>) : null;
+    const message =
+        record.message && typeof record.message === 'object' ? (record.message as Record<string, unknown>) : null;
     if (!message) {
         return null;
     }
-    const model = typeof message.model === 'string' && !message.model.startsWith('<') ? clip(message.model, MAX_NAME) : null;
+    const model =
+        typeof message.model === 'string' && !message.model.startsWith('<') ? clip(message.model, MAX_NAME) : null;
     const content = message.content;
     if (record.type === 'assistant' && record.isApiErrorMessage === true) {
         const error = typeof content === 'string' ? content : resultText(content);
@@ -133,7 +144,9 @@ export function parseClaudeLine(line: unknown): ConversationEntry[] | null {
     if (!Array.isArray(content)) {
         return null;
     }
-    const blocks = content.filter((block): block is Record<string, unknown> => Boolean(block) && typeof block === 'object');
+    const blocks = content.filter(
+        (block): block is Record<string, unknown> => Boolean(block) && typeof block === 'object',
+    );
     const entries: ConversationEntry[] = [];
     if (record.type === 'user') {
         const images = blocks.filter((block) => block.type === 'image').length;
@@ -151,7 +164,8 @@ export function parseClaudeLine(line: unknown): ConversationEntry[] | null {
         } else if (block.type === 'thinking' && str(block.thinking).trim()) {
             entries.push({ kind: 'thinking', text: text(str(block.thinking)), at });
         } else if (block.type === 'tool_use' && typeof block.name === 'string') {
-            const input = block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {};
+            const input =
+                block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {};
             entries.push({
                 kind: 'tool',
                 id: typeof block.id === 'string' ? block.id : '',

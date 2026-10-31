@@ -126,7 +126,10 @@ describe('PaneManager', () => {
 
     it('never starts a process for a preview or changes pane', () => {
         const { manager, recorded } = setup();
-        for (const pane of [makePane({ adapter: 'preview', command: 'http://localhost:5173/' }), makePane({ adapter: 'changes' })]) {
+        for (const pane of [
+            makePane({ adapter: 'preview', command: 'http://localhost:5173/' }),
+            makePane({ adapter: 'changes' }),
+        ]) {
             manager.add(pane);
             manager.attach(pane.id, new FakeClient());
             manager.resize(pane.id, 80, 24);
@@ -198,24 +201,36 @@ describe('PaneManager', () => {
 
     it('accepts hook reports only with the secret of the current process', () => {
         const { manager, recorded } = setup();
-        const pane = makePane({ adapter: 'claude', command: null, agentSessionId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b' });
+        const pane = makePane({
+            adapter: 'claude',
+            command: null,
+            agentSessionId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+        });
         manager.add(pane);
         const internals = manager as unknown as Internals;
         internals.runtimes.get(pane.id)!.hookSecret = 'per-spawn-secret';
 
         expect(manager.hook(pane.id, 'wrong-secret!!!!', 'Stop', {})).toBe(false);
 
-        expect(manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' })).toBe(
-            true,
-        );
-        expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', agentResumable: false });
+        expect(
+            manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', {
+                session_id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+            }),
+        ).toBe(true);
+        expect(recorded.records.at(-1)).toMatchObject({
+            agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+            agentResumable: false,
+        });
         manager.hook(pane.id, 'per-spawn-secret', 'SessionStart', { session_id: '--dangerously-skip-permissions' });
         expect(recorded.records.at(-1)).toMatchObject({ agentSessionId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d' });
 
         manager.hook(pane.id, 'per-spawn-secret', 'UserPromptSubmit', { prompt: 'fix it' });
         expect(view(manager, pane.id)).toMatchObject({ status: 'working', detail: 'fix it', agentResumable: true });
 
-        manager.hook(pane.id, 'per-spawn-secret', 'Notification', { notification_type: 'permission_prompt', message: 'Allow Bash?' });
+        manager.hook(pane.id, 'per-spawn-secret', 'Notification', {
+            notification_type: 'permission_prompt',
+            message: 'Allow Bash?',
+        });
         expect(view(manager, pane.id)).toMatchObject({ status: 'needs-input', detail: 'Allow Bash?' });
 
         manager.hook(pane.id, 'per-spawn-secret', 'Stop', { last_assistant_message: 'Fixed.' });
@@ -238,8 +253,15 @@ describe('PaneManager', () => {
             tool_use_id: 't1',
             tool_input: { description: 'review the diff', subagent_type: 'general-purpose', run_in_background: true },
         });
-        expect(manager.hook(pane.id, 'per-spawn-secret', 'SubagentStart', { agent_id: 'a1', agent_type: 'general-purpose' })).toBe(true);
-        expect(view(manager, pane.id).subagents).toMatchObject([{ id: 'a1', description: 'review the diff', background: true }]);
+        expect(
+            manager.hook(pane.id, 'per-spawn-secret', 'SubagentStart', {
+                agent_id: 'a1',
+                agent_type: 'general-purpose',
+            }),
+        ).toBe(true);
+        expect(view(manager, pane.id).subagents).toMatchObject([
+            { id: 'a1', description: 'review the diff', background: true },
+        ]);
 
         expect(manager.hook(pane.id, 'wrong-secret!!!!', 'SubagentStop', { agent_id: 'a1' })).toBe(false);
         expect(view(manager, pane.id).subagents).toHaveLength(1);
@@ -383,7 +405,10 @@ describe('PaneManager', () => {
         const pane = makePane({ cwd: '/definitely/not/here' });
         manager.add(pane);
         manager.resize(pane.id, 80, 24);
-        expect(view(manager, pane.id)).toMatchObject({ status: 'exited', detail: 'working directory not found: /definitely/not/here' });
+        expect(view(manager, pane.id)).toMatchObject({
+            status: 'exited',
+            detail: 'working directory not found: /definitely/not/here',
+        });
     });
 
     it('marks a hooks agent stuck at a pre-hook prompt as needing input', async () => {

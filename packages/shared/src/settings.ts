@@ -41,7 +41,12 @@ export const DARK_THEME_IDS: readonly string[] = [
     'rose-pine',
     'solarized-dark',
 ];
-export const LIGHT_THEME_IDS: readonly string[] = ['voltran-light', 'catppuccin-latte', 'solarized-light', 'github-light'];
+export const LIGHT_THEME_IDS: readonly string[] = [
+    'voltran-light',
+    'catppuccin-latte',
+    'solarized-light',
+    'github-light',
+];
 export const MIN_FONT_SIZE = 9;
 export const MAX_FONT_SIZE = 28;
 export const MIN_UI_FONT_SIZE = 11;
@@ -110,7 +115,8 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['git', 'pullRequests'], check: flag },
 ];
 
-const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // Every value read from the file or sent by a client goes through these checks; nothing else
 // decides whether a setting is valid.
@@ -185,7 +191,9 @@ export function settingsEdits(patch: SettingsPatch): { path: string[]; value: un
     const edits: { path: string[]; value: unknown }[] = [];
     for (const { path } of LEAVES) {
         const [key, name] = path;
-        const holder = (name === undefined ? patch : patch[key as keyof SettingsPatch]) as Record<string, unknown> | undefined;
+        const holder = (name === undefined ? patch : patch[key as keyof SettingsPatch]) as
+            | Record<string, unknown>
+            | undefined;
         const field = name ?? key;
         if (holder && holder[field] !== undefined) {
             edits.push({ path, value: holder[field] });

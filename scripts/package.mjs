@@ -48,7 +48,10 @@ chmodSync(bin, 0o755);
 
 const versionFile = join(out, 'packages/web/dist/version.json');
 const version = JSON.parse(readFileSync(versionFile, 'utf8'));
-writeFileSync(versionFile, JSON.stringify({ ...version, protocol: sourceHash(join(out, 'packages'), PROTOCOL_SOURCES) }));
+writeFileSync(
+    versionFile,
+    JSON.stringify({ ...version, protocol: sourceHash(join(out, 'packages'), PROTOCOL_SOURCES) }),
+);
 
 const manifest = readJson('package.json');
 const { '@voltran/shared': _, ...dependencies } = readJson('packages/daemon/package.json').dependencies;

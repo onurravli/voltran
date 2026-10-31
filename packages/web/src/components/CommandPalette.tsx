@@ -57,8 +57,16 @@ const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }>
         placeholder: 'Pick a font, or type the name of any installed font',
         empty: 'No matching fonts',
     },
-    'ui-fonts': { title: 'UI font family', placeholder: 'Pick a font, or type the name of any installed font', empty: 'No matching fonts' },
-    appearance: { title: 'Appearance', placeholder: 'Follow the system, or always use dark or light', empty: 'No matching appearance' },
+    'ui-fonts': {
+        title: 'UI font family',
+        placeholder: 'Pick a font, or type the name of any installed font',
+        empty: 'No matching fonts',
+    },
+    appearance: {
+        title: 'Appearance',
+        placeholder: 'Follow the system, or always use dark or light',
+        empty: 'No matching appearance',
+    },
     dark: { title: 'Dark theme', placeholder: 'Pick the theme for dark appearance', empty: 'No matching themes' },
     light: { title: 'Light theme', placeholder: 'Pick the theme for light appearance', empty: 'No matching themes' },
 };
@@ -184,7 +192,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         onClose();
     };
 
-    const appearanceLabel = (option: Appearance): string => (option === 'system' ? `System (${systemScheme})` : APPEARANCE_LABELS[option]);
+    const appearanceLabel = (option: Appearance): string =>
+        option === 'system' ? `System (${systemScheme})` : APPEARANCE_LABELS[option];
 
     const resize = (size: number): void => saveSettings({ terminal: { fontSize: clampFontSize(size) } });
     const resizeUi = (size: number): void => saveSettings({ ui: { fontSize: clampUiFontSize(size) } });
@@ -237,7 +246,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     keepOpen: true,
                     run: () => enterThemes('light'),
                 },
-                { id: 'font-family', label: 'Terminal font family…', hint: font.family, keepOpen: true, run: () => enterFonts('terminal') },
+                {
+                    id: 'font-family',
+                    label: 'Terminal font family…',
+                    hint: font.family,
+                    keepOpen: true,
+                    run: () => enterFonts('terminal'),
+                },
                 {
                     id: 'font-bigger',
                     label: 'Terminal font size: bigger',
@@ -322,7 +337,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     run: () => useUi.getState().openDialog({ kind: 'about' }),
                 },
                 ...(installable
-                    ? [{ id: 'install-app', label: 'Install Voltran as an app', keywords: 'dock window desktop pwa', run: installApp }]
+                    ? [
+                          {
+                              id: 'install-app',
+                              label: 'Install Voltran as an app',
+                              keywords: 'dock window desktop pwa',
+                              run: installApp,
+                          },
+                      ]
                     : []),
                 ...SHORTCUTS.filter((shortcut) => shortcut.run !== togglePalette).map((shortcut) => ({
                     id: shortcut.code,
@@ -503,12 +525,21 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                                     style={
                                         item.family === undefined
                                             ? undefined
-                                            : { fontFamily: mode === 'ui-fonts' ? uiFontStack(item.family) : fontStack(item.family) }
+                                            : {
+                                                  fontFamily:
+                                                      mode === 'ui-fonts'
+                                                          ? uiFontStack(item.family)
+                                                          : fontStack(item.family),
+                                              }
                                     }
                                 >
                                     {item.label}
                                 </span>
-                                {item.keys ? <kbd>{item.keys}</kbd> : item.hint && <span className="palette__hint">{item.hint}</span>}
+                                {item.keys ? (
+                                    <kbd>{item.keys}</kbd>
+                                ) : (
+                                    item.hint && <span className="palette__hint">{item.hint}</span>
+                                )}
                             </li>
                         ))}
                     </ul>

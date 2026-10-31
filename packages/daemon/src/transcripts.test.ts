@@ -24,16 +24,29 @@ function project(): { dir: string; parent: string; subagents: string } {
 const line = (value: unknown): string => `${JSON.stringify(value)}\n`;
 
 const LINES = [
-    { type: 'user', timestamp: '2026-10-10T00:00:00.000Z', message: { role: 'user', content: 'Research C++ polymorphism.' } },
+    {
+        type: 'user',
+        timestamp: '2026-10-10T00:00:00.000Z',
+        message: { role: 'user', content: 'Research C++ polymorphism.' },
+    },
     { type: 'attachment', attachment: { type: 'skill_listing' } },
-    { type: 'user', isMeta: true, message: { role: 'user', content: '<system-reminder> Report back when done. </system-reminder>' } },
+    {
+        type: 'user',
+        isMeta: true,
+        message: { role: 'user', content: '<system-reminder> Report back when done. </system-reminder>' },
+    },
     {
         type: 'assistant',
         message: {
             role: 'assistant',
             content: [
                 { type: 'thinking', thinking: 'hidden' },
-                { type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'g++ --version\n', description: 'compiler' } },
+                {
+                    type: 'tool_use',
+                    id: 'tu1',
+                    name: 'Bash',
+                    input: { command: 'g++ --version\n', description: 'compiler' },
+                },
             ],
         },
     },
@@ -44,14 +57,17 @@ const LINES = [
             content: [{ type: 'tool_result', tool_use_id: 'tu1', content: [{ type: 'text', text: 'Apple clang 17' }] }],
         },
     },
-    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Virtual functions dispatch at runtime.' }] } },
+    {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Virtual functions dispatch at runtime.' }] },
+    },
 ];
 
 describe('subagentTranscriptPath', () => {
     it("follows Claude's layout next to the parent transcript", () => {
-        expect(subagentTranscriptPath(`/home/me/.claude/projects/p/${SESSION}.jsonl`, SESSION, 'a6afb54c3c5df9e20')).toBe(
-            `/home/me/.claude/projects/p/${SESSION}/subagents/agent-a6afb54c3c5df9e20.jsonl`,
-        );
+        expect(
+            subagentTranscriptPath(`/home/me/.claude/projects/p/${SESSION}.jsonl`, SESSION, 'a6afb54c3c5df9e20'),
+        ).toBe(`/home/me/.claude/projects/p/${SESSION}/subagents/agent-a6afb54c3c5df9e20.jsonl`);
     });
 
     it('refuses anything that does not have that exact shape', () => {
@@ -118,7 +134,9 @@ describe('readTranscript', () => {
             join(subagents, 'agent-a1.jsonl'),
             line({
                 type: 'user',
-                message: { content: [{ type: 'tool_result', tool_use_id: 't', content: 'x'.repeat(5000), is_error: true }] },
+                message: {
+                    content: [{ type: 'tool_result', tool_use_id: 't', content: 'x'.repeat(5000), is_error: true }],
+                },
             }),
         );
         const [entry] = readTranscript(path, 0)!.entries;
@@ -150,7 +168,9 @@ describe('readTranscript', () => {
         mkdirSync(run, { recursive: true });
         expect(readTranscript(path, 0)).toBeNull();
         writeFileSync(join(run, 'agent-a7.jsonl'), line(LINES[5]));
-        expect(readTranscript(path, 0)?.entries).toEqual([{ kind: 'text', text: 'Virtual functions dispatch at runtime.', at: null }]);
+        expect(readTranscript(path, 0)?.entries).toEqual([
+            { kind: 'text', text: 'Virtual functions dispatch at runtime.', at: null },
+        ]);
     });
 
     it('refuses workflow transcripts reached through symlinks', () => {
@@ -165,7 +185,10 @@ describe('readTranscript', () => {
         expect(readTranscript(subagentTranscriptPath(linkedRun.parent, SESSION, 'a1')!, 0)).toBeNull();
 
         mkdirSync(join(linkedRun.subagents, 'workflows', 'wf_real'));
-        symlinkSync(join(outside, 'wf_run', 'agent-a1.jsonl'), join(linkedRun.subagents, 'workflows', 'wf_real', 'agent-a2.jsonl'));
+        symlinkSync(
+            join(outside, 'wf_run', 'agent-a1.jsonl'),
+            join(linkedRun.subagents, 'workflows', 'wf_real', 'agent-a2.jsonl'),
+        );
         expect(readTranscript(subagentTranscriptPath(linkedRun.parent, SESSION, 'a2')!, 0)).toBeNull();
 
         const linkedWorkflows = project();
@@ -181,7 +204,10 @@ describe('readSubagentMeta', () => {
             join(subagents, 'agent-a1.meta.json'),
             JSON.stringify({ agentType: 'Explore', description: 'map the repo', toolUseId: 't1' }),
         );
-        expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a1')!)).toEqual({ description: 'map the repo', type: 'Explore' });
+        expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a1')!)).toEqual({
+            description: 'map the repo',
+            type: 'Explore',
+        });
         expect(readSubagentMeta(subagentTranscriptPath(parent, SESSION, 'a2')!)).toBeNull();
     });
 
@@ -230,18 +256,32 @@ describe('parseTranscriptLine', () => {
 
     it('summarizes tool calls by their most telling input', () => {
         const tool = (name: string, input: Record<string, unknown>) =>
-            parseTranscriptLine({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'x', name, input }] } })![0];
+            parseTranscriptLine({
+                type: 'assistant',
+                message: { content: [{ type: 'tool_use', id: 'x', name, input }] },
+            })![0];
         expect(tool('Read', { file_path: '/repo/src/a.ts', limit: 20 })).toMatchObject({ summary: '/repo/src/a.ts' });
         expect(tool('WebSearch', { query: 'cpp vtable' })).toMatchObject({ summary: 'cpp vtable' });
-        expect(tool('mcp__docs__search', { query: 'release notes', limit: 5 })).toMatchObject({ summary: 'release notes' });
-        expect(tool('Bash', { command: 'x'.repeat(500) })).toMatchObject({ summary: expect.stringMatching(/^x{139}…$/) });
+        expect(tool('mcp__docs__search', { query: 'release notes', limit: 5 })).toMatchObject({
+            summary: 'release notes',
+        });
+        expect(tool('Bash', { command: 'x'.repeat(500) })).toMatchObject({
+            summary: expect.stringMatching(/^x{139}…$/),
+        });
     });
 
     it('shows the report a subagent hands back as text rather than as a tool call', () => {
         const [entry] = parseTranscriptLine({
             type: 'assistant',
             message: {
-                content: [{ type: 'tool_use', id: 'h', name: 'SubagentHandback', input: { message: '# Fact sheet\nAll checked.' } }],
+                content: [
+                    {
+                        type: 'tool_use',
+                        id: 'h',
+                        name: 'SubagentHandback',
+                        input: { message: '# Fact sheet\nAll checked.' },
+                    },
+                ],
             },
         })!;
         expect(entry).toEqual({ kind: 'text', text: '# Fact sheet\nAll checked.', at: null });

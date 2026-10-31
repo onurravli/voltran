@@ -30,7 +30,14 @@ export function groupTurns(entries: ConversationEntry[]): Turn[] {
     let turn: Turn | null = null;
     entries.forEach((entry, index) => {
         if (entry.kind === 'prompt' || !turn) {
-            turn = { key: `turn-${index}`, prompt: null, items: [], model: null, startedAt: entry.at, endedAt: entry.at };
+            turn = {
+                key: `turn-${index}`,
+                prompt: null,
+                items: [],
+                model: null,
+                startedAt: entry.at,
+                endedAt: entry.at,
+            };
             turns.push(turn);
             if (entry.kind === 'prompt') {
                 turn.prompt = entry;
@@ -86,7 +93,10 @@ export function lineDiff(before: string, after: string): DiffLine[] {
     const a = before === '' ? [] : before.split('\n');
     const b = after === '' ? [] : after.split('\n');
     if (a.length * b.length > MAX_DIFF_CELLS) {
-        return [...a.map((text) => ({ type: 'removed' as const, text })), ...b.map((text) => ({ type: 'added' as const, text }))];
+        return [
+            ...a.map((text) => ({ type: 'removed' as const, text })),
+            ...b.map((text) => ({ type: 'added' as const, text })),
+        ];
     }
     const lengths = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
     for (let i = a.length - 1; i >= 0; i -= 1) {

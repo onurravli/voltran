@@ -16,7 +16,9 @@ describe('linkLabel', () => {
 
     it('names Jira and Linear issues by their key', () => {
         expect(linkLabel('https://acme.atlassian.net/browse/ABC-123')).toBe('ABC-123');
-        expect(linkLabel('https://acme.atlassian.net/jira/software/projects/ABC/boards/1?selectedIssue=ABC-12')).toBe('ABC-12');
+        expect(linkLabel('https://acme.atlassian.net/jira/software/projects/ABC/boards/1?selectedIssue=ABC-12')).toBe(
+            'ABC-12',
+        );
         expect(linkLabel('https://linear.app/acme/issue/ENG-42/fix-the-thing')).toBe('ENG-42');
     });
 
@@ -66,7 +68,16 @@ describe('gitLabels', () => {
     });
 
     it('counts commits to push and pull, and the changed files by kind', () => {
-        const labels = gitLabels({ ...clean, ahead: 2, behind: 1, changed: 4, staged: 1, unstaged: 2, untracked: 1, conflicted: 1 });
+        const labels = gitLabels({
+            ...clean,
+            ahead: 2,
+            behind: 1,
+            changed: 4,
+            staged: 1,
+            unstaged: 2,
+            untracked: 1,
+            conflicted: 1,
+        });
         expect([labels.sync, labels.changes]).toEqual(['↑2 ↓1', '4']);
         expect(labels.detail).toBe(
             'On main, tracking origin/main\n2 commits to push, 1 commit to pull\n4 changed files: 1 staged, 2 unstaged, 1 untracked, 1 in conflict',

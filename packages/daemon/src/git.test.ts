@@ -68,12 +68,17 @@ describe('parseStatus', () => {
     });
 
     it('reports a detached head without a branch and a repository without commits without a commit', () => {
-        expect(parseStatus(records('# branch.oid 89abcdef0123456789abcdef0123456789abcdef', '# branch.head (detached)'))).toMatchObject({
+        expect(
+            parseStatus(records('# branch.oid 89abcdef0123456789abcdef0123456789abcdef', '# branch.head (detached)')),
+        ).toMatchObject({
             branch: null,
             commit: '89abcde',
             upstream: null,
         });
-        expect(parseStatus(records('# branch.oid (initial)', '# branch.head main'))).toMatchObject({ branch: 'main', commit: null });
+        expect(parseStatus(records('# branch.oid (initial)', '# branch.head main'))).toMatchObject({
+            branch: 'main',
+            commit: null,
+        });
     });
 });
 
@@ -89,21 +94,37 @@ describe('parsePullRequest', () => {
         });
 
     it('tells open, draft, merged and closed pull requests apart', () => {
-        expect(parsePullRequest(pr({}))).toEqual({ number: 42, url: 'https://github.com/o/r/pull/42', state: 'open', checks: null });
+        expect(parsePullRequest(pr({}))).toEqual({
+            number: 42,
+            url: 'https://github.com/o/r/pull/42',
+            state: 'open',
+            checks: null,
+        });
         expect(parsePullRequest(pr({ isDraft: true }))?.state).toBe('draft');
         expect(parsePullRequest(pr({ state: 'MERGED' }))?.state).toBe('merged');
         expect(parsePullRequest(pr({ state: 'CLOSED' }))?.state).toBe('closed');
     });
 
     it('sums up the checks: any failure fails, anything unfinished is pending', () => {
-        const run = (status: string, conclusion = ''): Record<string, string> => ({ __typename: 'CheckRun', status, conclusion });
+        const run = (status: string, conclusion = ''): Record<string, string> => ({
+            __typename: 'CheckRun',
+            status,
+            conclusion,
+        });
         const context = (state: string): Record<string, string> => ({ __typename: 'StatusContext', state });
         expect(
-            parsePullRequest(pr({ statusCheckRollup: [run('COMPLETED', 'SUCCESS'), run('COMPLETED', 'SKIPPED'), context('SUCCESS')] }))
-                ?.checks,
+            parsePullRequest(
+                pr({
+                    statusCheckRollup: [run('COMPLETED', 'SUCCESS'), run('COMPLETED', 'SKIPPED'), context('SUCCESS')],
+                }),
+            )?.checks,
         ).toBe('passing');
-        expect(parsePullRequest(pr({ statusCheckRollup: [run('COMPLETED', 'SUCCESS'), run('IN_PROGRESS')] }))?.checks).toBe('pending');
-        expect(parsePullRequest(pr({ statusCheckRollup: [run('IN_PROGRESS'), context('ERROR')] }))?.checks).toBe('failing');
+        expect(
+            parsePullRequest(pr({ statusCheckRollup: [run('COMPLETED', 'SUCCESS'), run('IN_PROGRESS')] }))?.checks,
+        ).toBe('pending');
+        expect(parsePullRequest(pr({ statusCheckRollup: [run('IN_PROGRESS'), context('ERROR')] }))?.checks).toBe(
+            'failing',
+        );
         expect(parsePullRequest(pr({ statusCheckRollup: [run('COMPLETED', 'FAILURE')] }))?.checks).toBe('failing');
     });
 
@@ -157,7 +178,11 @@ describe('repositoryFilterOverrides', () => {
     });
 });
 
-function watcher(folders: string[], run: GitRunner, pullRequests = true): { watcher: GitWatcher; changes: () => number } {
+function watcher(
+    folders: string[],
+    run: GitRunner,
+    pullRequests = true,
+): { watcher: GitWatcher; changes: () => number } {
     let count = 0;
     const instance = new GitWatcher({
         folders: () => folders,
@@ -182,7 +207,13 @@ describe('GitWatcher', () => {
         await git.refresh(dir);
         await git.refresh(plain);
         expect(git.snapshot()).toEqual({
-            [dir]: expect.objectContaining({ branch: 'main', upstream: null, changed: 1, untracked: 1, pullRequest: null }),
+            [dir]: expect.objectContaining({
+                branch: 'main',
+                upstream: null,
+                changed: 1,
+                untracked: 1,
+                pullRequest: null,
+            }),
         });
         expect(changes()).toBe(1);
 
@@ -196,7 +227,10 @@ describe('GitWatcher', () => {
         const run: GitRunner = async (command, args) => {
             calls.push(`${command} ${args.join(' ')}`);
             return command === 'git'
-                ? { ok: true, stdout: records('# branch.oid 0123456789abcdef0123456789abcdef01234567', `# branch.head ${head}`) }
+                ? {
+                      ok: true,
+                      stdout: records('# branch.oid 0123456789abcdef0123456789abcdef01234567', `# branch.head ${head}`),
+                  }
                 : {
                       ok: true,
                       stdout: JSON.stringify({
@@ -283,7 +317,10 @@ describe('GitWatcher', () => {
                 ghCalls += 1;
                 return { ok: false, stdout: '', missing: true };
             }
-            return { ok: true, stdout: records('# branch.oid 0123456789abcdef0123456789abcdef01234567', '# branch.head main') };
+            return {
+                ok: true,
+                stdout: records('# branch.oid 0123456789abcdef0123456789abcdef01234567', '# branch.head main'),
+            };
         });
         await git.refresh('/a');
         await git.refresh('/b');
@@ -294,7 +331,10 @@ describe('GitWatcher', () => {
         const folders = ['/a', '/b'];
         const { watcher: git } = watcher(
             folders,
-            async () => ({ ok: true, stdout: records('# branch.oid 0123456789abcdef0123456789abcdef01234567', '# branch.head main') }),
+            async () => ({
+                ok: true,
+                stdout: records('# branch.oid 0123456789abcdef0123456789abcdef01234567', '# branch.head main'),
+            }),
             false,
         );
         await git.refresh('/a');

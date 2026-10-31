@@ -39,7 +39,13 @@ export function titleFromPrompt(prompt: unknown): string | null {
 export class SessionNamer {
     private checks = new Map<string, { at: number; count: number }>();
 
-    name(session: Session, pane: Pane, event: string, payload: Record<string, unknown>, now = Date.now()): SessionTitle | null {
+    name(
+        session: Session,
+        pane: Pane,
+        event: string,
+        payload: Record<string, unknown>,
+        now = Date.now(),
+    ): SessionTitle | null {
         if (session.titleSource !== 'pending' && session.titleSource !== 'prompt') {
             return null;
         }

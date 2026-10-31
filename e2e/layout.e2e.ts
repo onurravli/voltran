@@ -126,7 +126,10 @@ describe('layout', () => {
         await page.mouse.move(separator.x + 200, separator.y + separator.height / 2, { steps: 10 });
         await page.mouse.up();
 
-        await until(async () => ((await left.boundingBox())?.width ?? 0) > before.width + 150, 'the left pane to widen');
+        await until(
+            async () => ((await left.boundingBox())?.width ?? 0) > before.width + 150,
+            'the left pane to widen',
+        );
         await until(async () => {
             const layout = await layoutOf(session.id);
             return layout?.type === 'split' && layout.sizes[0] > 55;

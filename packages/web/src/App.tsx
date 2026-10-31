@@ -24,7 +24,11 @@ function Welcome() {
                 <>
                     <h1 className="welcome__title">Pick a session, or start one</h1>
                     <p className="welcome__body">A session groups the agents and terminals for one piece of work.</p>
-                    <button type="button" className="button button--primary" onClick={() => openDialog({ kind: 'session' })}>
+                    <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => openDialog({ kind: 'session' })}
+                    >
                         Start a session
                     </button>
                 </>
@@ -32,10 +36,14 @@ function Welcome() {
                 <>
                     <h1 className="welcome__title">Bring your agents into one place</h1>
                     <p className="welcome__body">
-                        Add a folder you work in. Each session there gets its own agents and terminals, and Voltran tells you which one is
-                        waiting on you.
+                        Add a folder you work in. Each session there gets its own agents and terminals, and Voltran
+                        tells you which one is waiting on you.
                     </p>
-                    <button type="button" className="button button--primary" onClick={() => openDialog({ kind: 'project' })}>
+                    <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => openDialog({ kind: 'project' })}
+                    >
                         <FolderIcon size={14} /> Add a project
                     </button>
                 </>

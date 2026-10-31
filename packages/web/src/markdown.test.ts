@@ -13,11 +13,15 @@ describe('renderMarkdown', () => {
             '<pre><code class="language-sh"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;&lt;b&gt;&quot;</span>\n</code></pre>\n',
         );
         expect(renderMarkdown('```\nconst a = 1;\n```')).toBe('<pre><code>const a = 1;\n</code></pre>\n');
-        expect(renderMarkdown('```brainfuck\n<b>\n```')).toBe('<pre><code class="language-brainfuck">&lt;b&gt;\n</code></pre>\n');
+        expect(renderMarkdown('```brainfuck\n<b>\n```')).toBe(
+            '<pre><code class="language-brainfuck">&lt;b&gt;\n</code></pre>\n',
+        );
     });
 
     it('keeps raw HTML and images as text', () => {
-        const html = renderMarkdown('<img src=x onerror=alert(1)> <script>alert(1)</script>\n\n![pixel](https://tracker.example/p.png)');
+        const html = renderMarkdown(
+            '<img src=x onerror=alert(1)> <script>alert(1)</script>\n\n![pixel](https://tracker.example/p.png)',
+        );
         expect(html).not.toMatch(/<img|<script/);
         expect(html).toContain('&lt;script&gt;');
     });

@@ -129,7 +129,9 @@ describe('codex adapter', () => {
         expect(args).toHaveLength(CODEX_HOOK_EVENTS.length * 2);
         CODEX_HOOK_EVENTS.forEach((event, index) => {
             expect(args[index * 2]).toBe('-c');
-            const match = /^hooks\.(\w+)=\[\{hooks=\[\{type="command",command=("(?:[^"\\]|\\.)*")\}\]\}\]$/.exec(args[index * 2 + 1]);
+            const match = /^hooks\.(\w+)=\[\{hooks=\[\{type="command",command=("(?:[^"\\]|\\.)*")\}\]\}\]$/.exec(
+                args[index * 2 + 1],
+            );
             expect(match?.[1]).toBe(event);
             const command = JSON.parse(match?.[2] ?? '""') as string;
             expect(command).toContain(`"$VOLTRAN_URL/api/hooks/$VOLTRAN_PANE_ID/${event}"`);
@@ -152,9 +154,13 @@ describe('opencodeArgsProblem', () => {
         expect(opencodeArgsProblem('-s ses_1')).toBe('-s is set by Voltran');
         expect(opencodeArgsProblem('--server=http://x')).toBe('--server is set by Voltran');
         expect(opencodeArgsProblem('mini --standalone')).toBe('--standalone is set by Voltran');
-        expect(opencodeArgsProblem('run hello')).toBe("opencode run does not open OpenCode's interface; run it as a command instead");
+        expect(opencodeArgsProblem('run hello')).toBe(
+            "opencode run does not open OpenCode's interface; run it as a command instead",
+        );
         expect(opencodeArgsProblem('.')).toBe("OpenCode starts in the session's folder; leave out .");
-        expect(opencodeArgsProblem('../other --model x')).toBe("OpenCode starts in the session's folder; leave out ../other");
+        expect(opencodeArgsProblem('../other --model x')).toBe(
+            "OpenCode starts in the session's folder; leave out ../other",
+        );
         expect(opencodeArgsProblem(`--model 'a`)).toBe('the OpenCode arguments have an unterminated quote');
     });
 });
@@ -185,8 +191,20 @@ describe('opencode adapter', () => {
 
     it('runs its own server on the pane session, with the arguments after the ones Voltran sets', () => {
         expect(launch({}).args).toEqual(['--standalone', '--session', 'ses_abc']);
-        expect(launch({ command: `--model 'a b'` }).args).toEqual(['--standalone', '--session', 'ses_abc', '--model', 'a b']);
-        expect(launch({ command: 'mini --replay' }).args).toEqual(['mini', '--standalone', '--session', 'ses_abc', '--replay']);
+        expect(launch({ command: `--model 'a b'` }).args).toEqual([
+            '--standalone',
+            '--session',
+            'ses_abc',
+            '--model',
+            'a b',
+        ]);
+        expect(launch({ command: 'mini --replay' }).args).toEqual([
+            'mini',
+            '--standalone',
+            '--session',
+            'ses_abc',
+            '--replay',
+        ]);
     });
 
     it('adds the Voltran plugin to the configuration it passes', () => {
@@ -195,15 +213,25 @@ describe('opencode adapter', () => {
 
     it("gives OpenCode the notes guide and the pane's notes as instructions, after the user's own", () => {
         const config = JSON.parse(
-            launch({}, { OPENCODE_CONFIG_CONTENT: '{"instructions":["mine.md"]}' }, '/n/p/notes.md').env?.OPENCODE_CONFIG_CONTENT ?? '',
+            launch({}, { OPENCODE_CONFIG_CONTENT: '{"instructions":["mine.md"]}' }, '/n/p/notes.md').env
+                ?.OPENCODE_CONFIG_CONTENT ?? '',
         );
-        expect(config).toEqual({ instructions: ['mine.md', '/n/GUIDE.md', '/n/p/notes.md'], plugins: [OPENCODE_PLUGIN] });
+        expect(config).toEqual({
+            instructions: ['mine.md', '/n/GUIDE.md', '/n/p/notes.md'],
+            plugins: [OPENCODE_PLUGIN],
+        });
     });
 });
 
 describe('claudeHookSettings', () => {
-    type Settings = { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>; permissions?: { allow: string[] } };
-    const notesOf = (pane: string) => ({ file: `/home/o'b/.voltran/notes/${pane}/notes.md`, guide: "/home/o'b/.voltran/notes/GUIDE.md" });
+    type Settings = {
+        hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>;
+        permissions?: { allow: string[] };
+    };
+    const notesOf = (pane: string) => ({
+        file: `/home/o'b/.voltran/notes/${pane}/notes.md`,
+        guide: "/home/o'b/.voltran/notes/GUIDE.md",
+    });
     const settings = claudeHookSettings(notesOf('pane-1')) as Settings;
 
     it('adds the notes hooks after the status reports, quoting their paths', () => {

@@ -76,16 +76,32 @@ describe('THEMES', () => {
     it('keeps the main text at 4.5:1 or better in the terminal and on every UI surface', () => {
         for (const theme of THEMES) {
             const { terminal, ui } = theme;
-            expect(contrastRatio(terminal.foreground, terminal.background), `${theme.id} terminal`).toBeGreaterThanOrEqual(4.5);
+            expect(
+                contrastRatio(terminal.foreground, terminal.background),
+                `${theme.id} terminal`,
+            ).toBeGreaterThanOrEqual(4.5);
             for (const surface of ['--hull', '--bay', '--plate-solid'] as const) {
-                expect(contrastRatio(ui['--text'], ui[surface]), `${theme.id} text on ${surface}`).toBeGreaterThanOrEqual(4.5);
+                expect(
+                    contrastRatio(ui['--text'], ui[surface]),
+                    `${theme.id} text on ${surface}`,
+                ).toBeGreaterThanOrEqual(4.5);
             }
-            expect(contrastRatio(ui['--text-muted'], ui['--bay']), `${theme.id} muted text`).toBeGreaterThanOrEqual(4.5);
+            expect(contrastRatio(ui['--text-muted'], ui['--bay']), `${theme.id} muted text`).toBeGreaterThanOrEqual(
+                4.5,
+            );
             expect(contrastRatio(ui['--signal'], ui['--bay']), `${theme.id} signal text`).toBeGreaterThanOrEqual(4.5);
             expect(contrastRatio(ui['--focus'], ui['--bay']), `${theme.id} link text`).toBeGreaterThanOrEqual(4.5);
-            expect(contrastRatio(ui['--on-signal'], ui['--signal']), `${theme.id} badge text`).toBeGreaterThanOrEqual(4.5);
-            expect(contrastRatio(ui['--on-fault'], ui['--fault']), `${theme.id} danger button text`).toBeGreaterThanOrEqual(4.5);
-            expect(contrastRatio(ui['--error-text'], ui['--plate-solid']), `${theme.id} error text`).toBeGreaterThanOrEqual(4.5);
+            expect(contrastRatio(ui['--on-signal'], ui['--signal']), `${theme.id} badge text`).toBeGreaterThanOrEqual(
+                4.5,
+            );
+            expect(
+                contrastRatio(ui['--on-fault'], ui['--fault']),
+                `${theme.id} danger button text`,
+            ).toBeGreaterThanOrEqual(4.5);
+            expect(
+                contrastRatio(ui['--error-text'], ui['--plate-solid']),
+                `${theme.id} error text`,
+            ).toBeGreaterThanOrEqual(4.5);
         }
     });
 
@@ -93,7 +109,9 @@ describe('THEMES', () => {
         const lamps = ['--signal', '--finished', '--live', '--fault'] as const;
         for (const theme of THEMES) {
             for (const lamp of [...lamps, '--working'] as const) {
-                expect(contrastRatio(theme.ui[lamp], theme.ui['--bay']), `${theme.id} ${lamp}`).toBeGreaterThanOrEqual(3);
+                expect(contrastRatio(theme.ui[lamp], theme.ui['--bay']), `${theme.id} ${lamp}`).toBeGreaterThanOrEqual(
+                    3,
+                );
             }
             lamps.forEach((a, index) => {
                 for (const b of lamps.slice(index + 1)) {
@@ -106,7 +124,9 @@ describe('THEMES', () => {
     it('keeps the default theme identical to the stylesheet defaults', () => {
         const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
         const root = /^:root \{([^}]*)\}/m.exec(css)?.[1] ?? '';
-        const declared = Object.fromEntries([...root.matchAll(/(--[\w-]+): ([^;]+);/g)].map((match) => [match[1], match[2]]));
+        const declared = Object.fromEntries(
+            [...root.matchAll(/(--[\w-]+): ([^;]+);/g)].map((match) => [match[1], match[2]]),
+        );
         const { ui, scheme } = themeById(DEFAULT_THEME_ID);
         for (const name of UI_VARIABLES) {
             expect(declared[name], name).toBe(ui[name]);
@@ -157,10 +177,12 @@ describe('parseThemeChoice', () => {
     });
 
     it('keeps a stored appearance and a theme per scheme', () => {
-        expect(parseThemeChoice({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } })).toEqual({
-            appearance: 'light',
-            themeIds: { dark: 'nord', light: 'solarized-light' },
-        });
+        expect(parseThemeChoice({ appearance: 'light', themeIds: { dark: 'nord', light: 'solarized-light' } })).toEqual(
+            {
+                appearance: 'light',
+                themeIds: { dark: 'nord', light: 'solarized-light' },
+            },
+        );
     });
 
     it('replaces unknown or mismatched stored themes with the scheme default', () => {
@@ -186,10 +208,12 @@ describe('parseThemeChoice', () => {
     });
 
     it('ignores a single stored theme once an appearance is stored', () => {
-        expect(parseThemeChoice({ appearance: 'system', themeIds: { dark: 'nord' }, themeId: 'github-light' })).toEqual({
-            appearance: 'system',
-            themeIds: { dark: 'nord', light: DEFAULT_THEME_IDS.light },
-        });
+        expect(parseThemeChoice({ appearance: 'system', themeIds: { dark: 'nord' }, themeId: 'github-light' })).toEqual(
+            {
+                appearance: 'system',
+                themeIds: { dark: 'nord', light: DEFAULT_THEME_IDS.light },
+            },
+        );
     });
 });
 

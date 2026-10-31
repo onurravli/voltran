@@ -10,7 +10,14 @@ import { notesFresh } from '../notes.ts';
 import { FIND_STEP_KEYS, closePane, keys } from '../shortcuts.ts';
 import { peekTerminal, terminalFor, type LinkState } from '../terminals.ts';
 import { panesOf, reportError, useUi } from '../store.ts';
-import { draggedItem, dropIntoWorkspace, endDrag, removeFromWorkspace, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
+import {
+    draggedItem,
+    dropIntoWorkspace,
+    endDrag,
+    removeFromWorkspace,
+    saveHostLayout,
+    type PaneHost,
+} from '../workspace-actions.ts';
 import {
     BranchIcon,
     ChevronDownIcon,
@@ -194,7 +201,10 @@ function typingElsewhere(): boolean {
     if (!(active instanceof HTMLElement) || active.classList.contains('xterm-helper-textarea')) {
         return false;
     }
-    return active.matches('input, textarea, select, [contenteditable="true"]') || active.closest('.notes, [role="dialog"]') !== null;
+    return (
+        active.matches('input, textarea, select, [contenteditable="true"]') ||
+        active.closest('.notes, [role="dialog"]') !== null
+    );
 }
 
 export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
@@ -391,7 +401,11 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                         type="button"
                         className="icon-button pane__view-toggle"
                         aria-pressed={conversation}
-                        title={conversation ? `Show the terminal (${keys('⌃⌥C')})` : `Show the conversation (${keys('⌃⌥C')})`}
+                        title={
+                            conversation
+                                ? `Show the terminal (${keys('⌃⌥C')})`
+                                : `Show the conversation (${keys('⌃⌥C')})`
+                        }
                         onClick={() => useUi.getState().toggleConversation(pane.id)}
                     >
                         <ConversationIcon size={14} />
@@ -409,10 +423,20 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     </button>
                 ) : null}
                 <div className="pane__actions">
-                    <button type="button" className="icon-button" title="Split right" onClick={(event) => split(event, 'horizontal')}>
+                    <button
+                        type="button"
+                        className="icon-button"
+                        title="Split right"
+                        onClick={(event) => split(event, 'horizontal')}
+                    >
                         <SplitRightIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" title="Split down" onClick={(event) => split(event, 'vertical')}>
+                    <button
+                        type="button"
+                        className="icon-button"
+                        title="Split down"
+                        onClick={(event) => split(event, 'vertical')}
+                    >
                         <SplitDownIcon size={14} />
                     </button>
                     <button
@@ -435,7 +459,12 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     ) : null}
                     {preview !== null || changes ? (
                         <>
-                            <button type="button" className="icon-button" title="Reload" onClick={() => setLoads((count) => count + 1)}>
+                            <button
+                                type="button"
+                                className="icon-button"
+                                title="Reload"
+                                onClick={() => setLoads((count) => count + 1)}
+                            >
                                 <RestartIcon size={14} />
                             </button>
                             {preview !== null ? (
@@ -463,7 +492,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <button
                         type="button"
                         className="icon-button"
-                        title={inWorkspace ? `Remove from this workspace (${keys('⌃⌥W')})` : `Close pane (${keys('⌃⌥W')})`}
+                        title={
+                            inWorkspace ? `Remove from this workspace (${keys('⌃⌥W')})` : `Close pane (${keys('⌃⌥W')})`
+                        }
                         onClick={close}
                     >
                         <CloseIcon size={14} />
@@ -494,7 +525,11 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 )}
                 {conversation ? <ConversationView pane={pane} focusToken={focusToken} /> : null}
                 {notesOpen ? (
-                    <NotesDrawer pane={pane} agent={adapter?.kind === 'agent' ? adapter.label : null} hint={notesHint(adapter)} />
+                    <NotesDrawer
+                        pane={pane}
+                        agent={adapter?.kind === 'agent' ? adapter.label : null}
+                        hint={notesHint(adapter)}
+                    />
                 ) : null}
                 {finding && !archived && !conversation ? <FindBar paneId={pane.id} /> : null}
                 {canDrop ? (
@@ -520,12 +555,22 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 {pane.status === 'exited' && !archived ? (
                     <div className={`pane__exit${failed ? ' is-failed' : ''}`}>
                         <span>
-                            {pane.exitCode === null ? (pane.detail ?? 'The process did not start.') : `Exited with code ${pane.exitCode}.`}
+                            {pane.exitCode === null
+                                ? (pane.detail ?? 'The process did not start.')
+                                : `Exited with code ${pane.exitCode}.`}
                         </span>
-                        <button type="button" className="button button--small" onClick={() => api.restartPane(pane.id).catch(reportError)}>
+                        <button
+                            type="button"
+                            className="button button--small"
+                            onClick={() => api.restartPane(pane.id).catch(reportError)}
+                        >
                             {adapter?.resumable ? 'Restart and resume' : 'Restart'}
                         </button>
-                        <button type="button" className="button button--small button--ghost" onClick={() => closePane(pane)}>
+                        <button
+                            type="button"
+                            className="button button--small button--ghost"
+                            onClick={() => closePane(pane)}
+                        >
                             Close pane
                         </button>
                     </div>
@@ -543,7 +588,10 @@ export function setSizesAt(layout: Layout, path: number[], sizes: number[]): Lay
         return { ...layout, sizes };
     }
     const [head, ...rest] = path;
-    return { ...layout, children: layout.children.map((child, index) => (index === head ? setSizesAt(child, rest, sizes) : child)) };
+    return {
+        ...layout,
+        children: layout.children.map((child, index) => (index === head ? setSizesAt(child, rest, sizes) : child)),
+    };
 }
 
 const childKey = (node: Layout): string => (node.type === 'pane' ? node.paneId : `split:${paneIds(node).join(',')}`);
@@ -618,9 +666,17 @@ function GitChips({ status, sessionId }: { status: GitStatus; sessionId: string 
                 ) : null}
             </span>
             {pr && prLabel ? (
-                <a className={`git-pr git-pr--${pr.state}`} href={pr.url} target="_blank" rel="noreferrer noopener" title={prLabel.title}>
+                <a
+                    className={`git-pr git-pr--${pr.state}`}
+                    href={pr.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title={prLabel.title}
+                >
                     {prLabel.text}
-                    {prLabel.mark ? <span className={`git-pr__checks git-pr__checks--${pr.checks}`}>{prLabel.mark}</span> : null}
+                    {prLabel.mark ? (
+                        <span className={`git-pr__checks git-pr__checks--${pr.checks}`}>{prLabel.mark}</span>
+                    ) : null}
                 </a>
             ) : null}
         </>
@@ -633,7 +689,9 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
     const toggleSidebar = useUi((state) => state.toggleSidebar);
     const projectWorking = useUi((state) => {
         const sessionIds = new Set(
-            state.app?.sessions.filter((entry) => entry.projectId === session.projectId && !entry.archived).map((entry) => entry.id),
+            state.app?.sessions
+                .filter((entry) => entry.projectId === session.projectId && !entry.archived)
+                .map((entry) => entry.id),
         );
         return state.app?.panes.some((pane) => pane.status === 'working' && sessionIds.has(pane.sessionId)) ?? false;
     });
@@ -701,7 +759,12 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                     onSave={(title) => api.updateSession(session.id, { title })}
                 />
             </div>
-            <button type="button" className="session-header__path" title={`${session.cwd}\nClick to copy`} onClick={copyPath}>
+            <button
+                type="button"
+                className="session-header__path"
+                title={`${session.cwd}\nClick to copy`}
+                onClick={copyPath}
+            >
                 {shortPath(session.cwd)}
             </button>
             {git ? <GitChips status={git} sessionId={session.id} /> : null}
@@ -723,7 +786,13 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                     }}
                 />
             ) : session.link ? (
-                <a className="session-header__link" href={session.link} target="_blank" rel="noreferrer noopener" title={session.link}>
+                <a
+                    className="session-header__link"
+                    href={session.link}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title={session.link}
+                >
                     <LinkIcon size={13} />
                     <span>{linkLabel(session.link)}</span>
                 </a>

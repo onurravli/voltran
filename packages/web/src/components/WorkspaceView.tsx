@@ -44,7 +44,10 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
             </div>
             <span className="workspace__count">{count === 1 ? '1 pane' : `${count} panes`}</span>
             <div className="session-header__actions">
-                <MoreMenu label="Workspace actions" items={() => workspaceMenu(workspace, () => setRenaming(true), 'header')} />
+                <MoreMenu
+                    label="Workspace actions"
+                    items={() => workspaceMenu(workspace, () => setRenaming(true), 'header')}
+                />
             </div>
         </header>
     );
@@ -76,7 +79,9 @@ function EmptyWorkspace({ workspace }: { workspace: Workspace }) {
             }}
         >
             <p>Drag panes or whole sessions here from the sidebar.</p>
-            <p className="workspace__hint">They keep running in their own sessions; a workspace only shows them side by side.</p>
+            <p className="workspace__hint">
+                They keep running in their own sessions; a workspace only shows them side by side.
+            </p>
         </div>
     );
 }

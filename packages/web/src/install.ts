@@ -18,7 +18,9 @@ export function watchInstallOffer(): void {
     window.addEventListener('appinstalled', () => {
         offer = null;
         useUi.getState().setInstallable(false);
-        useUi.getState().showToast('Voltran is installed. To keep it in the Dock, right-click its icon → Options → Keep in Dock');
+        useUi
+            .getState()
+            .showToast('Voltran is installed. To keep it in the Dock, right-click its icon → Options → Keep in Dock');
     });
 }
 

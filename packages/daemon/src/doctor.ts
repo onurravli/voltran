@@ -91,7 +91,12 @@ async function terminalsCheck(): Promise<DiagnosticCheck> {
     try {
         const pty = await import('node-pty');
         const exited = await new Promise<boolean>((done) => {
-            const child = pty.spawn('/bin/sh', ['-c', 'exit 0'], { cols: 20, rows: 5, cwd: homedir(), env: { PATH: '/usr/bin:/bin' } });
+            const child = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+                cols: 20,
+                rows: 5,
+                cwd: homedir(),
+                env: { PATH: '/usr/bin:/bin' },
+            });
             const timer = setTimeout(() => {
                 child.kill();
                 done(false);
@@ -148,7 +153,9 @@ export function daemonCheck(config: Config, daemon: DaemonInfo | null, version: 
 }
 
 async function voltranCheck(version: string, path: string): Promise<DiagnosticCheck> {
-    const commit = existsSync(join(REPO_ROOT, '.git')) ? await run('git', ['-C', REPO_ROOT, 'rev-parse', '--short', 'HEAD'], path) : null;
+    const commit = existsSync(join(REPO_ROOT, '.git'))
+        ? await run('git', ['-C', REPO_ROOT, 'rev-parse', '--short', 'HEAD'], path)
+        : null;
     return check('Voltran', 'ok', commit ? `${version} (${commit})` : version);
 }
 
@@ -182,7 +189,8 @@ function browserCheck(config: Config): DiagnosticCheck {
 }
 
 function autostartCheck(): DiagnosticCheck {
-    const file = process.platform === 'darwin' ? LAUNCH_AGENT_FILE : process.platform === 'linux' ? SYSTEMD_UNIT_FILE : null;
+    const file =
+        process.platform === 'darwin' ? LAUNCH_AGENT_FILE : process.platform === 'linux' ? SYSTEMD_UNIT_FILE : null;
     return file && existsSync(file) ? check('Autostart', 'ok', 'on') : check('Autostart', 'off', 'off');
 }
 

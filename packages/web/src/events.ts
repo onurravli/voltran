@@ -76,7 +76,12 @@ export function connectEvents(): () => void {
             if (event.type === 'settings') {
                 useUi
                     .getState()
-                    .applySettings({ settings: event.settings, problems: event.problems, exists: event.exists, path: event.path });
+                    .applySettings({
+                        settings: event.settings,
+                        problems: event.problems,
+                        exists: event.exists,
+                        path: event.path,
+                    });
             } else if (event.type === 'state') {
                 useUi.getState().setApp(event.state);
             } else if (event.type === 'version') {

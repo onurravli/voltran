@@ -27,10 +27,17 @@ export function orderedSessions(app: AppState | null, showArchived: boolean): Se
 }
 
 function stepSession(delta: number): void {
-    const { app, showArchived, selectedSessionId, selectedWorkspaceId, selectSession, selectWorkspace } = useUi.getState();
+    const { app, showArchived, selectedSessionId, selectedWorkspaceId, selectSession, selectWorkspace } =
+        useUi.getState();
     const views = [
-        ...(app?.workspaces ?? []).map((workspace) => ({ id: workspace.id, select: () => selectWorkspace(workspace.id) })),
-        ...orderedSessions(app, showArchived).map((session) => ({ id: session.id, select: () => selectSession(session.id) })),
+        ...(app?.workspaces ?? []).map((workspace) => ({
+            id: workspace.id,
+            select: () => selectWorkspace(workspace.id),
+        })),
+        ...orderedSessions(app, showArchived).map((session) => ({
+            id: session.id,
+            select: () => selectSession(session.id),
+        })),
     ];
     if (views.length === 0) {
         return;
@@ -69,14 +76,21 @@ function splitFocused(direction: 'horizontal' | 'vertical'): void {
     const state = useUi.getState();
     const workspace = selectedWorkspace(state);
     const focused = visibleFocusedPane();
-    const sessionId = workspace ? state.app?.panes.find((pane) => pane.id === focused)?.sessionId : state.selectedSessionId;
+    const sessionId = workspace
+        ? state.app?.panes.find((pane) => pane.id === focused)?.sessionId
+        : state.selectedSessionId;
     if (!sessionId) {
         if (workspace) {
             state.showToast('Click a pane first; the new one joins its session');
         }
         return;
     }
-    api.createPane(sessionId, { adapter: 'shell', splitFrom: focused ?? undefined, direction, workspaceId: workspace?.id })
+    api.createPane(sessionId, {
+        adapter: 'shell',
+        splitFrom: focused ?? undefined,
+        direction,
+        workspaceId: workspace?.id,
+    })
         .then((pane) => useUi.getState().focusPane(pane.id))
         .catch(reportError);
 }
@@ -95,7 +109,12 @@ export function reportProblem(): void {
             if (tab) {
                 tab.opener = null;
             } else {
-                useUi.getState().showToast('The browser blocked the bug report. Allow pop-ups, or run `voltran doctor --report`.', 'error');
+                useUi
+                    .getState()
+                    .showToast(
+                        'The browser blocked the bug report. Allow pop-ups, or run `voltran doctor --report`.',
+                        'error',
+                    );
             }
         })
         .catch(reportError);
@@ -123,7 +142,11 @@ export function editSettings(): void {
                     return;
                 }
                 stop();
-                if (state.focusedPaneId === null && returnTo && state.app.panes.some((entry) => entry.id === returnTo)) {
+                if (
+                    state.focusedPaneId === null &&
+                    returnTo &&
+                    state.app.panes.some((entry) => entry.id === returnTo)
+                ) {
                     state.focusPane(returnTo);
                 }
             });
@@ -249,7 +272,12 @@ export const SHORTCUTS: Shortcut[] = [
         label: `Zen mode: the focused pane, full screen, nothing else (${keys('⇧Esc')} leaves)`,
         run: toggleZen,
     },
-    { code: 'KeyN', keys: keys('⌃⌥N'), label: 'Start a new session', run: () => useUi.getState().openDialog({ kind: 'session' }) },
+    {
+        code: 'KeyN',
+        keys: keys('⌃⌥N'),
+        label: 'Start a new session',
+        run: () => useUi.getState().openDialog({ kind: 'session' }),
+    },
     { code: 'ArrowUp', keys: keys('⌃⌥↑'), label: 'Previous workspace or session', run: () => stepSession(-1) },
     { code: 'ArrowDown', keys: keys('⌃⌥↓'), label: 'Next workspace or session', run: () => stepSession(1) },
     { code: 'ArrowLeft', keys: keys('⌃⌥←'), label: 'Previous pane on screen', run: () => stepPane(-1) },
@@ -260,7 +288,12 @@ export const SHORTCUTS: Shortcut[] = [
         label: 'Split the focused pane to the right with a shell',
         run: () => splitFocused('horizontal'),
     },
-    { code: 'Minus', keys: keys('⌃⌥-'), label: 'Split the focused pane downward with a shell', run: () => splitFocused('vertical') },
+    {
+        code: 'Minus',
+        keys: keys('⌃⌥-'),
+        label: 'Split the focused pane downward with a shell',
+        run: () => splitFocused('vertical'),
+    },
     {
         code: 'Enter',
         keys: keys('⌃⌥↩'),
@@ -272,7 +305,12 @@ export const SHORTCUTS: Shortcut[] = [
             }
         },
     },
-    { code: 'KeyW', keys: keys('⌃⌥W'), label: 'Close the focused pane, or take it out of the workspace', run: closeFocused },
+    {
+        code: 'KeyW',
+        keys: keys('⌃⌥W'),
+        label: 'Close the focused pane, or take it out of the workspace',
+        run: closeFocused,
+    },
     { code: 'KeyE', keys: keys('⌃⌥E'), label: 'Show or hide the notes of the focused pane', run: toggleFocusedNotes },
     {
         code: 'KeyC',
@@ -280,8 +318,18 @@ export const SHORTCUTS: Shortcut[] = [
         label: 'Switch the focused Claude Code pane between its conversation and its terminal',
         run: toggleFocusedConversation,
     },
-    { code: 'KeyG', keys: keys('⌃⌥G'), label: 'Show or hide the git changes of the focused session', run: toggleChanges },
-    { code: 'Slash', keys: keys('⌃⌥/'), label: 'Show keyboard shortcuts', run: () => useUi.getState().openDialog({ kind: 'shortcuts' }) },
+    {
+        code: 'KeyG',
+        keys: keys('⌃⌥G'),
+        label: 'Show or hide the git changes of the focused session',
+        run: toggleChanges,
+    },
+    {
+        code: 'Slash',
+        keys: keys('⌃⌥/'),
+        label: 'Show keyboard shortcuts',
+        run: () => useUi.getState().openDialog({ kind: 'shortcuts' }),
+    },
 ];
 
 const BY_CODE = new Map(SHORTCUTS.map((shortcut) => [shortcut.code, shortcut]));
@@ -316,10 +364,20 @@ export const FIND_SHORTCUT = { keys: keys('⌘F'), label: 'Find in the focused t
 
 export const FIND_STEP_KEYS = IS_MAC ? { next: '⌘G', previous: '⇧⌘G' } : { next: 'F3', previous: 'Shift+F3' };
 
-export const FIND_KEYS = [FIND_SHORTCUT, { keys: `${FIND_STEP_KEYS.next} / ${FIND_STEP_KEYS.previous}`, label: 'Next / previous match' }];
+export const FIND_KEYS = [
+    FIND_SHORTCUT,
+    { keys: `${FIND_STEP_KEYS.next} / ${FIND_STEP_KEYS.previous}`, label: 'Next / previous match' },
+];
 
 function isZenExitKey(event: KeyboardEvent): boolean {
-    return event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && useUi.getState().zen;
+    return (
+        event.key === 'Escape' &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        useUi.getState().zen
+    );
 }
 
 export function isAppShortcut(event: KeyboardEvent): boolean {

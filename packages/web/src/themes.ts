@@ -133,7 +133,8 @@ function deriveUi(scheme: Scheme, t: TerminalTheme, accents: Partial<Record<Acce
     const accent = (name: Accent, normal: string, bright: string, ratio: number): string =>
         withContrast(accents[name] ?? (dark ? bright : normal), bay, ratio, extreme);
     const readableOn = (color: string): string =>
-        [t.background, text, '#000000', '#ffffff'].find((candidate) => contrastRatio(candidate, color) >= 4.5) ?? extreme;
+        [t.background, text, '#000000', '#ffffff'].find((candidate) => contrastRatio(candidate, color) >= 4.5) ??
+        extreme;
     const signal = accent('signal', t.yellow, t.brightYellow, 4.5);
     const fault = accent('fault', t.red, t.brightRed, 3);
     const focus = accent('focus', t.blue, t.brightBlue, 4.5);
@@ -182,7 +183,14 @@ function defineTheme(
     terminal: TerminalTheme,
     accents: Partial<Record<Accent, string>> = {},
 ): Theme {
-    return { id, name, scheme, terminal, minimumContrastRatio: scheme === 'light' ? 3 : 1, ui: deriveUi(scheme, terminal, accents) };
+    return {
+        id,
+        name,
+        scheme,
+        terminal,
+        minimumContrastRatio: scheme === 'light' ? 3 : 1,
+        ui: deriveUi(scheme, terminal, accents),
+    };
 }
 
 export const DEFAULT_THEME_ID = DEFAULT_SETTINGS.theme.dark;
@@ -416,7 +424,14 @@ export const THEMES: Theme[] = [
             brightCyan: '#93a1a1',
             brightWhite: '#fdf6e3',
         },
-        { signal: '#b58900', finished: '#268bd2', working: '#6c71c4', live: '#2aa198', fault: '#dc322f', focus: '#268bd2' },
+        {
+            signal: '#b58900',
+            finished: '#268bd2',
+            working: '#6c71c4',
+            live: '#2aa198',
+            fault: '#dc322f',
+            focus: '#268bd2',
+        },
     ),
     defineTheme('voltran-light', 'Voltran Light', 'light', {
         background: '#fcfcfb',
@@ -539,7 +554,9 @@ export interface ThemeChoice {
 }
 
 export function parseThemeChoice(value: { appearance?: unknown; themeIds?: unknown; themeId?: unknown }): ThemeChoice {
-    const ids = (value.themeIds && typeof value.themeIds === 'object' ? value.themeIds : {}) as Partial<Record<Scheme, unknown>>;
+    const ids = (value.themeIds && typeof value.themeIds === 'object' ? value.themeIds : {}) as Partial<
+        Record<Scheme, unknown>
+    >;
     const choice: ThemeChoice = {
         appearance: parseAppearance(value.appearance),
         themeIds: { dark: parseThemeId(ids.dark, 'dark'), light: parseThemeId(ids.light, 'light') },

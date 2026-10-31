@@ -140,13 +140,23 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
     const expanded = useUi((state) => Boolean(state.expandedSessions[session.id]));
     const toggleSessionPanes = useUi((state) => state.toggleSessionPanes);
     const accepts = useUi((state) => {
-        const moving = state.draggingPaneId ? state.app?.panes.find((pane) => pane.id === state.draggingPaneId) : undefined;
+        const moving = state.draggingPaneId
+            ? state.app?.panes.find((pane) => pane.id === state.draggingPaneId)
+            : undefined;
         const from = moving ? state.app?.sessions.find((entry) => entry.id === moving.sessionId) : undefined;
-        return Boolean(moving && from && moving.sessionId !== session.id && !session.archived && from.projectId === session.projectId);
+        return Boolean(
+            moving &&
+                from &&
+                moving.sessionId !== session.id &&
+                !session.archived &&
+                from.projectId === session.projectId,
+        );
     });
     const reorders = useUi((state) => {
         const moving =
-            state.reordering?.kind === 'session' ? state.app?.sessions.find((entry) => entry.id === state.reordering?.id) : undefined;
+            state.reordering?.kind === 'session'
+                ? state.app?.sessions.find((entry) => entry.id === state.reordering?.id)
+                : undefined;
         return Boolean(moving && moving.id !== session.id && moving.projectId === session.projectId);
     });
     const worktreeBranch = useUi((state) => (session.worktree ? (state.app?.git[session.cwd]?.branch ?? null) : null));
@@ -190,7 +200,10 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 items={() =>
                     sessionMenu(
                         session,
-                        { rename: () => setRenaming(true), editLink: () => useUi.getState().editSessionLink(session.id) },
+                        {
+                            rename: () => setRenaming(true),
+                            editLink: () => useUi.getState().editSessionLink(session.id),
+                        },
                         'sidebar',
                     )
                 }
@@ -237,9 +250,9 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                             const siblings = orderedSessions(app, showArchived)
                                 .filter((entry) => entry.projectId === session.projectId)
                                 .map((entry) => entry.id);
-                            api.updateSession(reordering.id, { moveBefore: dropBefore(siblings, session.id, sideOf(event)) }).catch(
-                                reportError,
-                            );
+                            api.updateSession(reordering.id, {
+                                moveBefore: dropBefore(siblings, session.id, sideOf(event)),
+                            }).catch(reportError);
                             return;
                         }
                         if (!accepts || !moving) {
@@ -255,7 +268,9 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
                 >
                     <StatusLamp status={status} failed={failed} />
                     <span className="session-row__text">
-                        <span className={`session-row__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}>
+                        <span
+                            className={`session-row__title${session.titleSource === 'pending' ? ' title--pending' : ''}`}
+                        >
                             {session.title}
                         </span>
                         {showDetail ? (
@@ -321,7 +336,10 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
 
     return (
         <li>
-            <ContextMenuArea label={workspace.title} items={() => workspaceMenu(workspace, () => setRenaming(true), 'sidebar')}>
+            <ContextMenuArea
+                label={workspace.title}
+                items={() => workspaceMenu(workspace, () => setRenaming(true), 'sidebar')}
+            >
                 <button
                     type="button"
                     className={`session-row${selected ? ' is-selected' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}`}
@@ -398,7 +416,9 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
     const reorders = useUi((state) => state.reordering?.kind === 'project' && state.reordering.id !== project.id);
     const [side, setSide] = useState<DropSide | null>(null);
     const [renaming, setRenaming] = useState(false);
-    const waiting = sessions.filter((session) => panesOf(app, session.id).some((pane) => needsAttention(pane.status))).length;
+    const waiting = sessions.filter((session) =>
+        panesOf(app, session.id).some((pane) => needsAttention(pane.status)),
+    ).length;
 
     useEffect(() => {
         if (!reorders) {
@@ -429,7 +449,9 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
                 event.preventDefault();
                 endDrag();
                 const ids = (current?.projects ?? []).map((entry) => entry.id);
-                api.updateProject(reordering.id, { moveBefore: dropBefore(ids, project.id, sideOf(event)) }).catch(reportError);
+                api.updateProject(reordering.id, { moveBefore: dropBefore(ids, project.id, sideOf(event)) }).catch(
+                    reportError,
+                );
             }}
         >
             <ContextMenuArea label={project.name} items={menu}>
@@ -491,7 +513,11 @@ function ProjectGroup({ project, sessions }: { project: Project; sessions: Sessi
                 </div>
             </ContextMenuArea>
             {collapsed ? null : sessions.length === 0 ? (
-                <button type="button" className="project__empty" onClick={() => openDialog({ kind: 'session', projectId: project.id })}>
+                <button
+                    type="button"
+                    className="project__empty"
+                    onClick={() => openDialog({ kind: 'session', projectId: project.id })}
+                >
                     <PlusIcon size={12} /> New session
                 </button>
             ) : (
@@ -568,7 +594,11 @@ function UsageMeters() {
                         ? ''
                         : `, resets ${new Date(window.resetsAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`;
                 return (
-                    <div key={label} className="usage__row" title={reset ? `${name} has reset` : `${name}: ${percent}% used${resetsAt}`}>
+                    <div
+                        key={label}
+                        className="usage__row"
+                        title={reset ? `${name} has reset` : `${name}: ${percent}% used${resetsAt}`}
+                    >
                         <span className="usage__label">{label}</span>
                         <span
                             className={`usage__bar usage__bar--${usageLevel(percent)}`}
@@ -604,7 +634,9 @@ function Footer() {
     return (
         <footer className="sidebar__footer">
             <UsageMeters />
-            {connection === 'offline' ? <span className="connection connection--offline">Reconnecting to the daemon…</span> : null}
+            {connection === 'offline' ? (
+                <span className="connection connection--offline">Reconnecting to the daemon…</span>
+            ) : null}
             <div className="sidebar__footer-row">
                 {quiet && connection !== 'offline' ? <span className="sidebar__quiet">Nothing needs you</span> : null}
                 {permission === 'default' ? (
@@ -671,7 +703,8 @@ function SidebarResizer() {
         setDragging(false);
     };
     const step = (event: KeyboardEvent<HTMLDivElement>): void => {
-        const delta = event.key === 'ArrowLeft' ? -SIDEBAR_WIDTH_STEP : event.key === 'ArrowRight' ? SIDEBAR_WIDTH_STEP : 0;
+        const delta =
+            event.key === 'ArrowLeft' ? -SIDEBAR_WIDTH_STEP : event.key === 'ArrowRight' ? SIDEBAR_WIDTH_STEP : 0;
         if (delta !== 0) {
             event.preventDefault();
             setSidebarWidth(width + delta * outward);
@@ -735,7 +768,12 @@ export function Sidebar() {
     return (
         <aside className="sidebar">
             <header className="sidebar__header">
-                <button type="button" className="wordmark" title="About Voltran" onClick={() => openDialog({ kind: 'about' })}>
+                <button
+                    type="button"
+                    className="wordmark"
+                    title="About Voltran"
+                    onClick={() => openDialog({ kind: 'about' })}
+                >
                     <VoltranMark size={18} form />
                     <span>Voltran</span>
                 </button>
@@ -749,7 +787,12 @@ export function Sidebar() {
                     <PlusIcon size={15} />
                 </button>
             </header>
-            <button type="button" className="sidebar__search" onClick={togglePalette} title="Jump to a session or run a command">
+            <button
+                type="button"
+                className="sidebar__search"
+                onClick={togglePalette}
+                title="Jump to a session or run a command"
+            >
                 <SearchIcon size={13} />
                 <span>Search or run…</span>
                 <Hotkey keys={keys('⌘K')} />
@@ -771,7 +814,9 @@ export function Sidebar() {
                         key={project.id}
                         project={project}
                         sessions={
-                            app?.sessions.filter((session) => session.projectId === project.id && (showArchived || !session.archived)) ?? []
+                            app?.sessions.filter(
+                                (session) => session.projectId === project.id && (showArchived || !session.archived),
+                            ) ?? []
                         }
                     />
                 ))}

@@ -74,7 +74,9 @@ describe('readAiTitle', () => {
             { type: 'ai-title', aiTitle: '  Login  redirect fix ', sessionId: CONVERSATION },
         ]);
         expect(readAiTitle(file, CONVERSATION)).toBe('Login redirect fix');
-        const escaped = transcript([{ type: 'ai-title', aiTitle: 'Login\u001b]0;x\u0007 fix', sessionId: CONVERSATION }]);
+        const escaped = transcript([
+            { type: 'ai-title', aiTitle: 'Login\u001b]0;x\u0007 fix', sessionId: CONVERSATION },
+        ]);
         expect(readAiTitle(escaped, CONVERSATION)).toBe('Login]0;x fix');
     });
 
@@ -107,7 +109,9 @@ describe('SessionNamer', () => {
             title: 'add dark mode',
             titleSource: 'prompt',
         });
-        expect(namer.name(session('prompt'), pane('codex'), 'UserPromptSubmit', { prompt: 'second prompt' })).toBeNull();
+        expect(
+            namer.name(session('prompt'), pane('codex'), 'UserPromptSubmit', { prompt: 'second prompt' }),
+        ).toBeNull();
         expect(namer.name(session('pending'), pane('codex'), 'Stop', { prompt: 'not a prompt event' })).toBeNull();
     });
 
@@ -132,7 +136,10 @@ describe('SessionNamer', () => {
         });
         writeFileSync(empty, `${JSON.stringify({ type: 'ai-title', aiTitle: 'Named' })}\n`, { flag: 'a' });
         expect(namer.name(session('prompt'), pane('claude'), 'PreToolUse', payload, 1000)).toBeNull();
-        expect(namer.name(session('prompt'), pane('claude'), 'Stop', payload, 2500)).toEqual({ title: 'Named', titleSource: 'agent' });
+        expect(namer.name(session('prompt'), pane('claude'), 'Stop', payload, 2500)).toEqual({
+            title: 'Named',
+            titleSource: 'agent',
+        });
     });
 
     it('never renames a session the user titled', () => {

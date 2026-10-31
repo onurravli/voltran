@@ -3,7 +3,12 @@ import { join } from 'node:path';
 import { findOnPath } from './adapters.ts';
 
 export const SYSTEMD_UNIT_NAME = 'voltran.service';
-export const SYSTEMD_UNIT_FILE = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'systemd', 'user', SYSTEMD_UNIT_NAME);
+export const SYSTEMD_UNIT_FILE = join(
+    process.env.XDG_CONFIG_HOME || join(homedir(), '.config'),
+    'systemd',
+    'user',
+    SYSTEMD_UNIT_NAME,
+);
 
 const CHROME_BINARIES = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
 

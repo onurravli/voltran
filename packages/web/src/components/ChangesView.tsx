@@ -64,7 +64,9 @@ export function ChangesView({
     const [error, setError] = useState<string | null>(null);
     const [contentsError, setContentsError] = useState<string | null>(null);
     const root = useRef<HTMLElement>(null);
-    const statusKey = status ? `${status.commit}:${status.changed}:${status.staged}:${status.unstaged}:${status.untracked}` : null;
+    const statusKey = status
+        ? `${status.commit}:${status.changed}:${status.staged}:${status.unstaged}:${status.untracked}`
+        : null;
     const [revision, setRevision] = useState(0);
 
     useEffect(() => {
@@ -93,7 +95,9 @@ export function ChangesView({
                 }
                 setChanges(next);
                 setError(null);
-                setSelected((path) => (path && next.files.some((file) => file.path === path) ? path : (next.files[0]?.path ?? null)));
+                setSelected((path) =>
+                    path && next.files.some((file) => file.path === path) ? path : (next.files[0]?.path ?? null),
+                );
             })
             .catch((reason) => current && setError(message(reason)));
         return () => {
@@ -151,7 +155,9 @@ export function ChangesView({
 
     const file = files.find((entry) => entry.path === selected) ?? null;
     const shown = contents && contents.path === selected ? contents : null;
-    const count = changes ? `${files.length}${changes.truncated ? '+' : ''} ${files.length === 1 ? 'file' : 'files'}` : '';
+    const count = changes
+        ? `${files.length}${changes.truncated ? '+' : ''} ${files.length === 1 ? 'file' : 'files'}`
+        : '';
 
     return (
         <section
@@ -181,7 +187,13 @@ export function ChangesView({
                     >
                         <SplitRightIcon size={14} />
                     </button>
-                    <button type="button" className="icon-button" aria-label="Close" title="Close (Esc)" onClick={() => openChanges(null)}>
+                    <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Close"
+                        title="Close (Esc)"
+                        onClick={() => openChanges(null)}
+                    >
                         <CloseIcon size={14} />
                     </button>
                 </header>
@@ -210,12 +222,16 @@ export function ChangesView({
                                 </button>
                             );
                         })}
-                        {changes?.truncated ? <div className="changes__more">Only the first {files.length} files are listed.</div> : null}
+                        {changes?.truncated ? (
+                            <div className="changes__more">Only the first {files.length} files are listed.</div>
+                        ) : null}
                     </nav>
                     <div className="changes__diff">
                         {file ? (
                             <div className="changes__file-head">
-                                <span className="changes__path">{file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}</span>
+                                <span className="changes__path">
+                                    {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+                                </span>
                                 <span className="changes__stage">
                                     {STATE_MARKS[file.state].label}, {stageLabel(file)}
                                 </span>

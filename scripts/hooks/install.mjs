@@ -15,7 +15,9 @@ if (current === HOOKS) {
     process.exit(0);
 }
 if (current !== '') {
-    console.warn(`core.hooksPath is already ${current}; leaving it. Run "git config core.hooksPath ${HOOKS}" to use Voltran's hooks.`);
+    console.warn(
+        `core.hooksPath is already ${current}; leaving it. Run "git config core.hooksPath ${HOOKS}" to use Voltran's hooks.`,
+    );
     process.exit(0);
 }
 git(['config', '--local', 'core.hooksPath', HOOKS]);

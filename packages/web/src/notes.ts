@@ -200,7 +200,11 @@ export class NotesEditor {
         }
         const text = this.draft;
         try {
-            const saved = await this.api.save(this.paneId, { content: text, version: this.version, holder: this.holder }, keepalive);
+            const saved = await this.api.save(
+                this.paneId,
+                { content: text, version: this.version, holder: this.holder },
+                keepalive,
+            );
             this.content = saved.content;
             this.version = saved.version;
             this.renewedAt = Date.now();

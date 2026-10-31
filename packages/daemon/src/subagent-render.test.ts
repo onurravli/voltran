@@ -12,7 +12,11 @@ describe('renderEntries', () => {
                     { kind: 'prompt', text: 'Find the Jokers.\nKeep it short.', at: null },
                     { kind: 'tool', id: 't1', name: 'WebSearch', summary: 'Impractical Jokers cast', at: null },
                     { kind: 'result', toolUseId: 't1', text: 'one\ntwo\nthree\nfour\nfive', error: false, at: null },
-                    { kind: 'text', text: '# Fact sheet\nThe **four** Jokers:\n```\nJoe Murr Q Sal\n```\nDone.', at: null },
+                    {
+                        kind: 'text',
+                        text: '# Fact sheet\nThe **four** Jokers:\n```\nJoe Murr Q Sal\n```\nDone.',
+                        at: null,
+                    },
                 ],
                 state,
             ),
@@ -46,18 +50,21 @@ describe('renderEntries', () => {
             ],
             state,
         );
-        expect(plain(renderEntries([{ kind: 'result', toolUseId: 'a', text: 'contents', error: false, at: null }], state))).toBe(
-            '  ⎿  (Read) contents\n',
-        );
-        expect(plain(renderEntries([{ kind: 'result', toolUseId: 'b', text: '', error: false, at: null }], state))).toBe(
-            '  ⎿  (no output)\n',
-        );
+        expect(
+            plain(renderEntries([{ kind: 'result', toolUseId: 'a', text: 'contents', error: false, at: null }], state)),
+        ).toBe('  ⎿  (Read) contents\n');
+        expect(
+            plain(renderEntries([{ kind: 'result', toolUseId: 'b', text: '', error: false, at: null }], state)),
+        ).toBe('  ⎿  (no output)\n');
     });
 
     it('shows failed tool results in red', () => {
         const state = createRenderState();
         renderEntries([{ kind: 'tool', id: 'x', name: 'Bash', summary: 'rm', at: null }], state);
-        const output = renderEntries([{ kind: 'result', toolUseId: 'x', text: 'permission denied', error: true, at: null }], state);
+        const output = renderEntries(
+            [{ kind: 'result', toolUseId: 'x', text: 'permission denied', error: true, at: null }],
+            state,
+        );
         expect(output).toContain('\x1b[31mpermission denied');
     });
 

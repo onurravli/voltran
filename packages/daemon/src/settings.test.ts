@@ -45,7 +45,11 @@ describe('SettingsFile', () => {
     it('writes every setting, with what each accepts, the first time one changes', () => {
         const { path, file, changes } = setup();
         const state = file.update({ sidebar: { position: 'right' } });
-        expect(state).toMatchObject({ exists: true, problems: [], settings: { ...DEFAULT_SETTINGS, sidebar: { position: 'right' } } });
+        expect(state).toMatchObject({
+            exists: true,
+            problems: [],
+            settings: { ...DEFAULT_SETTINGS, sidebar: { position: 'right' } },
+        });
         expect(changes).toEqual([state]);
         const text = readFileSync(path, 'utf8');
         expect(text).toBe(settingsFileText(state.settings));
@@ -55,7 +59,10 @@ describe('SettingsFile', () => {
 
     it('changes only the keys it is given and keeps the comments', () => {
         const { path, file } = setup();
-        writeFileSync(path, '{\n    // mine\n    "appearance": "dark", // keep\n    "terminal": { "fontSize": 15 },\n}\n');
+        writeFileSync(
+            path,
+            '{\n    // mine\n    "appearance": "dark", // keep\n    "terminal": { "fontSize": 15 },\n}\n',
+        );
         file.update({ terminal: { fontFamily: 'Menlo' }, theme: { dark: 'nord' } });
         const text = readFileSync(path, 'utf8');
         expect(text).toContain('// mine');
@@ -96,7 +103,11 @@ describe('SettingsFile', () => {
     it('treats an empty file as no settings', () => {
         const { path } = setup();
         writeFileSync(path, '\n');
-        expect(new SettingsFile(path, () => undefined).state()).toMatchObject({ settings: DEFAULT_SETTINGS, problems: [], exists: true });
+        expect(new SettingsFile(path, () => undefined).state()).toMatchObject({
+            settings: DEFAULT_SETTINGS,
+            problems: [],
+            exists: true,
+        });
     });
 
     it('writes a template that reads back as the same settings', () => {
@@ -106,7 +117,10 @@ describe('SettingsFile', () => {
             editor: { command: 'nvim' },
             git: { pullRequests: false },
         };
-        expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({ settings, problems: [] });
+        expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({
+            settings,
+            problems: [],
+        });
     });
 
     it('creates the file on request without touching an existing one', () => {
@@ -129,6 +143,8 @@ describe('editorCommand', () => {
     });
 
     it('quotes the path for the shell', () => {
-        expect(editorCommand('vim', "/Users/o'neil/my home/settings.json", {})).toBe("vim '/Users/o'\\''neil/my home/settings.json'");
+        expect(editorCommand('vim', "/Users/o'neil/my home/settings.json", {})).toBe(
+            "vim '/Users/o'\\''neil/my home/settings.json'",
+        );
     });
 });

@@ -18,7 +18,10 @@ export interface ChromeApp {
 function readPlist(file: string): Record<string, unknown> | null {
     try {
         return JSON.parse(
-            execFileSync('plutil', ['-convert', 'json', '-o', '-', file], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }),
+            execFileSync('plutil', ['-convert', 'json', '-o', '-', file], {
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+            }),
         );
     } catch {
         return null;
@@ -29,7 +32,11 @@ function readPlist(file: string): Record<string, unknown> | null {
 // URL it opens and the profile folder that owns it (`<user data dir>/<profile>/Web Applications/…`).
 // A bundle that several profiles share names the folder `-`, and Chrome's Local State lists the
 // profiles that have the app, most recently used first.
-export function installedChromeApp(url: string, appsDir = CHROME_APPS_DIR, userDataDir = CHROME_USER_DATA_DIR): ChromeApp | null {
+export function installedChromeApp(
+    url: string,
+    appsDir = CHROME_APPS_DIR,
+    userDataDir = CHROME_USER_DATA_DIR,
+): ChromeApp | null {
     if (!existsSync(appsDir)) {
         return null;
     }
@@ -47,7 +54,8 @@ export function installedChromeApp(url: string, appsDir = CHROME_APPS_DIR, userD
         if (dirname(profile) !== userDataDir) {
             continue;
         }
-        const profileDirectory = basename(profile) === SHARED_SHIM_PROFILE ? appShimProfile(userDataDir, id) : basename(profile);
+        const profileDirectory =
+            basename(profile) === SHARED_SHIM_PROFILE ? appShimProfile(userDataDir, id) : basename(profile);
         if (profileDirectory) {
             return { id, profileDirectory };
         }
@@ -70,7 +78,8 @@ function profileList(shim: unknown, key: string): string[] {
     const list = typeof shim === 'object' && shim !== null ? (shim as Record<string, unknown>)[key] : undefined;
     return Array.isArray(list)
         ? list.filter(
-              (name): name is string => typeof name === 'string' && name !== SHARED_SHIM_PROFILE && name !== '' && basename(name) === name,
+              (name): name is string =>
+                  typeof name === 'string' && name !== SHARED_SHIM_PROFILE && name !== '' && basename(name) === name,
           )
         : [];
 }
@@ -91,7 +100,10 @@ export function launchAgentPlist(spec: { program: string[]; env: Record<string, 
         '    </array>',
         '    <key>EnvironmentVariables</key>',
         '    <dict>',
-        ...Object.entries(spec.env).flatMap(([key, value]) => [`        <key>${xml(key)}</key>`, `        <string>${xml(value)}</string>`]),
+        ...Object.entries(spec.env).flatMap(([key, value]) => [
+            `        <key>${xml(key)}</key>`,
+            `        <string>${xml(value)}</string>`,
+        ]),
         '    </dict>',
         '    <key>RunAtLoad</key>',
         '    <true/>',

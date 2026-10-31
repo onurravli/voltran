@@ -46,7 +46,9 @@
     --fill: color-mix(in srgb, var(--text) 5%, transparent);
     --fill-strong: color-mix(in srgb, var(--text) 8.5%, transparent);
     --ring: color-mix(in srgb, var(--focus) 32%, transparent);
-    --elevation: 0 0 0 1px var(--line), 0 18px 48px -12px rgba(var(--shadow-rgb), 0.45), 0 4px 12px -4px rgba(var(--shadow-rgb), 0.25);
+    --elevation:
+        0 0 0 1px var(--line), 0 18px 48px -12px rgba(var(--shadow-rgb), 0.45),
+        0 4px 12px -4px rgba(var(--shadow-rgb), 0.25);
 
     --radius-xs: 4px;
     --radius-s: 6px;
@@ -60,7 +62,9 @@
     --ease: cubic-bezier(0.2, 0, 0, 1);
     --sidebar-slide: 220ms;
 
-    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Inter", system-ui, sans-serif;
+    --font-ui:
+        -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Inter", system-ui,
+        sans-serif;
     --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
 
     color-scheme: dark;
