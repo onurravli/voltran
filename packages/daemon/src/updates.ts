@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { UpdateNotice } from '@voltran/shared';
 
@@ -36,6 +36,18 @@ export function isNewer(latest: string, current: string): boolean {
         return a[4] === undefined && b[4] !== undefined;
     }
     return a[4].localeCompare(b[4], undefined, { numeric: true }) > 0;
+}
+
+// Homebrew installs the npm package under its Cellar; updating that copy with npm would install a
+// second one next to it, while autostart and the Homebrew link keep starting the old one.
+export function upgradeCommand(repoRoot: string): string {
+    let root = repoRoot;
+    try {
+        root = realpathSync(repoRoot);
+    } catch {
+        // The path as given.
+    }
+    return /\/Cellar\/voltran\//.test(root) ? 'brew upgrade voltran' : 'npm i -g voltran';
 }
 
 // Why this copy does not check, or null when it does: a development daemon or a git checkout is
@@ -94,6 +106,7 @@ export interface UpdateCheckerOptions {
     cacheFile: string;
     current: string;
     skip: () => string | null;
+    command: string;
     onChange: () => void;
     fetch?: Fetch;
     now?: () => number;
@@ -137,7 +150,7 @@ export class UpdateChecker {
         if (this.options.skip() !== null || !latest || !isNewer(latest, this.options.current)) {
             return null;
         }
-        return { current: this.options.current, latest };
+        return { current: this.options.current, latest, command: this.options.command };
     }
 
     async checkIfDue(): Promise<void> {

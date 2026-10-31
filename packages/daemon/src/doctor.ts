@@ -9,7 +9,7 @@ import { REPO_ROOT, voltranVersion, type Config } from './config.ts';
 import { SYSTEMD_UNIT_FILE, findChrome } from './linux.ts';
 import { CHROME, LAUNCH_AGENT_FILE, installedChromeApp } from './macos.ts';
 import { withoutControls } from './status.ts';
-import { fetchLatest, isNewer, skipReason, type Fetch } from './updates.ts';
+import { fetchLatest, isNewer, skipReason, upgradeCommand, type Fetch } from './updates.ts';
 
 export const MIN_NODE = '22.18.0';
 
@@ -218,7 +218,7 @@ export async function updatesCheck(
         return check('Updates', 'off', 'offline: registry.npmjs.org did not answer');
     }
     return isNewer(latest, version)
-        ? check('Updates', 'warn', `${latest} is available; run \`npm i -g voltran\``)
+        ? check('Updates', 'warn', `${latest} is available; run \`${upgradeCommand(repoRoot)}\``)
         : check('Updates', 'ok', `up to date (the latest is ${latest})`);
 }
 

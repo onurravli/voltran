@@ -93,6 +93,11 @@ describe('updatesCheck', () => {
             detail: '1.1.0 is available; run `npm i -g voltran`',
         });
         expect(await updatesCheck(config, '1.1.0', {}, registry('1.1.0'), root)).toMatchObject({ status: 'ok' });
+        const cellar = join(root, 'Cellar', 'voltran', '1.0.0');
+        mkdirSync(cellar, { recursive: true });
+        expect(await updatesCheck(config, '1.0.0', {}, registry('1.1.0'), cellar)).toMatchObject({
+            detail: '1.1.0 is available; run `brew upgrade voltran`',
+        });
         expect(await updatesCheck(config, '1.1.0', {}, registry(null), root)).toMatchObject({
             status: 'off',
             detail: 'offline: registry.npmjs.org did not answer',

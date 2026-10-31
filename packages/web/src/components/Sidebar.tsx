@@ -625,7 +625,6 @@ function UsageMeters() {
 
 const UPDATE_DISMISSED_KEY = 'voltran.update.dismissed';
 const CHANGELOG = 'https://github.com/onurravli/voltran/blob/main/CHANGELOG.md';
-const INSTALL_COMMAND = 'npm i -g voltran';
 
 function readDismissed(): string | null {
     try {
@@ -655,8 +654,8 @@ function UpdateLine() {
     };
     const copy = (): void => {
         navigator.clipboard
-            .writeText(INSTALL_COMMAND)
-            .then(() => showToast(`Copied \`${INSTALL_COMMAND}\`; run \`voltran restart\` after it`))
+            .writeText(update.command)
+            .then(() => showToast(`Copied \`${update.command}\`; run \`voltran restart\` after it`))
             .catch(reportError);
     };
     return (
@@ -668,7 +667,7 @@ function UpdateLine() {
                 Changelog
             </a>
             <button type="button" className="update-line__command" title="Copy the install command" onClick={copy}>
-                {INSTALL_COMMAND}
+                {update.command}
             </button>
             <button
                 type="button"

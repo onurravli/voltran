@@ -20,7 +20,7 @@ import type { GitRunner } from './git.ts';
 import { createVoltranServer, openInEditor } from './server.ts';
 import { SettingsFile } from './settings.ts';
 import { Store } from './store.ts';
-import { UpdateChecker, skipReason, type Fetch } from './updates.ts';
+import { UpdateChecker, skipReason, upgradeCommand, type Fetch } from './updates.ts';
 import { VersionWatch } from './version.ts';
 
 export interface DaemonOptions {
@@ -94,6 +94,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
                 env: options.baseEnv,
                 setting: settings.state().settings.updates.check,
             }),
+        command: upgradeCommand(REPO_ROOT),
         onChange: () => hub.setUpdate(updates.notice()),
         fetch: options.fetch,
     });

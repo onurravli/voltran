@@ -501,9 +501,9 @@ The daemon makes one request of its own to the internet: to tell you about a new
 `https://registry.npmjs.org/voltran/latest` for the latest version number when it starts and then once
 a day, and keeps the answer in `~/.voltran/update.json`. The request carries no id, usage data or
 headers of Voltran's own; when it fails, nothing is shown and nothing is retried until the next day.
-A newer version shows as a line at the bottom of the sidebar (with the changelog and `npm i -g
-voltran`, which you run yourself: Voltran never installs anything, since a restart ends the agents'
-sessions). Turn it off with `"updates": { "check": false }` in the settings file or
+A newer version shows as a line at the bottom of the sidebar, with the changelog and the command
+that updates your copy: `npm i -g voltran`, or `brew upgrade voltran` when Homebrew installed it.
+You run it yourself: Voltran never installs anything, since a restart ends the agents' sessions. Turn it off with `"updates": { "check": false }` in the settings file or
 `VOLTRAN_NO_UPDATE_CHECK=1`; a development daemon and a git checkout never check.
 
 Child processes do not inherit the environment of a Claude session that launched the daemon

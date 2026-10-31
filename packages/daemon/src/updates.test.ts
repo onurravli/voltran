@@ -9,6 +9,7 @@ import {
     fetchLatest,
     isNewer,
     skipReason,
+    upgradeCommand,
     type Fetch,
 } from './updates.ts';
 
@@ -59,6 +60,18 @@ describe('skipReason', () => {
     });
 });
 
+describe('upgradeCommand', () => {
+    it('updates a Homebrew install with brew, and any other with npm', () => {
+        const brew = join(folder(), 'Cellar', 'voltran', '1.2.0', 'libexec', 'lib', 'node_modules', 'voltran');
+        mkdirSync(brew, { recursive: true });
+        expect(upgradeCommand(brew)).toBe('brew upgrade voltran');
+        const npm = join(folder(), 'lib', 'node_modules', 'voltran');
+        mkdirSync(npm, { recursive: true });
+        expect(upgradeCommand(npm)).toBe('npm i -g voltran');
+        expect(upgradeCommand('/nowhere/Cellar/voltran/1.0.0')).toBe('brew upgrade voltran');
+    });
+});
+
 describe('fetchLatest', () => {
     it('asks the registry for the latest version, sending nothing of its own', async () => {
         const calls: { url: string; init: object }[] = [];
@@ -91,7 +104,15 @@ describe('UpdateChecker', () => {
         const onChange = vi.fn();
         const fetchSpy = vi.fn(fetchImpl);
         const make = () =>
-            new UpdateChecker({ cacheFile, current: '1.1.0', skip, onChange, fetch: fetchSpy, now: () => now });
+            new UpdateChecker({
+                cacheFile,
+                current: '1.1.0',
+                skip,
+                command: 'npm i -g voltran',
+                onChange,
+                fetch: fetchSpy,
+                now: () => now,
+            });
         return { cacheFile, onChange, fetchSpy, make, advance: (ms: number) => (now += ms) };
     };
 
@@ -100,12 +121,12 @@ describe('UpdateChecker', () => {
         const checker = make();
         expect(checker.notice()).toBeNull();
         await checker.checkIfDue();
-        expect(checker.notice()).toEqual({ current: '1.1.0', latest: '1.2.0' });
+        expect(checker.notice()).toEqual({ current: '1.1.0', latest: '1.2.0', command: 'npm i -g voltran' });
         expect(onChange).toHaveBeenCalledTimes(1);
         expect(statSync(cacheFile).mode & 0o777).toBe(0o600);
 
         const restarted = make();
-        expect(restarted.notice()).toEqual({ current: '1.1.0', latest: '1.2.0' });
+        expect(restarted.notice()).toEqual({ current: '1.1.0', latest: '1.2.0', command: 'npm i -g voltran' });
         await restarted.checkIfDue();
         expect(fetchSpy).toHaveBeenCalledTimes(1);
 

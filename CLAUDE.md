@@ -179,7 +179,8 @@ the internet: `fetchLatest` asks `registry.npmjs.org/voltran/latest` with no hea
 start and then when the answer in `~/.voltran/update.json` is a day old, and any failure reads as no
 answer, retried only the next day. `skipReason` turns it off for `updates.check: false`,
 `VOLTRAN_NO_UPDATE_CHECK`, a dev daemon and a git checkout (so it never runs in this repository).
-`AppState.update` is set only for a newer version; the sidebar footer shows it, dismissed per version in
+`AppState.update` is set only for a newer version, with the command that updates this copy
+(`upgradeCommand`: `brew upgrade voltran` for one under Homebrew's Cellar, else `npm i -g voltran`); the sidebar footer shows it, dismissed per version in
 `localStorage`, and `voltran doctor` asks the registry itself (`updatesCheck`).
 
 **Diagnostics.** `daemon/src/doctor.ts` (`diagnose`) runs the checks behind `voltran doctor` and

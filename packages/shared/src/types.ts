@@ -298,6 +298,8 @@ export interface AppState {
 export interface UpdateNotice {
     current: string;
     latest: string;
+    // How this copy updates: through the package manager that installed it.
+    command: string;
 }
 
 export interface PaneSpec {
