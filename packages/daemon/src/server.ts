@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { extname, join, normalize, sep } from 'node:path';
+import { basename, dirname, extname, join, normalize, sep } from 'node:path';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import {
     MAX_ATTACHMENT_BYTES,
@@ -15,6 +15,7 @@ import {
     type ServerEvent,
 } from '@voltran/shared';
 import { voltranVersion, writeNewToken, type Config } from './config.ts';
+import { FilesError, MAX_EDIT_BYTES, ProjectFiles } from './files.ts';
 import { HttpError, type Hub } from './hub.ts';
 import { bearerToken, WS_PROTOCOL, type Guard } from './security.ts';
 import { editorCommand, type SettingsFile } from './settings.ts';
@@ -215,6 +216,37 @@ export function createVoltranServer(options: ServerOptions): Server {
         options.openFile(settings.path);
         sendJson(res, 202, { path: settings.path });
     });
+    // The settings file in the editor pane. The route names no path: it reads and writes only the
+    // daemon's own settings file, through a link to wherever that leads, such as a dotfiles folder.
+    const settingsFile = (): { root: string; name: string } => {
+        settings.create();
+        const real = realpathSync(settings.path);
+        return { root: dirname(real), name: basename(real) };
+    };
+    const settingsEditor = new ProjectFiles({ run: async () => ({ ok: false, stdout: '' }), trash: () => false });
+    const asHttp = <T>(action: () => T): T => {
+        try {
+            return action();
+        } catch (error) {
+            throw error instanceof FilesError
+                ? new HttpError(error.status, error.message.replace(/^\S+/, 'settings.json'))
+                : error;
+        }
+    };
+    route('GET', '/api/settings/file', (req, res) => {
+        const { root, name } = settingsFile();
+        const file = asHttp(() => settingsEditor.read(root, name, requestUrl(req).searchParams.get('known')));
+        sendJson(res, 200, { ...file, path: 'settings.json' });
+    });
+    route('PUT', '/api/settings/file', async (req, res) => {
+        const params = requestUrl(req).searchParams;
+        const text = (await readBytes(req, JSON_LIMIT)).toString('utf8');
+        const { root, name } = settingsFile();
+        const saved = asHttp(() =>
+            settingsEditor.write(root, name, text, params.get('base'), params.get('force') === '1'),
+        );
+        sendJson(res, 200, { ...saved, path: 'settings.json' });
+    });
     route('POST', '/api/settings/edit', async (req, res) => {
         const body = await readJson<EditSettingsBody | null>(req);
         const pane = hub.createPane(
@@ -261,6 +293,34 @@ export function createVoltranServer(options: ServerOptions): Server {
     );
     route('GET', '/api/sessions/:id/contents', async (req, res, [id]) =>
         sendJson(res, 200, await hub.sessionFileContents(id, requestUrl(req).searchParams.get('path') ?? '')),
+    );
+    route('GET', '/api/sessions/:id/files/tree', async (req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionTree(id, requestUrl(req).searchParams.getAll('path'))),
+    );
+    route('GET', '/api/sessions/:id/files/all', async (_req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionFileList(id)),
+    );
+    route('GET', '/api/sessions/:id/files/read', async (req, res, [id]) => {
+        const params = requestUrl(req).searchParams;
+        sendJson(res, 200, await hub.readSessionFile(id, params.get('path') ?? '', params.get('known')));
+    });
+    route('PUT', '/api/sessions/:id/files/write', async (req, res, [id]) => {
+        const params = requestUrl(req).searchParams;
+        const text = (await readBytes(req, MAX_EDIT_BYTES)).toString('utf8');
+        sendJson(
+            res,
+            200,
+            await hub.writeSessionFile(
+                id,
+                params.get('path') ?? '',
+                text,
+                params.get('base'),
+                params.get('force') === '1',
+            ),
+        );
+    });
+    route('POST', '/api/sessions/:id/files/action', async (req, res, [id]) =>
+        sendJson(res, 200, await hub.sessionFileAction(id, await readJson(req))),
     );
     route('POST', '/api/sessions/:id/reveal', (_req, res, [id]) => {
         hub.revealSession(id);

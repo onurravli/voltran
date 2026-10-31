@@ -9,7 +9,8 @@ export type AdapterId =
     | 'command'
     | 'subagent'
     | 'preview'
-    | 'changes';
+    | 'changes'
+    | 'editor';
 
 export type PaneKind = 'agent' | 'shell' | 'process' | 'page';
 
@@ -92,6 +93,8 @@ export interface ChangedFile {
 
 export interface SessionChanges {
     root: string;
+    // Where the session's folder is inside the repository, such as `packages/web/`; empty at its root.
+    prefix: string;
     files: ChangedFile[];
     truncated: boolean;
 }
@@ -103,6 +106,56 @@ export interface FileContents {
     modified: string | null;
     binary: boolean;
     tooLarge: boolean;
+}
+
+export type FileEntryKind = 'file' | 'dir' | 'other';
+
+export interface FileEntry {
+    name: string;
+    kind: FileEntryKind;
+    link: boolean;
+    ignored: boolean;
+}
+
+export interface DirListing {
+    entries: FileEntry[];
+    truncated: boolean;
+}
+
+export interface FileTree {
+    root: string;
+    dirs: Record<string, DirListing | { error: string }>;
+}
+
+export interface ProjectFileList {
+    files: string[];
+    truncated: boolean;
+}
+
+// A file opened for editing. `version` names the bytes it was read from; a client that already
+// has that version gets `unchanged` and no text.
+export interface EditorFile {
+    path: string;
+    version: string;
+    text: string | null;
+    binary: boolean;
+    tooLarge: boolean;
+    unchanged: boolean;
+}
+
+export interface SavedFile {
+    path: string;
+    version: string;
+}
+
+export type FileAction =
+    | { action: 'create'; path: string; kind: 'file' | 'dir' }
+    | { action: 'rename'; from: string; to: string }
+    | { action: 'trash'; path: string }
+    | { action: 'delete'; path: string };
+
+export interface FileActionResult {
+    trashed: boolean;
 }
 
 export interface Workspace {

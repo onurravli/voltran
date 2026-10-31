@@ -37,6 +37,7 @@ import {
     StopIcon,
 } from './Icons.tsx';
 import { ChangesView } from './ChangesView.tsx';
+import { EditorView } from './EditorView.tsx';
 import { ConversationView } from './ConversationView.tsx';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
@@ -222,8 +223,9 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const finding = useUi((state) => state.findPaneId === pane.id);
     const preview = pane.adapter === 'preview' ? pane.command : null;
     const changes = pane.adapter === 'changes';
+    const editing = pane.adapter === 'editor';
     const git = useUi((state) => (changes && session ? state.app?.git[session.cwd] : undefined));
-    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes;
+    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes && !editing;
     const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
     const archived = session?.archived ?? false;
     const hasConversation = pane.adapter === 'claude';
@@ -391,6 +393,10 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     />
                 ) : changes ? (
                     <span className="pane__summary">{changesSummary(git)}</span>
+                ) : editing ? (
+                    <span className="pane__summary" title={session?.cwd}>
+                        {session ? shortPath(session.cwd) : ''}
+                    </span>
                 ) : (
                     <span className="pane__summary" title={pane.detail ?? undefined}>
                         {paneSummary(pane, adapter?.kind)}
@@ -457,7 +463,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                             <StopIcon size={14} />
                         </button>
                     ) : null}
-                    {preview !== null || changes ? (
+                    {editing ? null : preview !== null || changes ? (
                         <>
                             <button
                                 type="button"
@@ -506,6 +512,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <div className="pane__placeholder">Archived. Restore the session to resume this pane.</div>
                 ) : changes ? (
                     <ChangesView key={loads} sessionId={pane.sessionId} pane focusToken={focusToken} />
+                ) : editing ? (
+                    <EditorView pane={pane} focusToken={focusToken} />
                 ) : preview !== null ? (
                     sameOrigin(preview) ? (
                         <div className="pane__placeholder">Voltran does not preview itself.</div>

@@ -8,7 +8,8 @@ import {
     type ProjectGit,
 } from '@voltran/shared';
 import { api } from '../api.ts';
-import { FIND_KEYS, SHORTCUTS, reportProblem } from '../shortcuts.ts';
+import { editorKeys } from '../editor.ts';
+import { FIND_KEYS, IS_MAC, SHORTCUTS, reportProblem } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
 import { CommandPalette } from './CommandPalette.tsx';
 import { VoltranMark } from './Icons.tsx';
@@ -457,6 +458,17 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
                 ))}
             </dl>
             <p className="form__aside">They work while a terminal has focus, too.</p>
+            <h3 className="shortcuts__heading">In an editor pane</h3>
+            <dl className="shortcuts">
+                {editorKeys(IS_MAC).map((shortcut) => (
+                    <div key={shortcut.label} className="shortcuts__row">
+                        <dt>
+                            <kbd>{shortcut.keys}</kbd>
+                        </dt>
+                        <dd>{shortcut.label}</dd>
+                    </div>
+                ))}
+            </dl>
         </Modal>
     );
 }
@@ -626,6 +638,10 @@ export function PaneMenu() {
             >
                 <span>Changes</span>
                 <span className="menu__note">{inGit ? '' : 'not in git'}</span>
+            </button>
+            <button type="button" role="menuitem" className="menu__item" onClick={() => create({ adapter: 'editor' })}>
+                <span>Editor</span>
+                <span className="menu__note">files</span>
             </button>
             <form
                 className="menu__command"

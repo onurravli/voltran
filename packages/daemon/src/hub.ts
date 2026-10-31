@@ -18,7 +18,10 @@ import {
     type CreateProjectBody,
     type CreateSessionBody,
     type CreateWorkspaceBody,
+    type EditorFile,
+    type FileActionResult,
     type FileContents,
+    type FileTree,
     type Layout,
     type MovePaneBody,
     type NotesLockBody,
@@ -30,6 +33,8 @@ import {
     type SaveNotesBody,
     type ServerEvent,
     type Session,
+    type ProjectFileList,
+    type SavedFile,
     type SessionChanges,
     type SlashCommand,
     type UpdatePaneBody,
@@ -55,6 +60,7 @@ import {
 } from './adapters.ts';
 import { ChangesError, SessionChangesReader } from './changes.ts';
 import { readClaudeConversation } from './conversation.ts';
+import { FilesError, ProjectFiles, systemTrash, type Trash } from './files.ts';
 import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { AttachmentRefused, AttachmentStore } from './attachments.ts';
@@ -86,6 +92,7 @@ export interface HubOptions {
     path: string;
     baseEnv: NodeJS.ProcessEnv;
     gitRunner?: GitRunner;
+    trash?: Trash;
     pullRequests?: () => boolean;
     worktreesDir: string;
     worktreeRunner?: WorktreeRunner;
@@ -161,6 +168,7 @@ export class Hub {
     readonly panes: PaneManager;
     private readonly git: GitWatcher;
     private readonly changes: SessionChangesReader;
+    private readonly files: ProjectFiles;
     private readonly notes: NotesStore;
     private readonly attachments: AttachmentStore;
     private readonly claudeConfig: string | null;
@@ -226,6 +234,7 @@ export class Hub {
             run: gitRunner,
         });
         this.changes = new SessionChangesReader(gitRunner);
+        this.files = new ProjectFiles({ run: gitRunner, trash: options.trash ?? systemTrash(options.baseEnv) });
     }
 
     state(): AppState {
@@ -975,6 +984,63 @@ export class Hub {
     async sessionFileContents(id: string, path: string): Promise<FileContents> {
         const session = this.mustGetSession(id);
         return this.readChanges(() => this.changes.contents(session.cwd, requireString(path, 'path', 4096)));
+    }
+
+    // The editor works in the session's folder: the project's, or the session's worktree.
+    async sessionTree(id: string, paths: string[]): Promise<FileTree> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.tree(session.cwd, paths));
+    }
+
+    async sessionFileList(id: string): Promise<ProjectFileList> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.list(session.cwd));
+    }
+
+    readSessionFile(id: string, path: unknown, known: string | null): Promise<EditorFile> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.read(session.cwd, path, known));
+    }
+
+    async writeSessionFile(
+        id: string,
+        path: unknown,
+        text: string,
+        base: string | null,
+        force: boolean,
+    ): Promise<SavedFile> {
+        const session = this.mustGetSession(id);
+        const saved = await this.useFiles(() => this.files.write(session.cwd, path, text, base, force));
+        this.refreshGitSoon(session.cwd);
+        return saved;
+    }
+
+    async sessionFileAction(id: string, body: unknown): Promise<FileActionResult> {
+        const session = this.mustGetSession(id);
+        const result = await this.useFiles(() => this.files.act(session.cwd, body));
+        this.refreshGitSoon(session.cwd);
+        return result;
+    }
+
+    private async useFiles<T>(action: () => T | Promise<T>): Promise<T> {
+        try {
+            return await action();
+        } catch (error) {
+            if (error instanceof FilesError) {
+                throw new HttpError(error.status, error.message);
+            }
+            const code = (error as NodeJS.ErrnoException | null)?.code;
+            if (code === 'EACCES' || code === 'EPERM') {
+                throw new HttpError(403, 'permission denied');
+            }
+            if (code === 'ENOENT' || code === 'ENOTDIR') {
+                throw new HttpError(404, 'it is no longer there');
+            }
+            if (code === 'EEXIST' || code === 'ENOTEMPTY' || code === 'EISDIR' || code === 'ELOOP') {
+                throw new HttpError(409, (error as Error).message);
+            }
+            throw error;
+        }
     }
 
     private async readChanges<T>(read: () => Promise<T>): Promise<T> {

@@ -4,6 +4,7 @@ import { syncAttentionBadge } from './notify.ts';
 import { installShortcuts } from './shortcuts.ts';
 import { selectedWorkspace, useUi } from './store.ts';
 import { disposeNotesExcept, flushNotesOnExit } from './notes.ts';
+import { disposeEditorsExcept } from './editor-session.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
 import { ChangesView } from './components/ChangesView.tsx';
 import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
@@ -95,6 +96,7 @@ export function App() {
         if (app) {
             const live = new Set(app.panes.map((pane) => pane.id));
             disposeTerminalsExcept(live);
+            disposeEditorsExcept(live);
             disposeNotesExcept(live);
         }
     }, [app]);

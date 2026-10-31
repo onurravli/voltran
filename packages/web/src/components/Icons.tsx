@@ -147,6 +147,29 @@ export const SearchIcon = (props: IconProps) => (
         <path d="m10.2 10.2 3.3 3.3" />
     </Icon>
 );
+export const FileIcon = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M4 2.5h5l3 3v8H4z" />
+        <path d="M9 2.5v3h3" />
+    </Icon>
+);
+export const NewFileIcon = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M8.5 13.5H4v-11h5l3 3v3" />
+        <path d="M9 2.5v3h3M12 10.5v4M10 12.5h4" />
+    </Icon>
+);
+export const NewFolderIcon = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M8 12.5H2.5v-8h4l1.5 1.5h5.5v3" />
+        <path d="M12 10v4.5M9.75 12.25h4.5" />
+    </Icon>
+);
+export const CollapseIcon = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M5 3.5 8 6.5l3-3M5 12.5l3-3 3 3" />
+    </Icon>
+);
 export const MoreIcon = (props: IconProps) => (
     <Icon {...props} strokeWidth={2.2}>
         <path d="M3.5 8h.01M8 8h.01M12.5 8h.01" />

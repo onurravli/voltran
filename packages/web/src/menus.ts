@@ -73,6 +73,7 @@ function addPaneItems(sessionId: string): MenuItem[] {
             disabled: !inGit,
             onSelect: () => create({ adapter: 'changes' }),
         },
+        { label: 'Editor', note: 'files', onSelect: () => create({ adapter: 'editor' }) },
     ];
 }
 
@@ -306,7 +307,10 @@ export function paneMenu(pane: PaneView): MenuItem[] {
                   },
               ]
             : []),
-        ...(pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes'
+        ...(pane.adapter === 'subagent' ||
+        pane.adapter === 'preview' ||
+        pane.adapter === 'changes' ||
+        pane.adapter === 'editor'
             ? []
             : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
         {

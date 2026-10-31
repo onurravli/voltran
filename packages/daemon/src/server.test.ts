@@ -25,10 +25,14 @@ import {
     type AppState,
     type ConversationChunk,
     type Diagnostics,
+    type EditorFile,
+    type FileTree,
     type Layout,
     type NotesMeta,
     type PaneNotes,
     type PaneView,
+    type ProjectFileList,
+    type SavedFile,
     type ServerEvent,
     type Session,
     type SettingsState,
@@ -1451,5 +1455,82 @@ describe('restart', () => {
         await until(() => shutdownForRestart !== null);
         expect(shutdownForRestart).toBe(true);
         expect(restarting.server.listening).toBe(false);
+    });
+});
+
+describe('editor files', () => {
+    it('lists, reads, saves and renames the files of a session folder, and nothing outside it', async () => {
+        const dir = mkdtempSync(join(home, 'editor-project-'));
+        mkdirSync(join(dir, 'src'));
+        writeFileSync(join(dir, 'src', 'main.ts'), 'const a = 1;\n');
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', { path: dir });
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'editor',
+            panes: [{ adapter: 'editor' }],
+        });
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        expect(state.panes.find((pane) => pane.sessionId === session.id)).toMatchObject({
+            adapter: 'editor',
+            status: 'idle',
+            pid: null,
+        });
+        const files = `/api/sessions/${session.id}/files`;
+
+        const { body: tree } = await api<FileTree>('GET', `${files}/tree?path=&path=src`);
+        expect(tree.dirs['']).toEqual({
+            entries: [{ name: 'src', kind: 'dir', link: false, ignored: false }],
+            truncated: false,
+        });
+        expect(tree.dirs.src).toMatchObject({ entries: [{ name: 'main.ts', kind: 'file' }] });
+
+        const { body: file } = await api<EditorFile>('GET', `${files}/read?path=src%2Fmain.ts`);
+        expect(file).toMatchObject({ path: 'src/main.ts', text: 'const a = 1;\n', unchanged: false });
+        const write = (text: string, known: string) =>
+            fetch(`${base}${files}/write?${new URLSearchParams({ path: 'src/main.ts', base: known })}`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'text/plain;charset=utf-8' },
+                body: text,
+            });
+        const saved = await write('const a = 2; // ünïcode\n', file.version);
+        expect(saved.status).toBe(200);
+        expect(readFileSync(join(dir, 'src', 'main.ts'), 'utf8')).toBe('const a = 2; // ünïcode\n');
+        expect((await write('stale\n', file.version)).status).toBe(409);
+        const { version } = (await saved.json()) as SavedFile;
+        expect((await api<EditorFile>('GET', `${files}/read?path=src%2Fmain.ts&known=${version}`)).body.unchanged).toBe(
+            true,
+        );
+
+        expect(
+            (await api('POST', `${files}/action`, { action: 'rename', from: 'src/main.ts', to: 'lib/index.ts' }))
+                .status,
+        ).toBe(200);
+        expect(readFileSync(join(dir, 'lib', 'index.ts'), 'utf8')).toBe('const a = 2; // ünïcode\n');
+        expect((await api<ProjectFileList>('GET', `${files}/all`)).body.files.sort()).toEqual(['lib/index.ts']);
+        expect((await api('POST', `${files}/action`, { action: 'delete', path: 'lib' })).status).toBe(200);
+        expect(existsSync(join(dir, 'lib'))).toBe(false);
+
+        expect((await api('GET', `${files}/read?path=..%2Fsecret`)).status).toBe(400);
+        expect((await api('GET', `${files}/read?path=missing.ts`)).status).toBe(404);
+        expect((await fetch(`${base}${files}/read?path=src%2Fmain.ts`)).status).toBe(401);
+        await api('DELETE', `/api/projects/${project.id}`);
+    });
+
+    it('opens the settings file in the editor and applies what it saves', async () => {
+        const { body: file } = await api<EditorFile>('GET', '/api/settings/file');
+        expect(file.path).toBe('settings.json');
+        expect(file.text).toContain('"wordWrap"');
+        const put = (text: string, known: string) =>
+            fetch(`${base}/api/settings/file?${new URLSearchParams({ base: known })}`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'text/plain;charset=utf-8' },
+                body: text,
+            });
+        const edited = (file.text ?? '').replace('"wordWrap": false', '"wordWrap": true');
+        expect((await put(edited, file.version)).status).toBe(200);
+        await until(async () => (await api<SettingsState>('GET', '/api/settings')).body.settings.editor.wordWrap);
+        expect((await put(file.text ?? '', file.version)).status).toBe(409);
+        expect((await fetch(`${base}/api/settings/file`)).status).toBe(401);
+        await api('PATCH', '/api/settings', { editor: { wordWrap: false } });
     });
 });

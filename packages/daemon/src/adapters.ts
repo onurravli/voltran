@@ -159,6 +159,18 @@ const DEFINITIONS: AdapterDefinition[] = [
             throw new Error('a changes pane runs no process');
         },
     },
+    {
+        id: 'editor',
+        label: 'Editor',
+        kind: 'page',
+        statusSource: 'process',
+        resumable: false,
+        reportsHooks: false,
+        binary: null,
+        launch: () => {
+            throw new Error('an editor pane runs no process');
+        },
+    },
 ];
 
 const BY_ID = new Map(DEFINITIONS.map((definition) => [definition.id, definition]));

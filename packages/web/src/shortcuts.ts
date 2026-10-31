@@ -1,5 +1,7 @@
 import { bugReportUrl, type AppState, type PaneView, type Session } from '@voltran/shared';
 import { api } from './api.ts';
+import { SETTINGS_TAB, unsavedIn } from './editor.ts';
+import { editorFor } from './editor-session.ts';
 import { isPrimaryChord, keyLabel } from './keymap.ts';
 import { revealPane } from './notify.ts';
 import { attentionPanes, reportError, selectedWorkspace, shownPaneIds, useUi } from './store.ts';
@@ -122,7 +124,23 @@ export function reportProblem(): void {
 
 // The editor runs in a pane next to the focused one; without an open session there is nowhere to put
 // it, so the file opens in the system's editor instead.
+// Voltran's settings in the editor pane of the session in view, opened next to the focused pane when
+// there is none yet. With no session open, the system's own editor opens the file.
 export function editSettings(): void {
+    const { app, selectedSessionId } = useUi.getState();
+    const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
+    if (!session || session.archived) {
+        openSettingsInApp();
+        return;
+    }
+    void editorPane().then((pane) => {
+        if (pane) {
+            editorFor(pane.id, pane.sessionId).open(SETTINGS_TAB);
+        }
+    });
+}
+
+export function editSettingsInTerminal(): void {
     const { app, selectedSessionId } = useUi.getState();
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
     if (!session || session.archived) {
@@ -200,8 +218,19 @@ export function toggleZen(): void {
 
 // An exited pane has no process left to stop, so closing it does not ask first.
 export function closePane(pane: PaneView): void {
-    if (pane.status === 'exited') {
+    const unsaved = pane.adapter === 'editor' ? unsavedIn(pane.id) : 0;
+    if (pane.status === 'exited' || (pane.adapter === 'editor' && unsaved === 0)) {
         api.deletePane(pane.id).catch(reportError);
+        return;
+    }
+    if (unsaved > 0) {
+        useUi.getState().openDialog({
+            kind: 'confirm',
+            title: `Close ${pane.title}?`,
+            body: `${unsaved === 1 ? 'A file has' : `${unsaved} files have`} unsaved changes, which are lost.`,
+            action: 'Close without saving',
+            onConfirm: () => api.deletePane(pane.id),
+        });
         return;
     }
     useUi.getState().openDialog({
@@ -244,11 +273,58 @@ function toggleFocusedNotes(): void {
     const state = useUi.getState();
     const paneId = visibleFocusedPane();
     const pane = state.app?.panes.find((entry) => entry.id === paneId);
-    if (!pane || pane.adapter === 'subagent' || pane.adapter === 'preview' || pane.adapter === 'changes') {
+    if (
+        !pane ||
+        pane.adapter === 'subagent' ||
+        pane.adapter === 'preview' ||
+        pane.adapter === 'changes' ||
+        pane.adapter === 'editor'
+    ) {
         state.showToast('Focus a terminal pane to see its notes');
         return;
     }
     state.toggleNotes(pane.id);
+}
+
+// The editor of the session the focused pane belongs to, opened to its right the first time.
+function openEditor(): void {
+    void editorPane();
+}
+
+// The editor pane of the focused pane's session, if one is on screen, or a new one to its right.
+async function editorPane(): Promise<{ id: string; sessionId: string } | null> {
+    const state = useUi.getState();
+    const workspace = selectedWorkspace(state);
+    const focused = visibleFocusedPane();
+    const sessionId =
+        state.app?.panes.find((pane) => pane.id === focused)?.sessionId ?? (workspace ? null : state.selectedSessionId);
+    if (!sessionId) {
+        state.showToast(
+            workspace ? 'Click a pane first; the editor opens its session’s files' : 'Open a session first',
+        );
+        return null;
+    }
+    const shown = shownPaneIds(state);
+    const existing = state.app?.panes.find(
+        (pane) => pane.adapter === 'editor' && pane.sessionId === sessionId && shown.includes(pane.id),
+    );
+    if (existing) {
+        state.focusPane(existing.id);
+        return existing;
+    }
+    try {
+        const pane = await api.createPane(sessionId, {
+            adapter: 'editor',
+            splitFrom: focused ?? undefined,
+            direction: 'horizontal',
+            workspaceId: workspace?.id,
+        });
+        useUi.getState().focusPane(pane.id);
+        return pane;
+    } catch (error) {
+        reportError(error);
+        return null;
+    }
 }
 
 function toggleFocusedConversation(): void {
@@ -323,6 +399,12 @@ export const SHORTCUTS: Shortcut[] = [
         keys: keys('⌃⌥G'),
         label: 'Show or hide the git changes of the focused session',
         run: toggleChanges,
+    },
+    {
+        code: 'KeyO',
+        keys: keys('⌃⌥O'),
+        label: 'Open the files of the focused session in an editor to its right',
+        run: openEditor,
     },
     {
         code: 'Slash',

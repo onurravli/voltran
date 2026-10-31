@@ -111,7 +111,13 @@ export class SessionChangesReader {
 
     async list(cwd: string): Promise<SessionChanges> {
         const { root, files } = await this.status(cwd);
-        return { root, files: files.slice(0, MAX_FILES), truncated: files.length > MAX_FILES };
+        const prefix = await this.run('git', ['rev-parse', '--show-prefix'], cwd);
+        return {
+            root,
+            prefix: prefix.ok ? prefix.stdout.trim() : '',
+            files: files.slice(0, MAX_FILES),
+            truncated: files.length > MAX_FILES,
+        };
     }
 
     private async status(cwd: string): Promise<{ root: string; files: ChangedFile[] }> {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { PaneStatus } from '@voltran/shared';
+import { DEFAULT_SETTINGS, LINE_NUMBERS, type LineNumbers, type PaneStatus } from '@voltran/shared';
 import {
     DEFAULT_FONT,
     DEFAULT_UI_FONT,
@@ -21,6 +21,7 @@ import {
     FIND_SHORTCUT,
     SHORTCUTS,
     editSettings,
+    editSettingsInTerminal,
     openSettingsInApp,
     reportProblem,
     togglePalette,
@@ -43,9 +44,9 @@ interface Item {
     run: () => void;
 }
 
-type FontTarget = 'terminal' | 'ui';
+type FontTarget = 'terminal' | 'ui' | 'editor';
 
-type Mode = 'commands' | 'terminal-fonts' | 'ui-fonts' | 'appearance' | Scheme;
+type Mode = 'commands' | 'terminal-fonts' | 'ui-fonts' | 'editor-fonts' | 'appearance' | Scheme;
 
 const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }> = {
     commands: {
@@ -62,6 +63,11 @@ const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }>
         placeholder: 'Pick a font, or type the name of any installed font',
         empty: 'No matching fonts',
     },
+    'editor-fonts': {
+        title: 'Editor font family',
+        placeholder: "Pick a font, or type the name of any installed font; the first follows the terminal's",
+        empty: 'No matching fonts',
+    },
     appearance: {
         title: 'Appearance',
         placeholder: 'Follow the system, or always use dark or light',
@@ -74,6 +80,12 @@ const COPY: Record<Mode, { title?: string; placeholder: string; empty: string }>
 const APPEARANCE_LABELS: Record<Appearance, string> = { system: 'System', dark: 'Dark', light: 'Light' };
 
 const SYSTEM_FONT_LABEL = 'System font';
+
+const LINE_NUMBER_LABELS: Record<LineNumbers, string> = {
+    on: 'shown',
+    relative: 'relative to the cursor',
+    off: 'hidden',
+};
 
 function themesOf(scheme: Scheme): Theme[] {
     return THEMES.filter((theme) => theme.scheme === scheme);
@@ -114,6 +126,7 @@ function ThemeSwatch({ theme }: { theme: Theme }) {
 export function CommandPalette({ onClose }: { onClose: () => void }) {
     const font = useUi((state) => state.terminalFont);
     const uiFont = useUi((state) => state.uiFont);
+    const editor = useUi((state) => state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor);
     const appearance = useUi((state) => state.appearance);
     const setAppearance = useUi((state) => state.setAppearance);
     const themeIds = useUi((state) => state.themeIds);
@@ -149,8 +162,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     };
 
     const enterFonts = (target: FontTarget): void => {
-        const current = target === 'terminal' ? font.family : uiFont.family;
-        const choices = target === 'terminal' ? fontChoices(current) : uiFontChoices(current);
+        const current = target === 'terminal' ? font.family : target === 'ui' ? uiFont.family : editor.fontFamily;
+        const choices =
+            target === 'terminal'
+                ? fontChoices(current)
+                : target === 'ui'
+                  ? uiFontChoices(current)
+                  : ['', ...fontChoices(current || font.family).filter((family) => family !== '')];
         setFamilies(choices);
         enterList(
             `${target}-fonts`,
@@ -176,7 +194,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     const chooseFamily = (target: FontTarget, family: string): void => {
         committedFont.current = null;
-        saveSettings(target === 'terminal' ? { terminal: { fontFamily: family } } : { ui: { fontFamily: family } });
+        saveSettings(
+            target === 'terminal'
+                ? { terminal: { fontFamily: family } }
+                : target === 'ui'
+                  ? { ui: { fontFamily: family } }
+                  : { editor: { fontFamily: family } },
+        );
         onClose();
     };
 
@@ -198,6 +222,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const resize = (size: number): void => saveSettings({ terminal: { fontSize: clampFontSize(size) } });
     const resizeUi = (size: number): void => saveSettings({ ui: { fontSize: clampUiFontSize(size) } });
     const otherSide = sidebarPosition === 'left' ? 'right' : 'left';
+    const editorSize = editor.fontSize ?? font.size;
+    const resizeEditor = (size: number): void => saveSettings({ editor: { fontSize: clampFontSize(size) } });
+    const nextLineNumbers = LINE_NUMBERS[(LINE_NUMBERS.indexOf(editor.lineNumbers) + 1) % LINE_NUMBERS.length];
 
     let items: Item[];
     if (mode === 'commands') {
@@ -307,6 +334,57 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     run: () => resizeUi(DEFAULT_UI_FONT.size),
                 },
                 {
+                    id: 'editor-font-family',
+                    label: 'Editor font family…',
+                    keywords: 'code monaco',
+                    hint: editor.fontFamily || `${font.family}, as the terminal`,
+                    keepOpen: true,
+                    run: () => enterFonts('editor'),
+                },
+                {
+                    id: 'editor-font-bigger',
+                    label: 'Editor font size: bigger',
+                    keywords: 'code monaco',
+                    hint: `${editorSize}px`,
+                    keepOpen: true,
+                    run: () => resizeEditor(editorSize + 1),
+                },
+                {
+                    id: 'editor-font-smaller',
+                    label: 'Editor font size: smaller',
+                    keywords: 'code monaco',
+                    hint: `${editorSize}px`,
+                    keepOpen: true,
+                    run: () => resizeEditor(editorSize - 1),
+                },
+                {
+                    id: 'editor-font-reset',
+                    label: "Editor font size: the terminal's",
+                    keywords: 'code monaco reset',
+                    hint: `${font.size}px`,
+                    keepOpen: true,
+                    run: () => saveSettings({ editor: { fontSize: null } }),
+                },
+                {
+                    id: 'editor-word-wrap',
+                    label: editor.wordWrap ? 'Editor: stop wrapping long lines' : 'Editor: wrap long lines',
+                    keywords: 'code monaco word wrap',
+                    run: () => saveSettings({ editor: { wordWrap: !editor.wordWrap } }),
+                },
+                {
+                    id: 'editor-minimap',
+                    label: editor.minimap ? 'Editor: hide the minimap' : 'Editor: show the minimap',
+                    keywords: 'code monaco overview',
+                    run: () => saveSettings({ editor: { minimap: !editor.minimap } }),
+                },
+                {
+                    id: 'editor-line-numbers',
+                    label: `Editor line numbers: ${LINE_NUMBER_LABELS[nextLineNumbers]}`,
+                    keywords: 'code monaco gutter relative',
+                    hint: `now ${LINE_NUMBER_LABELS[editor.lineNumbers]}`,
+                    run: () => saveSettings({ editor: { lineNumbers: nextLineNumbers } }),
+                },
+                {
                     id: 'sidebar-side',
                     label: `Move the sidebar to the ${otherSide}`,
                     keywords: 'sidebar position left right',
@@ -315,8 +393,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 {
                     id: 'settings-file',
                     label: 'Open the settings file',
-                    keywords: 'settings.json preferences configuration editor vim',
+                    keywords: 'settings.json preferences configuration editor',
                     run: editSettings,
+                },
+                {
+                    id: 'settings-file-terminal',
+                    label: 'Open the settings file in a terminal editor',
+                    keywords: 'settings.json preferences configuration vim nvim editor.command',
+                    run: editSettingsInTerminal,
                 },
                 {
                     id: 'settings-file-app',
@@ -379,15 +463,22 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             query,
         );
     } else {
-        const target: FontTarget = mode === 'terminal-fonts' ? 'terminal' : 'ui';
+        const target: FontTarget = mode === 'terminal-fonts' ? 'terminal' : mode === 'ui-fonts' ? 'ui' : 'editor';
         const current =
             target === 'terminal'
                 ? (committedFont.current?.terminal.family ?? font.family)
-                : (committedFont.current?.ui.family ?? uiFont.family);
+                : target === 'ui'
+                  ? (committedFont.current?.ui.family ?? uiFont.family)
+                  : editor.fontFamily;
         items = filterItems<Item>(
             families.map((family) => ({
                 id: `family:${family}`,
-                label: target === 'terminal' ? family : uiFontLabel(family),
+                label:
+                    target === 'terminal'
+                        ? family
+                        : target === 'ui'
+                          ? uiFontLabel(family)
+                          : family || `Same as the terminal (${font.family})`,
                 family,
                 hint: !sameFamily(family, current)
                     ? undefined

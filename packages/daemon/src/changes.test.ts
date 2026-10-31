@@ -64,6 +64,8 @@ describe('SessionChangesReader', () => {
 
         const changes = await reader().list(join(root, 'sub'));
         expect(changes.root).toBe(root);
+        expect(changes.prefix).toBe('sub/');
+        expect((await reader().list(root)).prefix).toBe('');
         expect(changes.files.map((file) => `${file.state} ${file.path}`)).toEqual([
             'untracked blob.bin',
             'untracked fresh.txt',
