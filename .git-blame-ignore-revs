@@ -1,4 +1,4 @@
 # style: format the code with Biome and apply its safe fixes
 bc0145283146fadd25a5ace8b5f19eb834776644
-# style: wrap lines at 120 columns
-fc99c508032de9688416ece23a81b0d017a2a734
+# feat: edit the session's files in an editor pane (#23), squashed with the 120-column reformat
+b2b38461845f44e60f6e90c91438c52a81e353a2
