@@ -3,6 +3,29 @@
 Voltran follows [Semantic Versioning](https://semver.org/). The README describes each feature in
 full.
 
+## 1.2.0 (2026-10-31)
+
+- An **Editor** pane browses the session's folder as a file tree and edits its files, with tabs,
+  syntax highlighting and VS Code's editing keys: ⌘S saves, ⌘P opens a file by name, ⌘B hides the
+  tree. Press ⌃⌥O to open one next to the focused pane, such as next to Claude Code. The tree shows
+  each file's git state and creates, renames and moves files to the Trash. An agent's edit shows up
+  in the open file as it lands, and a save never overwrites an edit it has not seen.
+- The `editor` section of the settings file sets the editor's font, indentation, cursor, rulers,
+  word wrap, minimap, trimming on save and auto save; ⌘K → **Open the settings file** now opens it in
+  the editor.
+- A Claude Code pane can show its conversation as messages instead of its terminal (⌃⌥C, or the
+  button in its title bar), with replies as formatted text, tool calls with their results, and edits
+  as diffs. Its composer takes pasted or dropped images, and `/` lists Claude Code's commands.
+- A **Preview** pane shows a page served on this computer, such as `localhost:5173`, next to the
+  terminals: type the address where a command goes, or use `voltran new --pane "preview
+  localhost:5173"`.
+- The changes view (⌃⌥G) shows each file in a side-by-side diff with syntax highlighting, and can stay
+  open as a **Changes** pane next to an agent.
+- Voltran says, in a line at the bottom of the sidebar, when a newer version is out. It asks npm once
+  a day, sends nothing about you, and never installs anything; `"updates": { "check": false }` in the
+  settings turns it off. `voltran doctor` reports it too.
+- Updated markdown-it and DOMPurify for security advisories, and xterm.js to a newer build.
+
 ## 1.1.0 (2026-10-24)
 
 - Click the Voltran logo, or ⌘K → **About Voltran**, for the version, the author and links to the
