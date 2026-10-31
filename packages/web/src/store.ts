@@ -228,6 +228,7 @@ function shownSettings(state: UiState): Settings {
         sidebar: { position: state.sidebarPosition },
         editor: state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor,
         git: state.settingsFile?.settings.git ?? DEFAULT_SETTINGS.git,
+        updates: state.settingsFile?.settings.updates ?? DEFAULT_SETTINGS.updates,
     };
 }
 

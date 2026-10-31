@@ -4,7 +4,15 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describeAdapters, resolveShellPath } from './adapters.ts';
 import { startDaemonProcess } from './cli.ts';
-import { ensureHome, loadConfig, privateFile, readOrCreateToken, voltranVersion, type Config } from './config.ts';
+import {
+    REPO_ROOT,
+    ensureHome,
+    loadConfig,
+    privateFile,
+    readOrCreateToken,
+    voltranVersion,
+    type Config,
+} from './config.ts';
 import { diagnose } from './doctor.ts';
 import { Hub } from './hub.ts';
 import { Guard } from './security.ts';
@@ -12,6 +20,7 @@ import type { GitRunner } from './git.ts';
 import { createVoltranServer, openInEditor } from './server.ts';
 import { SettingsFile } from './settings.ts';
 import { Store } from './store.ts';
+import { UpdateChecker, skipReason, type Fetch } from './updates.ts';
 import { VersionWatch } from './version.ts';
 
 export interface DaemonOptions {
@@ -21,6 +30,7 @@ export interface DaemonOptions {
     onShutdown?: (restart: boolean) => void;
     openFile?: (path: string) => void;
     gitRunner?: GitRunner;
+    fetch?: Fetch;
 }
 
 export interface Daemon {
@@ -70,8 +80,26 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
         pullRequests: () => settings.state().settings.git.pullRequests,
     });
     const guard = new Guard(config, token);
-    const settings = new SettingsFile(config.settingsFile, (state) => hub.publish({ type: 'settings', ...state }));
+    const settings = new SettingsFile(config.settingsFile, (state) => {
+        hub.publish({ type: 'settings', ...state });
+        updates.settingsChanged();
+    });
+    const updates = new UpdateChecker({
+        cacheFile: join(config.home, 'update.json'),
+        current: voltranVersion(),
+        skip: () =>
+            skipReason({
+                dev: config.dev,
+                repoRoot: REPO_ROOT,
+                env: options.baseEnv,
+                setting: settings.state().settings.updates.check,
+            }),
+        onChange: () => hub.setUpdate(updates.notice()),
+        fetch: options.fetch,
+    });
     settings.watch();
+    hub.setUpdate(updates.notice());
+    updates.start();
 
     // Remembers how many windows were open so the next `voltran up` can wait for them to reconnect
     // instead of opening another one.
@@ -90,6 +118,7 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
             // only a hint for the next start
         }
         settings.close();
+        updates.stop();
         try {
             await hub.shutdown();
         } finally {
@@ -126,6 +155,8 @@ export function buildDaemon(config: Config, options: DaemonOptions): Daemon {
                 shell: options.shell,
                 path: options.path,
                 daemon: { pid: process.pid, version: voltranVersion() },
+                env: options.baseEnv,
+                fetch: options.fetch,
             }),
     });
     return { config, token, hub, server, shutdown };

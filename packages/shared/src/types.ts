@@ -291,6 +291,13 @@ export interface AppState {
     git: Record<string, GitStatus>;
     adapters: AdapterInfo[];
     usage: Usage | null;
+    update: UpdateNotice | null;
+}
+
+// A newer release of Voltran on npm than the one running, which the daemon checks for once a day.
+export interface UpdateNotice {
+    current: string;
+    latest: string;
 }
 
 export interface PaneSpec {

@@ -64,6 +64,7 @@ const app = {
     git: {},
     adapters: [],
     usage: null,
+    update: null,
 } as AppState;
 
 describe('destinations', () => {

@@ -44,6 +44,7 @@ export interface Settings {
         autoSaveDelay: number;
     };
     git: { pullRequests: boolean };
+    updates: { check: boolean };
 }
 
 export interface SettingsPatch {
@@ -54,6 +55,7 @@ export interface SettingsPatch {
     sidebar?: Partial<Settings['sidebar']>;
     editor?: Partial<Settings['editor']>;
     git?: Partial<Settings['git']>;
+    updates?: Partial<Settings['updates']>;
 }
 
 export interface SettingsState {
@@ -139,6 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
         autoSaveDelay: 1000,
     },
     git: { pullRequests: true },
+    updates: { check: true },
 };
 
 type Check = (value: unknown) => string | null;
@@ -241,6 +244,7 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['editor', 'autoSave'], check: oneOf(AUTO_SAVES) },
     { path: ['editor', 'autoSaveDelay'], check: wholeNumber(MIN_AUTO_SAVE_DELAY, MAX_AUTO_SAVE_DELAY) },
     { path: ['git', 'pullRequests'], check: flag },
+    { path: ['updates', 'check'], check: flag },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -303,6 +307,7 @@ export function applySettingsPatch(settings: Settings, patch: SettingsPatch): Se
         sidebar: { ...settings.sidebar, ...patch.sidebar },
         editor: { ...settings.editor, ...patch.editor },
         git: { ...settings.git, ...patch.git },
+        updates: { ...settings.updates, ...patch.updates },
     };
 }
 

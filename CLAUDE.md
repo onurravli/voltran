@@ -174,6 +174,14 @@ hard-linked or non-regular notes file reads as empty and never has its mode chan
 one copy of what agents are told. A daemon start restores permissions and deletes the notes of panes
 that no longer exist.
 
+**Update notice.** `daemon/src/updates.ts` (`UpdateChecker`) is the daemon's only request of its own to
+the internet: `fetchLatest` asks `registry.npmjs.org/voltran/latest` with no headers of Voltran's own, at
+start and then when the answer in `~/.voltran/update.json` is a day old, and any failure reads as no
+answer, retried only the next day. `skipReason` turns it off for `updates.check: false`,
+`VOLTRAN_NO_UPDATE_CHECK`, a dev daemon and a git checkout (so it never runs in this repository).
+`AppState.update` is set only for a newer version; the sidebar footer shows it, dismissed per version in
+`localStorage`, and `voltran doctor` asks the registry itself (`updatesCheck`).
+
 **Diagnostics.** `daemon/src/doctor.ts` (`diagnose`) runs the checks behind `voltran doctor` and
 `GET /api/diagnostics`; `shared/src/diagnostics.ts` formats them and builds the pre-filled bug report
 URL, whose query keys are the field ids in `.github/ISSUE_TEMPLATE/bug_report.yml`. The CLI runs

@@ -65,7 +65,7 @@ is already open, `voltran up` does not open another one.
 | `voltran restart` | Restart the daemon so it loads new code, then reconnect the open windows. Takes the same options as `up` |
 | `voltran autostart [on\|off]` | Start the daemon when you log in (a LaunchAgent on macOS, a systemd user service on Linux); with no argument, say whether it does |
 | `voltran signout` | Sign out every window and replace the token. `voltran up` signs this computer in again |
-| `voltran doctor [--report]` | Check the installation: Node, terminals, the daemon, the agents it finds, git and the browser. `--report` opens a bug report with the results filled in |
+| `voltran doctor [--report]` | Check the installation: Node, terminals, the daemon, the agents it finds, git, the browser and whether a newer Voltran is out. `--report` opens a bug report with the results filled in |
 | `voltran version` | Print the installed version (`--version` and `-v` work too) |
 
 ### In the Dock
@@ -383,7 +383,8 @@ the default app**, it opens in your system's editor instead. The file takes comm
         "autoSave": "off",             // "off", "afterDelay" or "onFocusChange"
         "autoSaveDelay": 1000          // milliseconds, for "afterDelay"
     },
-    "git": { "pullRequests": true }    // look up each branch's pull request with gh
+    "git": { "pullRequests": true },   // look up each branch's pull request with gh
+    "updates": { "check": true }       // say when a newer Voltran is on npm
 }
 ```
 
@@ -495,6 +496,15 @@ A local server that can start processes is reachable from every web page you ope
 - keeps `~/.voltran` at mode 0700 and its files at 0600, and refuses a home another user owns;
 - drops control characters from session titles and status lines taken from what agents report, so
   `voltran status` never writes an agent's escape sequence to your terminal.
+
+The daemon makes one request of its own to the internet: to tell you about a new version, it asks
+`https://registry.npmjs.org/voltran/latest` for the latest version number when it starts and then once
+a day, and keeps the answer in `~/.voltran/update.json`. The request carries no id, usage data or
+headers of Voltran's own; when it fails, nothing is shown and nothing is retried until the next day.
+A newer version shows as a line at the bottom of the sidebar (with the changelog and `npm i -g
+voltran`, which you run yourself: Voltran never installs anything, since a restart ends the agents'
+sessions). Turn it off with `"updates": { "check": false }` in the settings file or
+`VOLTRAN_NO_UPDATE_CHECK=1`; a development daemon and a git checkout never check.
 
 Child processes do not inherit the environment of a Claude session that launched the daemon
 (`CLAUDECODE`, messaging sockets and tokens) or the identity variables of the terminal that launched

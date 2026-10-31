@@ -2,12 +2,14 @@ import { execFile } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { arch, homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import type { CheckStatus, DiagnosticCheck, Diagnostics } from '@voltran/shared';
+import { parse } from 'jsonc-parser';
+import { parseSettings, type CheckStatus, type DiagnosticCheck, type Diagnostics } from '@voltran/shared';
 import { findOnPath } from './adapters.ts';
 import { REPO_ROOT, voltranVersion, type Config } from './config.ts';
 import { SYSTEMD_UNIT_FILE, findChrome } from './linux.ts';
 import { CHROME, LAUNCH_AGENT_FILE, installedChromeApp } from './macos.ts';
 import { withoutControls } from './status.ts';
+import { fetchLatest, isNewer, skipReason, type Fetch } from './updates.ts';
 
 export const MIN_NODE = '22.18.0';
 
@@ -28,6 +30,8 @@ export interface DiagnoseOptions {
     shell: string;
     path: string;
     daemon: DaemonInfo | null;
+    env?: NodeJS.ProcessEnv;
+    fetch?: Fetch;
 }
 
 function check(name: string, status: CheckStatus, detail: string): DiagnosticCheck {
@@ -188,6 +192,36 @@ function browserCheck(config: Config): DiagnosticCheck {
         : check('Window', 'off', 'Chrome not found; opens in the default browser');
 }
 
+function updateSetting(file: string): boolean {
+    try {
+        return parseSettings(parse(readFileSync(file, 'utf8'), [], { allowTrailingComma: true })).settings.updates
+            .check;
+    } catch {
+        return true;
+    }
+}
+
+// The same one request the daemon makes, asked now, so the report says what is true today.
+export async function updatesCheck(
+    config: Config,
+    version: string,
+    env: NodeJS.ProcessEnv,
+    fetchImpl?: Fetch,
+    repoRoot = REPO_ROOT,
+): Promise<DiagnosticCheck> {
+    const reason = skipReason({ dev: config.dev, repoRoot, env, setting: updateSetting(config.settingsFile) });
+    if (reason) {
+        return check('Updates', 'off', reason);
+    }
+    const latest = await fetchLatest(fetchImpl);
+    if (!latest) {
+        return check('Updates', 'off', 'offline: registry.npmjs.org did not answer');
+    }
+    return isNewer(latest, version)
+        ? check('Updates', 'warn', `${latest} is available; run \`npm i -g voltran\``)
+        : check('Updates', 'ok', `up to date (the latest is ${latest})`);
+}
+
 function autostartCheck(): DiagnosticCheck {
     const file =
         process.platform === 'darwin' ? LAUNCH_AGENT_FILE : process.platform === 'linux' ? SYSTEMD_UNIT_FILE : null;
@@ -203,6 +237,7 @@ export async function diagnose(options: DiagnoseOptions): Promise<Diagnostics> {
     const platform = await platformName();
     const checks = await Promise.all([
         voltranCheck(version, path),
+        updatesCheck(config, version, options.env ?? process.env, options.fetch),
         check(
             'Node.js',
             versionAtLeast(node, MIN_NODE) ? 'ok' : 'fail',

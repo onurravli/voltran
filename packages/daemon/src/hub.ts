@@ -41,6 +41,7 @@ import {
     type UpdateProjectBody,
     type UpdateSessionBody,
     type UpdateWorkspaceBody,
+    type UpdateNotice,
     type Usage,
     type Workspace,
     type ProjectGit,
@@ -181,6 +182,7 @@ export class Hub {
     private readonly namer = new SessionNamer();
     private readonly namingTimers = new Set<ReturnType<typeof setTimeout>>();
     private usage: Usage | null = null;
+    private update: UpdateNotice | null = null;
 
     constructor(options: HubOptions) {
         this.store = options.store;
@@ -246,7 +248,15 @@ export class Hub {
             git: this.git.snapshot(),
             adapters: this.adapters,
             usage: this.usage,
+            update: this.update,
         };
+    }
+
+    setUpdate(update: UpdateNotice | null): void {
+        if (update?.latest !== this.update?.latest) {
+            this.update = update;
+            this.scheduleBroadcast();
+        }
     }
 
     openWindows(): number {

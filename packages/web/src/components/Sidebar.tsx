@@ -26,6 +26,7 @@ import {
     BellIcon,
     BranchIcon,
     ChevronIcon,
+    CloseIcon,
     FeedbackIcon,
     FolderIcon,
     KeyboardIcon,
@@ -622,6 +623,66 @@ function UsageMeters() {
     );
 }
 
+const UPDATE_DISMISSED_KEY = 'voltran.update.dismissed';
+const CHANGELOG = 'https://github.com/onurravli/voltran/blob/main/CHANGELOG.md';
+const INSTALL_COMMAND = 'npm i -g voltran';
+
+function readDismissed(): string | null {
+    try {
+        return localStorage.getItem(UPDATE_DISMISSED_KEY);
+    } catch {
+        return null;
+    }
+}
+
+// A newer release, said once in the footer: the window installs nothing, since a restart ends the
+// agents, and a version the user dismissed stays dismissed until the next one.
+function UpdateLine() {
+    const update = useUi((state) => state.app?.update ?? null);
+    const showToast = useUi((state) => state.showToast);
+    const [dismissed, setDismissed] = useState(readDismissed);
+
+    if (!update || dismissed === update.latest) {
+        return null;
+    }
+    const dismiss = (): void => {
+        try {
+            localStorage.setItem(UPDATE_DISMISSED_KEY, update.latest);
+        } catch {
+            // It shows again in the next window.
+        }
+        setDismissed(update.latest);
+    };
+    const copy = (): void => {
+        navigator.clipboard
+            .writeText(INSTALL_COMMAND)
+            .then(() => showToast(`Copied \`${INSTALL_COMMAND}\`; run \`voltran restart\` after it`))
+            .catch(reportError);
+    };
+    return (
+        <div className="update-line" role="status">
+            <span className="update-line__text" title={`You run ${update.current}`}>
+                Voltran {update.latest} is available
+            </span>
+            <a className="update-line__link" href={CHANGELOG} target="_blank" rel="noreferrer noopener">
+                Changelog
+            </a>
+            <button type="button" className="update-line__command" title="Copy the install command" onClick={copy}>
+                {INSTALL_COMMAND}
+            </button>
+            <button
+                type="button"
+                className="icon-button update-line__dismiss"
+                aria-label={`Dismiss ${update.latest}`}
+                title="Dismiss until the next version"
+                onClick={dismiss}
+            >
+                <CloseIcon size={12} />
+            </button>
+        </div>
+    );
+}
+
 function Footer() {
     const connection = useUi((state) => state.connection);
     const showArchived = useUi((state) => state.showArchived);
@@ -634,6 +695,7 @@ function Footer() {
     return (
         <footer className="sidebar__footer">
             <UsageMeters />
+            <UpdateLine />
             {connection === 'offline' ? (
                 <span className="connection connection--offline">Reconnecting to the daemon…</span>
             ) : null}

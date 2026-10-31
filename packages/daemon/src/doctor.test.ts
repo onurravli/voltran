@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from './config.ts';
-import { daemonCheck, homeCheck, redactHome, versionAtLeast } from './doctor.ts';
+import { daemonCheck, homeCheck, redactHome, updatesCheck, versionAtLeast } from './doctor.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -73,5 +73,54 @@ describe('redactHome', () => {
         expect(redactHome('/Users/me/.voltran and /Users/me: done', '/Users/me')).toBe('~/.voltran and ~: done');
         expect(redactHome('/Users/meg/code', '/Users/me')).toBe('/Users/meg/code');
         expect(redactHome('/Users/meg/code', '/')).toBe('/Users/meg/code');
+    });
+});
+
+describe('updatesCheck', () => {
+    const installed = (): { config: ReturnType<typeof loadConfig>; root: string } => {
+        const root = mkdtempSync(join(tmpdir(), 'voltran-doctor-updates-'));
+        mkdirSync(join(root, 'home'));
+        return { config: loadConfig({ VOLTRAN_HOME: join(root, 'home') }), root };
+    };
+    const registry = (version: string | null) => async () =>
+        version === null ? Promise.reject(new Error('offline')) : { ok: true, json: async () => ({ version }) };
+
+    it('says whether a newer version is out, or that the registry did not answer', async () => {
+        const { config, root } = installed();
+        expect(await updatesCheck(config, '1.0.0', {}, registry('1.1.0'), root)).toEqual({
+            name: 'Updates',
+            status: 'warn',
+            detail: '1.1.0 is available; run `npm i -g voltran`',
+        });
+        expect(await updatesCheck(config, '1.1.0', {}, registry('1.1.0'), root)).toMatchObject({ status: 'ok' });
+        expect(await updatesCheck(config, '1.1.0', {}, registry(null), root)).toMatchObject({
+            status: 'off',
+            detail: 'offline: registry.npmjs.org did not answer',
+        });
+        rmSync(root, { recursive: true, force: true });
+    });
+
+    it('asks nothing when the check is off', async () => {
+        const { config, root } = installed();
+        let asked = false;
+        const fetchImpl = async () => {
+            asked = true;
+            return { ok: true, json: async () => ({ version: '9.0.0' }) };
+        };
+        writeFileSync(config.settingsFile, '{ "updates": { "check": false } }\n');
+        expect(await updatesCheck(config, '1.0.0', {}, fetchImpl, root)).toMatchObject({
+            status: 'off',
+            detail: /settings/,
+        });
+        writeFileSync(config.settingsFile, '{}\n');
+        expect(await updatesCheck(config, '1.0.0', { VOLTRAN_NO_UPDATE_CHECK: '1' }, fetchImpl, root)).toMatchObject({
+            status: 'off',
+        });
+        mkdirSync(join(root, '.git'));
+        expect(await updatesCheck(config, '1.0.0', {}, fetchImpl, root)).toMatchObject({
+            detail: 'not checked in a git checkout',
+        });
+        expect(asked).toBe(false);
+        rmSync(root, { recursive: true, force: true });
     });
 });

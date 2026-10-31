@@ -50,6 +50,7 @@ describe('parseSettings', () => {
                 autoSaveDelay: 500,
             },
             git: { pullRequests: false },
+            updates: { check: false },
         };
         expect(parseSettings(raw)).toEqual({ settings: raw, problems: [] });
     });

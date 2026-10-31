@@ -144,6 +144,7 @@ describe('SettingsFile', () => {
                 autoSaveDelay: 500,
             },
             git: { pullRequests: false },
+            updates: { check: false },
         };
         expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({
             settings,
