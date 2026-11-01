@@ -43,6 +43,40 @@ describe('sidebar menus', () => {
         await waitForText(page.locator('.pane').nth(1), 'e2e$');
     });
 
+    it('deletes several sessions of a project picked with ⌘-click and Shift-click', async () => {
+        const { project, session } = await voltran.seed('bulk');
+        const extra: Session[] = [];
+        for (const title of ['bulk two', 'bulk three', 'bulk four']) {
+            extra.push(
+                await voltran.api<Session>('POST', '/api/sessions', {
+                    projectId: project.id,
+                    title,
+                    panes: [{ adapter: 'shell', title }],
+                }),
+            );
+        }
+        const page = await voltran.open(context, session.id);
+        await waitForText(paneBox(page, 'bulk 1'), 'e2e$');
+        const row = (title: string) => page.locator('.session-row', { hasText: title });
+
+        await row('bulk two').click({ modifiers: ['ControlOrMeta'] });
+        await until(async () => (await page.locator('.session-row.is-picked').count()) === 1, 'only the clicked row');
+        await row('bulk session').click({ modifiers: ['ControlOrMeta'] });
+        await row('bulk three').click({ modifiers: ['Shift'] });
+        await until(async () => (await page.locator('.session-row.is-picked').count()) === 3, 'three picked rows');
+
+        await row('bulk two').click({ button: 'right' });
+        await page.getByRole('menuitem', { name: 'Delete 3 sessions…' }).click();
+        await page.getByText('bulk session (open), bulk two and bulk three.', { exact: false }).waitFor();
+        await page.getByRole('button', { name: 'Delete 3 sessions' }).click();
+        await until(async () => {
+            const ids = new Set((await voltran.state()).sessions.map((entry) => entry.id));
+            return !ids.has(session.id) && !ids.has(extra[0].id) && !ids.has(extra[1].id) && ids.has(extra[2].id);
+        }, 'the three picked sessions to go');
+        await row('bulk four').waitFor();
+        expect(await page.locator('.session-row.is-picked').count()).toBe(0);
+    });
+
     it('archives a session, stopping its processes, and restores it with its scrollback', async () => {
         const { session } = await voltran.seed('archive');
         const page = await voltran.open(context, session.id);

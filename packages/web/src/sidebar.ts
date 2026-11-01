@@ -36,3 +36,62 @@ export function stepBefore(ids: readonly string[], id: string, step: -1 | 1): st
     }
     return step === -1 ? ids[to] : (ids[to + 1] ?? null);
 }
+
+// Rows picked together within one scope (a project), kept in the order of that scope's rows. A Shift
+// range replaces the previous range from the same anchor but keeps the rows ⌘-clicked before it (`kept`).
+export interface RowSelection {
+    scope: string;
+    ids: string[];
+    anchor: string;
+    kept: string[];
+}
+
+export type SelectionMode = 'toggle' | 'range';
+
+// ⌘-click toggles a row on a Mac, where Control-click is a right-click; elsewhere Ctrl-click does.
+export function selectionMode(
+    event: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean },
+    mac: boolean,
+): SelectionMode | null {
+    if (event.altKey) {
+        return null;
+    }
+    if (event.shiftKey && !event.metaKey && !event.ctrlKey) {
+        return 'range';
+    }
+    const primary = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+    return primary && !event.shiftKey ? 'toggle' : null;
+}
+
+// A selection starts with the clicked row alone, so the open row is never picked without being
+// clicked; only a Shift range with nothing picked yet starts at the open row.
+export function extendSelection(
+    current: RowSelection | null,
+    scope: string,
+    rows: readonly string[],
+    id: string,
+    mode: SelectionMode,
+    open: string | null,
+): RowSelection | null {
+    if (!rows.includes(id)) {
+        return current;
+    }
+    const inRows = (ids: readonly string[]) => rows.filter((row) => ids.includes(row));
+    const start: RowSelection =
+        current?.scope === scope
+            ? { ...current, ids: inRows(current.ids), kept: inRows(current.kept) }
+            : {
+                  scope,
+                  ids: [],
+                  anchor: mode === 'range' && open !== null && rows.includes(open) ? open : id,
+                  kept: [],
+              };
+    if (mode === 'toggle') {
+        const ids = inRows(start.ids.includes(id) ? start.ids.filter((row) => row !== id) : [...start.ids, id]);
+        return ids.length === 0 ? null : { scope, ids, anchor: id, kept: ids };
+    }
+    const anchor = rows.includes(start.anchor) ? start.anchor : id;
+    const [from, to] = [rows.indexOf(anchor), rows.indexOf(id)].sort((a, b) => a - b);
+    const range = rows.slice(from, to + 1);
+    return { scope, ids: inRows([...start.kept, ...range]), anchor, kept: start.kept };
+}

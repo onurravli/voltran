@@ -15,7 +15,7 @@ import { DEFAULT_SETTINGS, SIDEBAR_POSITIONS, applySettingsPatch, needsAttention
 import { api } from './api.ts';
 import { DEFAULT_FONT, DEFAULT_UI_FONT, parseFont, parseUiFont, type TerminalFont, type UiFont } from './fonts.ts';
 import { markNotesSeen } from './notes.ts';
-import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from './sidebar.ts';
+import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, type RowSelection } from './sidebar.ts';
 import { parseThemeChoice, parseThemeId, schemeOf, themeById, type Appearance, type Scheme } from './themes.ts';
 
 export type Connection = 'connecting' | 'online' | 'offline' | 'unauthenticated';
@@ -68,6 +68,7 @@ export interface UiState {
     draggingPaneId: string | null;
     draggingSessionId: string | null;
     reordering: Reordering | null;
+    sessionSelection: RowSelection | null;
     findPaneId: string | null;
     findToken: number;
     findStep: { direction: 'next' | 'previous'; token: number } | null;
@@ -106,6 +107,7 @@ export interface UiState {
     setDraggingPane: (id: string | null) => void;
     setDraggingSession: (id: string | null) => void;
     setReordering: (reordering: Reordering | null) => void;
+    setSessionSelection: (selection: RowSelection | null) => void;
     openFind: (paneId: string) => void;
     closeFind: () => void;
     stepFind: (direction: 'next' | 'previous') => void;
@@ -133,6 +135,21 @@ export interface UiState {
 }
 
 const STORAGE_KEY = 'voltran.ui';
+
+// Sessions that were deleted, or archived out of sight, leave the selection.
+function pickedSessions(selection: RowSelection | null, app: AppState, showArchived: boolean): RowSelection | null {
+    if (!selection) {
+        return null;
+    }
+    const shown = new Set(
+        app.sessions.filter((session) => showArchived || !session.archived).map((session) => session.id),
+    );
+    const ids = selection.ids.filter((id) => shown.has(id));
+    if (ids.length === selection.ids.length) {
+        return selection;
+    }
+    return ids.length === 0 ? null : { ...selection, ids, kept: selection.kept.filter((id) => shown.has(id)) };
+}
 
 interface Persisted {
     selectedSessionId: string | null;
@@ -252,6 +269,7 @@ export const useUi = create<UiState>((set, get) => ({
     draggingPaneId: null,
     draggingSessionId: null,
     reordering: null,
+    sessionSelection: null,
     findPaneId: null,
     findToken: 0,
     findStep: null,
@@ -277,6 +295,7 @@ export const useUi = create<UiState>((set, get) => ({
                 : open;
         const next = {
             app,
+            sessionSelection: pickedSessions(get().sessionSelection, app, get().showArchived),
             notesOpen: live(notesOpen),
             conversationOpen: live(conversationOpen),
             selectedWorkspaceId: workspaceExists ? selectedWorkspaceId : null,
@@ -347,6 +366,7 @@ export const useUi = create<UiState>((set, get) => ({
     setDraggingPane: (draggingPaneId) => set({ draggingPaneId }),
     setDraggingSession: (draggingSessionId) => set({ draggingSessionId }),
     setReordering: (reordering) => set({ reordering }),
+    setSessionSelection: (sessionSelection) => set({ sessionSelection }),
     openFind: (paneId) => set({ findPaneId: paneId, findToken: get().findToken + 1 }),
     closeFind: () => set({ findPaneId: null }),
     stepFind: (direction) => set({ findStep: { direction, token: (get().findStep?.token ?? 0) + 1 } }),

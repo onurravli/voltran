@@ -141,6 +141,12 @@ stopping it, moving it to another session of its project, adding it to a workspa
 it. Right-click empty space for a new session, project or workspace. The ⋯ menus in the sidebar and
 the session and workspace headers offer the same actions.
 
+⌘-click sessions of one project (Ctrl-click off a Mac) to pick several, or Shift-click to pick the
+ones in between (from the open session, when nothing is picked yet). Right-click one of them to archive, restore or
+delete them all at once, or press ⌫ to delete them; Esc or a plain click clears the pick. Sessions
+whose worktrees have uncommitted changes are asked about together: keep those worktrees or delete
+them with the changes. The confirmation names every session it deletes and marks the open one.
+
 ### Workspaces
 
 The **+** next to **Workspaces** at the top of the sidebar starts one; double-click it to rename it.

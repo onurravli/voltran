@@ -7,7 +7,7 @@ import {
     type Workspace,
 } from '@voltran/shared';
 import { api } from './api.ts';
-import { shortPath } from './labels.ts';
+import { shortPath, titleList } from './labels.ts';
 import { revealPane } from './notify.ts';
 import { closePane, orderedSessions } from './shortcuts.ts';
 import { stepBefore } from './sidebar.ts';
@@ -162,6 +162,107 @@ export function deleteSession(session: Session): void {
         action: 'Delete session',
         onConfirm: () => api.deleteSession(session.id),
     });
+}
+
+function sessionCount(count: number): string {
+    return count === 1 ? '1 session' : `${count} sessions`;
+}
+
+// Each session is its own request, so one that fails is reported and the others still go.
+async function eachSession(
+    sessions: Session[],
+    act: (session: Session) => Promise<unknown>,
+    done: (count: number) => string,
+): Promise<void> {
+    const ui = useUi.getState();
+    ui.setSessionSelection(null);
+    const results = await Promise.allSettled(sessions.map(act));
+    const failed = results.filter((result) => result.status === 'rejected');
+    failed.forEach((result) => reportError(result.reason));
+    const succeeded = results.length - failed.length;
+    if (succeeded > 0 && failed.length === 0) {
+        ui.showToast(done(succeeded));
+    }
+}
+
+export function deleteSessions(sessions: Session[]): void {
+    const { app, openDialog, selectedSessionId } = useUi.getState();
+    const names = `${titleList(sessions.map((session) => ({ title: session.title, open: session.id === selectedSessionId })))}.`;
+    const dirty = new Set(
+        sessions
+            .filter((session) => session.worktree && (app?.git[session.cwd]?.changed ?? 0) > 0)
+            .map((session) => session.id),
+    );
+    const worktrees = sessions.filter((session) => session.worktree).length;
+    const remove = (choice?: 'keep' | 'remove') => () =>
+        eachSession(
+            sessions,
+            (session) => api.deleteSession(session.id, dirty.has(session.id) ? choice : undefined),
+            (count) => `Deleted ${sessionCount(count)}`,
+        );
+    const stops = `Every process in ${sessions.length === 1 ? 'it' : 'them'} stops and ${sessions.length === 1 ? 'its' : 'their'} scrollback is deleted. Agent conversations stay in their own history.`;
+    const title = `Delete ${sessionCount(sessions.length)}?`;
+    if (dirty.size > 0) {
+        openDialog({
+            kind: 'confirm',
+            title,
+            body: `${names} ${stops} ${dirty.size === 1 ? 'One of them works in a worktree' : `${dirty.size} of them work in worktrees`} with uncommitted changes. Keep ${dirty.size === 1 ? 'that worktree' : 'those worktrees'} to come back later, or delete them along with the changes. Clean worktrees are removed, and every branch stays.`,
+            action: 'Delete the changes too',
+            onConfirm: remove('remove'),
+            alternative: {
+                action: dirty.size === 1 ? 'Keep the worktree' : 'Keep the worktrees',
+                onConfirm: remove('keep'),
+            },
+        });
+        return;
+    }
+    openDialog({
+        kind: 'confirm',
+        title,
+        body: `${names} ${stops}${worktrees > 0 ? ' Their worktrees are removed; every branch stays.' : ''}`,
+        action: `Delete ${sessionCount(sessions.length)}`,
+        onConfirm: remove(),
+    });
+}
+
+export function selectionMenu(sessions: Session[]): MenuItem[] {
+    const open = sessions.filter((session) => !session.archived);
+    const archived = sessions.filter((session) => session.archived);
+    return [
+        ...(open.length > 0
+            ? [
+                  {
+                      label: `Archive ${sessionCount(open.length)}`,
+                      note: 'stops their processes',
+                      onSelect: () =>
+                          void eachSession(
+                              open,
+                              (session) => api.updateSession(session.id, { archived: true }),
+                              (count) => `Archived ${sessionCount(count)}`,
+                          ),
+                  },
+              ]
+            : []),
+        ...(archived.length > 0
+            ? [
+                  {
+                      label: `Restore ${sessionCount(archived.length)}`,
+                      onSelect: () =>
+                          void eachSession(
+                              archived,
+                              (session) => api.updateSession(session.id, { archived: false }),
+                              (count) => `Restored ${sessionCount(count)}`,
+                          ),
+                  },
+              ]
+            : []),
+        {
+            label: `Delete ${sessionCount(sessions.length)}…`,
+            danger: true,
+            onSelect: () => deleteSessions(sessions),
+        },
+        { label: 'Clear selection', separated: true, onSelect: () => useUi.getState().setSessionSelection(null) },
+    ];
 }
 
 export function projectMenu(project: Project, rename: () => void): MenuItem[] {

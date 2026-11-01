@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type PointerEvent } from 'react';
+import {
+    useEffect,
+    useRef,
+    useState,
+    type DragEvent,
+    type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
+} from 'react';
 import type { PaneView, Project, Session, SubagentView, Workspace } from '@voltran/shared';
 import { aggregateStatus, needsAttention, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
@@ -12,11 +20,21 @@ import {
     draggedSidebarWidth,
     dropBefore,
     dropSide,
+    extendSelection,
+    selectionMode,
     type DropSide,
 } from '../sidebar.ts';
 import { gitLabels } from '../labels.ts';
-import { paneMenu, projectMenu, sessionMenu, sidebarMenu, workspaceMenu } from '../menus.ts';
-import { keys, orderedSessions, reportProblem, togglePalette } from '../shortcuts.ts';
+import {
+    deleteSessions,
+    paneMenu,
+    projectMenu,
+    selectionMenu,
+    sessionMenu,
+    sidebarMenu,
+    workspaceMenu,
+} from '../menus.ts';
+import { IS_MAC, keys, orderedSessions, reportProblem, togglePalette } from '../shortcuts.ts';
 import { attentionPanes, panesOf, reportError, useUi } from '../store.ts';
 import { isReset, resetCountdown, usageLevel, usageRows } from '../usage.ts';
 import { createWorkspace, draggedItem, dropIntoWorkspace, endDrag } from '../workspace-actions.ts';
@@ -135,8 +153,39 @@ function PaneList({ session, panes }: { session: Session; panes: PaneView[] }) {
     );
 }
 
+const PICK_CLICK = IS_MAC ? '⌘-click' : 'Ctrl-click';
+
+function pickedSessions(): Session[] {
+    const { app, sessionSelection } = useUi.getState();
+    const ids = new Set(sessionSelection?.ids ?? []);
+    return app?.sessions.filter((session) => ids.has(session.id)) ?? [];
+}
+
+// A right-click on one of several picked sessions acts on all of them.
+function pickedWith(session: Session): Session[] | null {
+    const picked = pickedSessions();
+    return picked.length > 1 && picked.some((entry) => entry.id === session.id) ? picked : null;
+}
+
+function pickSession(session: Session, event: MouseEvent): boolean {
+    const mode = selectionMode(event, IS_MAC);
+    const ui = useUi.getState();
+    if (!mode) {
+        ui.setSessionSelection(null);
+        return false;
+    }
+    const rows = orderedSessions(ui.app, ui.showArchived)
+        .filter((entry) => entry.projectId === session.projectId)
+        .map((entry) => entry.id);
+    ui.setSessionSelection(
+        extendSelection(ui.sessionSelection, session.projectId, rows, session.id, mode, ui.selectedSessionId),
+    );
+    return true;
+}
+
 function SessionRow({ session, panes }: { session: Session; panes: PaneView[] }) {
     const selected = useUi((state) => state.selectedSessionId === session.id);
+    const picked = useUi((state) => Boolean(state.sessionSelection?.ids.includes(session.id)));
     const selectSession = useUi((state) => state.selectSession);
     const expanded = useUi((state) => Boolean(state.expandedSessions[session.id]));
     const toggleSessionPanes = useUi((state) => state.toggleSessionPanes);
@@ -198,23 +247,44 @@ function SessionRow({ session, panes }: { session: Session; panes: PaneView[] })
         <li className="session-item">
             <ContextMenuArea
                 label={session.title}
-                items={() =>
-                    sessionMenu(
-                        session,
-                        {
-                            rename: () => setRenaming(true),
-                            editLink: () => useUi.getState().editSessionLink(session.id),
-                        },
-                        'sidebar',
-                    )
-                }
+                items={() => {
+                    const group = pickedWith(session);
+                    return group
+                        ? selectionMenu(group)
+                        : sessionMenu(
+                              session,
+                              {
+                                  rename: () => setRenaming(true),
+                                  editLink: () => useUi.getState().editSessionLink(session.id),
+                              },
+                              'sidebar',
+                          );
+                }}
             >
                 <button
                     type="button"
-                    className={`session-row${selected ? ' is-selected' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}${reorders && side ? ` is-drop-${side}` : ''}`}
-                    onClick={() => selectSession(session.id)}
-                    onDoubleClick={() => setRenaming(true)}
-                    title="Double-click to rename. Drag to reorder, or onto a workspace to show its panes there"
+                    className={`session-row${selected ? ' is-selected' : ''}${picked ? ' is-picked' : ''}${session.archived ? ' is-archived' : ''}${accepts ? ' is-drop-candidate' : ''}${accepts && over ? ' is-drop-target' : ''}${reorders && side ? ` is-drop-${side}` : ''}`}
+                    onClick={(event) => {
+                        if (!pickSession(session, event)) {
+                            selectSession(session.id);
+                        }
+                    }}
+                    onDoubleClick={(event) => {
+                        if (!selectionMode(event, IS_MAC)) {
+                            setRenaming(true);
+                        }
+                    }}
+                    onKeyDown={(event) => {
+                        const group = pickedWith(session);
+                        if (event.key === 'Escape' && useUi.getState().sessionSelection) {
+                            event.preventDefault();
+                            useUi.getState().setSessionSelection(null);
+                        } else if (group && (event.key === 'Delete' || event.key === 'Backspace')) {
+                            event.preventDefault();
+                            deleteSessions(group);
+                        }
+                    }}
+                    title={`Double-click to rename. Drag to reorder, or onto a workspace to show its panes there. ${PICK_CLICK} or Shift-click to select several`}
                     draggable
                     onDragStart={(event) => {
                         event.dataTransfer.setData(SESSION_DRAG_TYPE, session.id);

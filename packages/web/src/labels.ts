@@ -1,5 +1,12 @@
 import type { GitStatus, PullRequest } from '@voltran/shared';
 
+// "a, b and c (open)", with at most `max` names before "and N more".
+export function titleList(titles: { title: string; open: boolean }[], max = 5): string {
+    const names = titles.map((entry) => (entry.open ? `${entry.title} (open)` : entry.title));
+    const shown = names.length > max ? [...names.slice(0, max - 1), `${names.length - max + 1} more`] : names;
+    return shown.length <= 1 ? (shown[0] ?? '') : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
+}
+
 const ISSUE_KEY = /^[A-Z][A-Z0-9]+-\d+$/;
 
 export function linkLabel(link: string): string {

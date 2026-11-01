@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GitStatus } from '@voltran/shared';
-import { gitLabels, linkLabel, pullRequestLabel, shortPath } from './labels.ts';
+import { gitLabels, linkLabel, pullRequestLabel, shortPath, titleList } from './labels.ts';
 
 describe('linkLabel', () => {
     it('names GitHub pull requests and issues by repository and number', () => {
@@ -106,5 +106,20 @@ describe('pullRequestLabel', () => {
             mark: null,
         });
         expect(pullRequestLabel({ number: 9, url: 'https://x', state: 'open', checks: 'failing' }).mark).toBe('✗');
+    });
+});
+
+describe('titleList', () => {
+    const titles = (...names: string[]) => names.map((title) => ({ title, open: false }));
+
+    it('joins names and marks the open one', () => {
+        expect(titleList([{ title: 'a', open: true }])).toBe('a (open)');
+        expect(titleList([...titles('a'), { title: 'b', open: true }])).toBe('a and b (open)');
+        expect(titleList(titles('a', 'b', 'c'))).toBe('a, b and c');
+    });
+
+    it('counts the rest past the limit', () => {
+        expect(titleList(titles('a', 'b', 'c', 'd', 'e'), 5)).toBe('a, b, c, d and e');
+        expect(titleList(titles('a', 'b', 'c', 'd', 'e', 'f', 'g'), 5)).toBe('a, b, c, d and 3 more');
     });
 });
