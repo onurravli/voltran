@@ -1,7 +1,17 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { AdapterId, Layout, Pane, Project, Session, TitleSource, Workspace } from '@voltran/shared';
+import type {
+    AdapterId,
+    Layout,
+    Pane,
+    Project,
+    Session,
+    Task,
+    TaskStatus,
+    TitleSource,
+    Workspace,
+} from '@voltran/shared';
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const SCHEMA = `
 create table if not exists projects (
@@ -45,6 +55,23 @@ create table if not exists workspaces (
     created_at integer not null,
     updated_at integer not null
 );
+create table if not exists tasks (
+    id text primary key,
+    project_id text not null references projects(id) on delete cascade,
+    pane_id text not null,
+    title text not null,
+    prompt text not null,
+    parent_id text,
+    depends_on text not null default '[]',
+    handoff_from text,
+    status text not null,
+    result text,
+    created_by text,
+    position integer not null,
+    created_at integer not null,
+    started_at integer,
+    finished_at integer
+);
 `;
 
 type Row = Record<string, string | number | null>;
@@ -83,6 +110,37 @@ const toPane = (row: Row): Pane => ({
     ended: Number(row.ended) === 1,
     createdAt: Number(row.created_at),
 });
+
+const nullableString = (value: string | number | null | undefined): string | null =>
+    value === null || value === undefined ? null : String(value);
+
+const nullableNumber = (value: string | number | null | undefined): number | null =>
+    value === null || value === undefined ? null : Number(value);
+
+const toTask = (row: Row): Task => ({
+    id: String(row.id),
+    projectId: String(row.project_id),
+    paneId: String(row.pane_id),
+    title: String(row.title),
+    prompt: String(row.prompt),
+    parentId: nullableString(row.parent_id),
+    dependsOn: JSON.parse(String(row.depends_on ?? '[]')) as string[],
+    handoffFrom: nullableString(row.handoff_from),
+    status: String(row.status) as TaskStatus,
+    result: nullableString(row.result),
+    createdBy: nullableString(row.created_by),
+    position: Number(row.position),
+    createdAt: Number(row.created_at),
+    startedAt: nullableNumber(row.started_at),
+    finishedAt: nullableNumber(row.finished_at),
+});
+
+export type TaskPatch = Partial<
+    Pick<
+        Task,
+        'title' | 'prompt' | 'status' | 'result' | 'position' | 'startedAt' | 'finishedAt' | 'dependsOn' | 'parentId'
+    >
+>;
 
 const toWorkspace = (row: Row): Workspace => ({
     id: String(row.id),
@@ -346,6 +404,69 @@ export class Store {
 
     deleteWorkspace(id: string): void {
         this.db.prepare('delete from workspaces where id = ?').run(id);
+    }
+
+    listTasks(): Task[] {
+        return (this.db.prepare('select * from tasks order by position, created_at').all() as Row[]).map(toTask);
+    }
+
+    getTask(id: string): Task | null {
+        const row = this.db.prepare('select * from tasks where id = ?').get(id) as Row | undefined;
+        return row ? toTask(row) : null;
+    }
+
+    nextTaskPosition(): number {
+        return Number((this.db.prepare('select coalesce(max(position), -1) + 1 as next from tasks').get() as Row).next);
+    }
+
+    insertTask(task: Task): void {
+        this.db
+            .prepare(`insert into tasks (id, project_id, pane_id, title, prompt, parent_id, depends_on, handoff_from, status,
+            result, created_by, position, created_at, started_at, finished_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(
+                task.id,
+                task.projectId,
+                task.paneId,
+                task.title,
+                task.prompt,
+                task.parentId,
+                JSON.stringify(task.dependsOn),
+                task.handoffFrom,
+                task.status,
+                task.result,
+                task.createdBy,
+                task.position,
+                task.createdAt,
+                task.startedAt,
+                task.finishedAt,
+            );
+    }
+
+    updateTask(id: string, patch: TaskPatch): void {
+        const current = this.getTask(id);
+        if (!current) {
+            return;
+        }
+        const next = { ...current, ...patch };
+        this.db
+            .prepare(`update tasks set title = ?, prompt = ?, status = ?, result = ?, position = ?, started_at = ?,
+            finished_at = ?, depends_on = ?, parent_id = ? where id = ?`)
+            .run(
+                next.title,
+                next.prompt,
+                next.status,
+                next.result,
+                next.position,
+                next.startedAt,
+                next.finishedAt,
+                JSON.stringify(next.dependsOn),
+                next.parentId,
+                id,
+            );
+    }
+
+    deleteTask(id: string): void {
+        this.db.prepare('delete from tasks where id = ?').run(id);
     }
 
     private reorder(table: 'projects' | 'sessions', ids: string[], id: string, before: string | null): void {

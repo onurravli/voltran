@@ -49,6 +49,14 @@ import {
     type Workspace,
     type ProjectGit,
     type WorktreeChoice,
+    type AdapterId,
+    type CreateTaskBody,
+    type Task,
+    type UpdateTaskBody,
+    DELEGATE_ADAPTERS,
+    MAX_BROADCAST,
+    MAX_TASK_PROMPT,
+    taskTitle,
 } from '@voltran/shared';
 import {
     adapterFor,
@@ -73,6 +81,7 @@ import { NOTES_GUIDE, NotesRefused, NotesStore, PROJECT_NOTES_GUIDE } from './no
 import { PaneManager } from './panes.ts';
 import { mergeUsage } from './statusline.ts';
 import type { Store } from './store.ts';
+import { TaskBoard, TaskRefused } from './tasks.ts';
 import { WorktreeError, Worktrees, worktreeRunner, type WorktreeRunner } from './worktrees.ts';
 
 export class HttpError extends Error {
@@ -160,11 +169,31 @@ const moveTarget = (value: unknown, siblings: string[], sibling: string): string
     return value;
 };
 
+const idList = (value: unknown, field: string): string[] => {
+    if (value === undefined || value === null) {
+        return [];
+    }
+    if (!Array.isArray(value) || value.some((id) => typeof id !== 'string') || value.length > 64) {
+        throw new HttpError(400, `${field} must be a list of ids`);
+    }
+    return value as string[];
+};
+
+const hookIds = (value: string | undefined): string[] =>
+    value && value.trim() !== 'none'
+        ? value
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+        : [];
+
+const hookParent = (value: string): string | null => (value.trim() === 'none' ? null : value.trim());
+
 function refusedAsHttp<T>(action: () => T): T {
     try {
         return action();
     } catch (error) {
-        if (error instanceof NotesRefused) {
+        if (error instanceof NotesRefused || error instanceof TaskRefused) {
             throw new HttpError(error.status, error.message);
         }
         throw error;
@@ -181,6 +210,7 @@ export class Hub {
     private readonly attachments: AttachmentStore;
     private readonly claudeConfig: string | null;
     private readonly worktrees: Worktrees;
+    private readonly tasks: TaskBoard;
     private readonly store: Store;
     private readonly adapters: AdapterInfo[];
     private listeners = new Set<Listener>();
@@ -242,6 +272,8 @@ export class Hub {
             onPaneRecord: (pane) => this.store.updatePane(pane.id, pane),
             onAttention: (pane, status, body) => this.attention(pane, status, body),
             onExit: (pane, exitCode) => this.exited(pane, exitCode),
+            onStatus: (pane, previous, change) =>
+                this.tasks?.statusChanged(pane.id, previous, change.status, change.detail),
             notes: {
                 guide: this.notes.guide,
                 file: (pane) => (pane.adapter === 'subagent' ? null : this.notes.file(pane.id)),
@@ -255,6 +287,22 @@ export class Hub {
         for (const pane of this.store.listPanes()) {
             this.panes.load(pane);
         }
+        this.tasks = new TaskBoard({
+            store: this.store,
+            onChange: () => this.scheduleBroadcast(),
+            handoff: (paneId) => this.handoffContext(paneId),
+            runner: {
+                status: (id) => this.panes.status(id),
+                running: (id) => this.panes.running(id),
+                wake: (id) => {
+                    const session = this.store.getSession(this.store.getPane(id)?.sessionId ?? '');
+                    if (session && !session.archived) {
+                        this.panes.wake(id);
+                    }
+                },
+                submit: (id, text) => this.panes.submit(id, text),
+            },
+        });
         this.notes.load(this.store.listPanes().map((pane) => pane.id));
         this.projectNotes.load(this.store.listProjects().map((project) => project.id));
         this.attachments = new AttachmentStore(options.attachmentsDir);
@@ -288,6 +336,7 @@ export class Hub {
             sessions: this.store.listSessions(),
             panes: this.panes.views().map((view) => ({ ...view, notes: this.notes.meta(view.id) })),
             workspaces: this.store.listWorkspaces(),
+            tasks: this.tasks.list(),
             git: this.git.snapshot(),
             adapters: this.adapters,
             usage: this.usage,
@@ -326,6 +375,7 @@ export class Hub {
         this.projectNotes.close();
         this.namingTimers.forEach(clearTimeout);
         this.namingTimers.clear();
+        this.tasks.close();
         if (this.broadcastTimer) {
             clearTimeout(this.broadcastTimer);
             this.broadcastTimer = null;
@@ -625,6 +675,7 @@ export class Hub {
         const pane = this.mustGetPane(id);
         const session = this.store.getSession(pane.sessionId);
         this.closeOnCleanExit.delete(id);
+        this.tasks.paneRemoved(id);
         this.panes.remove(id);
         this.notes.remove(id);
         this.attachments.remove(id);
@@ -726,6 +777,10 @@ export class Hub {
             return false;
         }
         const handled = this.panes.hook(paneId, secret, event, payload as Record<string, unknown>);
+        if (handled && (event === 'Stop' || event === 'TurnEnd')) {
+            const body = payload as Record<string, unknown>;
+            this.tasks.reply(paneId, event === 'Stop' ? body.last_assistant_message : body.message);
+        }
         if (handled) {
             this.trackNotesEdit(paneId, event, payload as Record<string, unknown>);
             this.nameSession(paneId, event, payload as Record<string, unknown>, true);
@@ -750,6 +805,318 @@ export class Hub {
         }
         const projectId = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '')?.projectId;
         return projectId ? this.projectNotes.current(projectId) : '';
+    }
+
+    createTasks(body: CreateTaskBody, createdBy: string | null = null): Task[] {
+        if (!body || typeof body !== 'object') {
+            throw new HttpError(400, 'a task needs a prompt');
+        }
+        const prompt = requireString(body.prompt, 'prompt', MAX_TASK_PROMPT);
+        const dependsOn = idList(body.dependsOn, 'dependsOn');
+        const parentId =
+            body.parentId === undefined || body.parentId === null ? null : requireString(body.parentId, 'parentId', 64);
+        const handoffFrom =
+            body.handoffFrom === undefined || body.handoffFrom === null
+                ? null
+                : this.mustGetPane(requireString(body.handoffFrom, 'handoffFrom', 64)).id;
+        const title = typeof body.title === 'string' && body.title.trim() ? body.title : undefined;
+        let targets: Pane[] = [];
+        let projectId: string;
+        let sessionId = '';
+        if (body.adapter !== undefined) {
+            if (!DELEGATE_ADAPTERS.includes(body.adapter)) {
+                throw new HttpError(400, 'a new pane for a task runs Claude Code, Codex or OpenCode');
+            }
+            sessionId = requireString(body.sessionId, 'sessionId', 64);
+            projectId = this.taskProject([], sessionId);
+        } else {
+            const ids = [...new Set(idList(body.paneIds, 'paneIds'))];
+            if (ids.length === 0) {
+                throw new HttpError(400, 'choose at least one agent pane, or an agent for a new pane');
+            }
+            if (ids.length > MAX_BROADCAST) {
+                throw new HttpError(400, `a prompt goes to at most ${MAX_BROADCAST} panes at once`);
+            }
+            targets = ids.map((id) => this.mustGetPane(id));
+            projectId = this.taskProject(targets);
+        }
+        if (createdBy && this.taskProject([this.mustGetPane(createdBy)]) !== projectId) {
+            throw new HttpError(400, 'an agent can only give tasks to agents of its own project');
+        }
+        if (handoffFrom && this.taskProject([this.mustGetPane(handoffFrom)]) !== projectId) {
+            throw new HttpError(400, 'a handoff comes from a pane of the same project');
+        }
+        refusedAsHttp(() => this.tasks.check(projectId, dependsOn, parentId));
+        if (body.adapter !== undefined) {
+            targets = [
+                this.createPane(sessionId, {
+                    adapter: body.adapter,
+                    title: `${adapterFor(body.adapter).label}: ${taskTitle(prompt, 32)}`,
+                    splitFrom:
+                        createdBy && this.store.getPane(createdBy)?.sessionId === sessionId ? createdBy : undefined,
+                }),
+            ];
+        }
+        return refusedAsHttp(() =>
+            targets.map((pane) =>
+                this.tasks.create({
+                    projectId,
+                    paneId: pane.id,
+                    prompt,
+                    title,
+                    parentId,
+                    dependsOn,
+                    handoffFrom: handoffFrom === pane.id ? null : handoffFrom,
+                    createdBy,
+                }),
+            ),
+        );
+    }
+
+    updateTask(id: string, body: UpdateTaskBody): Task {
+        if (!body || typeof body !== 'object') {
+            throw new HttpError(400, 'nothing to change');
+        }
+        return refusedAsHttp(() => {
+            if (body.action !== undefined) {
+                if (body.action !== 'cancel' && body.action !== 'retry' && body.action !== 'complete') {
+                    throw new HttpError(400, 'action must be cancel, retry or complete');
+                }
+                this.tasks.act(id, body.action);
+            }
+            if (body.title !== undefined || body.prompt !== undefined) {
+                this.tasks.edit(id, {
+                    title: body.title === undefined ? undefined : requireString(body.title, 'title', MAX_TITLE),
+                    prompt:
+                        body.prompt === undefined ? undefined : requireString(body.prompt, 'prompt', MAX_TASK_PROMPT),
+                });
+            }
+            if (body.dependsOn !== undefined || body.parentId !== undefined) {
+                this.tasks.link(id, {
+                    dependsOn: body.dependsOn === undefined ? undefined : idList(body.dependsOn, 'dependsOn'),
+                    parentId:
+                        body.parentId === undefined || body.parentId === null
+                            ? body.parentId
+                            : requireString(body.parentId, 'parentId', 64),
+                });
+            }
+            if (body.moveBefore !== undefined) {
+                this.tasks.move(id, body.moveBefore === null ? null : requireString(body.moveBefore, 'moveBefore', 64));
+            }
+            const task = this.tasks.get(id);
+            if (!task) {
+                throw new HttpError(404, 'task not found');
+            }
+            return task;
+        });
+    }
+
+    deleteTask(id: string): void {
+        refusedAsHttp(() => this.tasks.remove(id));
+    }
+
+    clearTasks(projectId: string): void {
+        this.mustGetProject(projectId);
+        this.tasks.clearFinished(projectId);
+    }
+
+    // An agent delegates through its pane's hook secret: the options come as headers and the prompt as
+    // the body, which a shell script can send without building JSON.
+    hookCreateTask(paneId: string, secret: string, prompt: string, options: Record<string, string | undefined>): Task {
+        const pane = this.mustReportingPane(paneId, secret);
+        const running = this.tasks.runningOn(pane.id);
+        const to = options.to?.trim();
+        const agent = options.agent?.trim();
+        const [task] = this.createTasks(
+            {
+                prompt,
+                title: options.title,
+                ...(to
+                    ? { paneIds: [to] }
+                    : { adapter: (agent || 'codex') as CreateTaskBody['adapter'], sessionId: pane.sessionId }),
+                parentId: options.parent?.trim() ? hookParent(options.parent) : (running?.id ?? null),
+                dependsOn: hookIds(options.after),
+                handoffFrom: options.handoff === '1' ? pane.id : null,
+            },
+            pane.id,
+        );
+        return task;
+    }
+
+    // An agent steers the project's graph the way the tasks view does: each option is a header, a value of
+    // `none` clears a link and `end` moves a task to the end of its queue.
+    hookUpdateTask(
+        paneId: string,
+        secret: string,
+        taskId: string,
+        options: Record<string, string | undefined>,
+        body: string,
+    ): Task {
+        const pane = this.mustReportingPane(paneId, secret);
+        this.mustProjectTask(pane, taskId);
+        const update: UpdateTaskBody = {};
+        if (options.action?.trim()) {
+            update.action = options.action.trim() as UpdateTaskBody['action'];
+        }
+        if (options.title?.trim()) {
+            update.title = options.title;
+        }
+        if (options.prompt === '1') {
+            update.prompt = body;
+        }
+        if (options.after?.trim()) {
+            update.dependsOn = hookIds(options.after);
+        }
+        if (options.parent?.trim()) {
+            update.parentId = hookParent(options.parent);
+        }
+        if (options.before?.trim()) {
+            update.moveBefore = options.before.trim() === 'end' ? null : options.before.trim();
+        }
+        if (Object.keys(update).length === 0) {
+            throw new HttpError(400, 'nothing to change');
+        }
+        return this.updateTask(taskId, update);
+    }
+
+    // `finished` clears the project's finished tasks, as the tasks view's button does.
+    hookDeleteTask(paneId: string, secret: string, taskId: string): void {
+        const pane = this.mustReportingPane(paneId, secret);
+        if (taskId === 'finished') {
+            this.tasks.clearFinished(this.taskProject([pane]));
+            return;
+        }
+        const task = this.mustProjectTask(pane, taskId);
+        if (task.status === 'running') {
+            throw new HttpError(409, 'cancel the task before removing it');
+        }
+        this.deleteTask(taskId);
+    }
+
+    // Opens an agent pane with no task yet, or the session's tasks view, next to the asking pane.
+    hookOpenPane(paneId: string, secret: string, options: Record<string, string | undefined>): Pane {
+        const pane = this.mustReportingPane(paneId, secret);
+        const kind = options.agent?.trim() || 'tasks';
+        if (kind === 'tasks') {
+            const existing = this.store.panesOfSession(pane.sessionId).find((entry) => entry.adapter === 'tasks');
+            return (
+                existing ?? this.createPane(pane.sessionId, { adapter: 'tasks', title: 'Tasks', splitFrom: pane.id })
+            );
+        }
+        if (!DELEGATE_ADAPTERS.includes(kind as AdapterId)) {
+            throw new HttpError(400, 'open tasks, claude, codex or opencode');
+        }
+        this.taskProject([], pane.sessionId);
+        const label = adapterFor(kind as AdapterId).label;
+        return this.createPane(pane.sessionId, {
+            adapter: kind as AdapterId,
+            title: options.title?.trim() ? options.title.trim().slice(0, MAX_TITLE) : label,
+            splitFrom: pane.id,
+        });
+    }
+
+    private mustProjectTask(pane: Pane, taskId: string): Task {
+        const task = this.tasks.get(taskId);
+        if (!task || task.projectId !== this.taskProject([pane])) {
+            throw new HttpError(404, 'task not found');
+        }
+        return task;
+    }
+
+    // Plain text so the script can read it: the status on the first line, then the result.
+    hookTask(paneId: string, secret: string, taskId: string | null): string {
+        const pane = this.mustReportingPane(paneId, secret);
+        const projectId = this.taskProject([pane]);
+        if (taskId === null) {
+            const panes = this.store
+                .sessionsOfProject(projectId)
+                .flatMap((session) => this.store.panesOfSession(session.id))
+                .filter((entry) => adapterFor(entry.adapter).kind === 'agent');
+            const tasks = this.tasks.list().filter((task) => task.projectId === projectId);
+            return [
+                'Agent panes (use an id with --to):',
+                ...panes.map(
+                    (entry) =>
+                        `${entry.id}  ${adapterFor(entry.adapter).label}  ${this.panes.status(entry.id) ?? ''}  ${entry.title}${entry.id === pane.id ? '  (you)' : ''}`,
+                ),
+                '',
+                'Tasks:',
+                ...(tasks.length === 0
+                    ? ['(none)']
+                    : tasks.map(
+                          (task) =>
+                              `${task.id}  ${task.status}  ${this.store.getPane(task.paneId)?.title ?? 'closed pane'}  ${task.title}${task.paneId === pane.id ? '  (yours)' : ''}${task.dependsOn.length > 0 ? `  after: ${task.dependsOn.join(',')}` : ''}${task.parentId ? `  parent: ${task.parentId}` : ''}`,
+                      )),
+                '',
+            ].join('\n');
+        }
+        const task = this.tasks.get(taskId);
+        if (!task || task.projectId !== projectId) {
+            throw new HttpError(404, 'task not found');
+        }
+        return `${task.status}\n${task.result ?? ''}\n`;
+    }
+
+    private mustReportingPane(paneId: string, secret: string): Pane {
+        const pane = this.store.getPane(paneId);
+        if (!pane || !this.panes.isReport(paneId, secret)) {
+            throw new HttpError(403, 'hook refused');
+        }
+        return pane;
+    }
+
+    // The project every target belongs to; tasks never cross projects.
+    private taskProject(panes: Pane[], sessionId?: string): string {
+        const projects = new Set<string>();
+        for (const pane of panes) {
+            const session = this.mustGetSession(pane.sessionId);
+            if (adapterFor(pane.adapter).kind !== 'agent') {
+                throw new HttpError(400, `${pane.title} is not an agent pane`);
+            }
+            if (session.archived) {
+                throw new HttpError(409, `restore the session of ${pane.title} first`);
+            }
+            projects.add(session.projectId);
+        }
+        if (sessionId) {
+            const session = this.mustGetSession(sessionId);
+            if (session.archived) {
+                throw new HttpError(409, 'restore the session first');
+            }
+            projects.add(session.projectId);
+        }
+        if (projects.size !== 1) {
+            throw new HttpError(400, 'every pane of a task must belong to the same project');
+        }
+        return [...projects][0];
+    }
+
+    private handoffContext(paneId: string): { label: string; reply: string | null; notes: string } | null {
+        const pane = this.store.getPane(paneId);
+        if (!pane) {
+            return null;
+        }
+        const finished = this.tasks
+            .list()
+            .filter((task) => task.paneId === paneId && task.status === 'done' && task.result)
+            .slice(-3);
+        const reply =
+            this.tasks.lastReply(paneId) ??
+            finished.at(-1)?.result ??
+            this.panes.views().find((view) => view.id === paneId)?.detail ??
+            null;
+        return {
+            label: `${pane.title} (${adapterFor(pane.adapter).label})`,
+            reply,
+            notes: [
+                this.notes.current(paneId),
+                ...finished
+                    .filter((task) => task.result !== reply)
+                    .map((task) => `Finished task "${task.title}":\n${task.result}`),
+            ]
+                .filter((part) => part.trim())
+                .join('\n\n'),
+        };
     }
 
     private statusLine(paneId: string, secret: string, payload: Record<string, unknown>): boolean {
@@ -1025,6 +1392,7 @@ export class Hub {
     private removeSessionPanes(sessionId: string): void {
         for (const pane of this.store.panesOfSession(sessionId)) {
             this.closeOnCleanExit.delete(pane.id);
+            this.tasks.paneRemoved(pane.id);
             this.panes.remove(pane.id);
             this.notes.remove(pane.id);
             this.attachments.remove(pane.id);

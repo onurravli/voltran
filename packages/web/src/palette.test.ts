@@ -61,6 +61,7 @@ const app = {
         pane('c', 'two', 'zsh', 'idle'),
     ],
     workspaces: [],
+    tasks: [],
     git: {},
     adapters: [],
     usage: null,

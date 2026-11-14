@@ -333,6 +333,18 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, 201, hub.createPane(id, await readJson(req))),
     );
 
+    route('POST', '/api/tasks', async (req, res) => sendJson(res, 201, hub.createTasks(await readJson(req))));
+    route('PATCH', '/api/tasks/:id', async (req, res, [id]) =>
+        sendJson(res, 200, hub.updateTask(id, await readJson(req))),
+    );
+    route('DELETE', '/api/tasks/:id', (_req, res, [id]) => {
+        hub.deleteTask(id);
+        sendJson(res, 200, { ok: true });
+    });
+    route('POST', '/api/projects/:id/tasks/clear', (_req, res, [id]) => {
+        hub.clearTasks(id);
+        sendJson(res, 200, { ok: true });
+    });
     route('POST', '/api/workspaces', async (req, res) => sendJson(res, 201, hub.createWorkspace(await readJson(req))));
     route('PATCH', '/api/workspaces/:id', async (req, res, [id]) =>
         sendJson(res, 200, hub.updateWorkspace(id, await readJson(req))),
@@ -392,6 +404,77 @@ export function createVoltranServer(options: ServerOptions): Server {
 
     const hookPattern = /^\/api\/hooks\/([^/]+)\/([A-Za-z]+)$/;
     const hookNotesPattern = /^\/api\/hooks\/([^/]+)\/(notes|project-notes)$/;
+    const hookTasksPattern = /^\/api\/hooks\/([^/]+)\/(tasks|panes)(?:\/([^/]+))?$/;
+
+    const handleHookTasks = async (
+        req: IncomingMessage,
+        res: ServerResponse,
+        paneId: string,
+        kind: string,
+        rawTaskId: string | undefined,
+    ): Promise<void> => {
+        const secret = bearerToken(req);
+        if (!secret) {
+            sendJson(res, 401, { error: 'missing hook secret' });
+            return;
+        }
+        const pane = decodeURIComponent(paneId);
+        const taskId = rawTaskId === undefined ? undefined : decodeURIComponent(rawTaskId);
+        const header = (name: string): string | undefined => {
+            const value = req.headers[`x-voltran-${name}`];
+            return typeof value === 'string' ? Buffer.from(value, 'latin1').toString('utf8') : undefined;
+        };
+        if (kind === 'panes') {
+            if (req.method !== 'POST' || taskId !== undefined) {
+                sendJson(res, 405, { error: 'method not allowed' });
+                return;
+            }
+            sendText(res, 201, hub.hookOpenPane(pane, secret, { agent: header('agent'), title: header('title') }).id);
+            return;
+        }
+        if (req.method === 'POST' && taskId === undefined) {
+            const prompt = await readBody(req, HOOK_LIMIT);
+            const task = hub.hookCreateTask(pane, secret, prompt, {
+                agent: header('agent'),
+                to: header('to'),
+                after: header('after'),
+                parent: header('parent'),
+                handoff: header('handoff'),
+                title: header('title'),
+            });
+            sendText(res, 201, task.id);
+            return;
+        }
+        if (req.method === 'PATCH' && taskId !== undefined) {
+            const body = await readBody(req, HOOK_LIMIT);
+            const task = hub.hookUpdateTask(
+                pane,
+                secret,
+                taskId,
+                {
+                    action: header('action'),
+                    title: header('title'),
+                    prompt: header('prompt'),
+                    after: header('after'),
+                    parent: header('parent'),
+                    before: header('before'),
+                },
+                body,
+            );
+            sendText(res, 200, `${task.status}\n`);
+            return;
+        }
+        if (req.method === 'DELETE' && taskId !== undefined) {
+            hub.hookDeleteTask(pane, secret, taskId);
+            sendText(res, 200, 'removed\n');
+            return;
+        }
+        if (req.method === 'GET') {
+            sendText(res, 200, hub.hookTask(pane, secret, taskId ?? null));
+            return;
+        }
+        sendJson(res, 405, { error: 'method not allowed' });
+    };
 
     const handleHook = async (
         req: IncomingMessage,
@@ -451,6 +534,16 @@ export function createVoltranServer(options: ServerOptions): Server {
     const server = createServer(async (req, res) => {
         try {
             const { pathname } = requestUrl(req);
+            const hookTasksMatch = pathname.match(hookTasksPattern);
+            if (hookTasksMatch) {
+                const verdict = guard.checkRequest(req, { allowAnonymous: true });
+                if (!verdict.ok) {
+                    sendJson(res, verdict.status, { error: verdict.reason });
+                    return;
+                }
+                await handleHookTasks(req, res, hookTasksMatch[1], hookTasksMatch[2], hookTasksMatch[3]);
+                return;
+            }
             const hookMatch = req.method === 'POST' ? pathname.match(hookPattern) : null;
             const hookNotesMatch = req.method === 'GET' ? pathname.match(hookNotesPattern) : null;
             if (hookMatch || hookNotesMatch) {

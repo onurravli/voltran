@@ -1,4 +1,5 @@
 import type { SettingsState } from './settings.ts';
+import type { Task } from './tasks.ts';
 
 export type AdapterId =
     | 'claude'
@@ -10,7 +11,8 @@ export type AdapterId =
     | 'subagent'
     | 'preview'
     | 'changes'
-    | 'editor';
+    | 'editor'
+    | 'tasks';
 
 export type PaneKind = 'agent' | 'shell' | 'process' | 'page';
 
@@ -323,6 +325,7 @@ export interface AppState {
     sessions: Session[];
     panes: PaneView[];
     workspaces: Workspace[];
+    tasks: Task[];
     git: Record<string, GitStatus>;
     adapters: AdapterInfo[];
     usage: Usage | null;

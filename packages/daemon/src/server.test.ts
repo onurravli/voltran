@@ -36,6 +36,7 @@ import {
     type ServerEvent,
     type Session,
     type SettingsState,
+    type Task,
     type Workspace,
 } from '@voltran/shared';
 import { loadConfig, voltranVersion } from './config.ts';
@@ -82,6 +83,33 @@ case "$*" in *--conversation-test*)
         '{"type":"assistant","message":{"model":"claude-test","role":"assistant","content":[{"type":"text","text":"Listing **now**."},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls","description":"List files"}}]}}' \
         '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"a.txt"}]}}' > "$PWD/$sid.jsonl"
     printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$PWD/$sid.jsonl" | sh -c "$(hook Stop 0)"
+;; esac
+case "$*" in *--delegate-test*)
+    id=$("$VOLTRAN_TASK" delegate --agent codex --handoff --title "Port it to Rüst" "port the parser to Rust")
+    "$VOLTRAN_TASK" status "$id" > "$PWD/delegated.txt"
+    foreign=$(printf '%s' "$*" | sed 's/.*--foreign=\\([^ ]*\\).*/\\1/')
+    "$VOLTRAN_TASK" delegate --to "$foreign" "leave this project" 2>> "$PWD/delegated.txt"
+    "$VOLTRAN_TASK" delegate --agent codex --after nope "wait for nothing" 2>> "$PWD/delegated.txt"
+    "$VOLTRAN_TASK" list >> "$PWD/delegated.txt"
+;; esac
+case "$*" in *--steer-test*)
+    out="$PWD/steered.txt"
+    worker=$("$VOLTRAN_TASK" spawn --agent codex --title Worker)
+    first=$("$VOLTRAN_TASK" delegate --to "$VOLTRAN_PANE_ID" --parent none "first step")
+    second=$("$VOLTRAN_TASK" delegate --to "$VOLTRAN_PANE_ID" --parent none "second step")
+    third=$("$VOLTRAN_TASK" delegate --to "$VOLTRAN_PANE_ID" --parent none "third step")
+    "$VOLTRAN_TASK" edit "$second" --title "Second, renamed" --prompt "the second step" >> "$out"
+    "$VOLTRAN_TASK" link "$second" --after "$first" --parent "$first" >> "$out"
+    "$VOLTRAN_TASK" link "$first" --after "$second" 2>> "$out"
+    "$VOLTRAN_TASK" move "$third" --before "$second" >> "$out"
+    "$VOLTRAN_TASK" done "$second" 2>> "$out"
+    "$VOLTRAN_TASK" cancel "$second" >> "$out"
+    "$VOLTRAN_TASK" retry "$second" >> "$out"
+    "$VOLTRAN_TASK" remove "$third" >> "$out"
+    "$VOLTRAN_TASK" board > /dev/null
+    board=$("$VOLTRAN_TASK" board)
+    "$VOLTRAN_TASK" list >> "$out"
+    printf 'ids %s %s %s %s\n' "$worker" "$first" "$second" "$board" >> "$out"
 ;; esac
 case "$*" in *--usage-test*)
     line=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).statusLine.command)' "$settings")
@@ -1033,6 +1061,152 @@ describe('agent panes', () => {
 
         socket.close();
         await api('DELETE', `/api/sessions/${session.id}`);
+    });
+
+    it('let Claude delegate a task to a new Codex pane and read its status', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const project = state.projects[0];
+        const report = join(project.path, 'delegated.txt');
+        rmSync(report, { force: true });
+        const { body: other } = await api<{ id: string }>('POST', '/api/projects', {
+            path: mkdtempSync(join(home, 'foreign-project-')),
+        });
+        const { body: foreign } = await api<Session>('POST', '/api/sessions', {
+            projectId: other.id,
+            title: 'foreign',
+            panes: [{ adapter: 'codex' }],
+        });
+        const [foreignPane] = paneIds(foreign.layout);
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'delegation',
+            panes: [{ adapter: 'claude', command: `--delegate-test --foreign=${foreignPane}` }],
+        });
+        const [claudeId] = paneIds(session.layout);
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${claudeId}`, {
+            headers: { Authorization: `Bearer ${daemon.token}` },
+        });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 200, rows: 40 }));
+
+        await until(() => existsSync(report) && readFileSync(report, 'utf8').includes('Tasks:'));
+        const after = (await api<AppState>('GET', '/api/state')).body;
+        const task = after.tasks.find((entry) => entry.createdBy === claudeId);
+        const codex = after.panes.find((pane) => pane.id === task?.paneId);
+        expect(task).toMatchObject({
+            title: 'Port it to Rüst',
+            prompt: 'port the parser to Rust',
+            handoffFrom: claudeId,
+        });
+        expect(codex).toMatchObject({ adapter: 'codex', sessionId: session.id });
+        expect(after.tasks.filter((entry) => entry.createdBy === claudeId)).toHaveLength(1);
+        expect(after.panes.filter((pane) => pane.sessionId === session.id)).toHaveLength(2);
+        const text = readFileSync(report, 'utf8');
+        expect(text).toContain('agents of its own project');
+        expect(text).toContain('tasks of the same project');
+        expect(text.split('\n')[0]).toMatch(/^(queued|running|done)$/);
+        expect(text).toContain(`${claudeId}  Claude Code`);
+        expect(text).toContain(`${task?.id}`);
+
+        expect(
+            (await fetch(`${base}/api/hooks/${claudeId}/tasks`, { headers: { Authorization: 'Bearer wrong' } })).status,
+        ).toBe(403);
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
+        await api('DELETE', `/api/projects/${other.id}`);
+        rmSync(report, { force: true });
+    });
+
+    it('let Claude open panes and rewire, reorder, cancel and retry tasks', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const project = state.projects[0];
+        const report = join(project.path, 'steered.txt');
+        rmSync(report, { force: true });
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'steering',
+            panes: [{ adapter: 'claude', command: '--steer-test' }],
+        });
+        const [claudeId] = paneIds(session.layout);
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${claudeId}`, {
+            headers: { Authorization: `Bearer ${daemon.token}` },
+        });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 200, rows: 40 }));
+
+        await until(() => existsSync(report) && readFileSync(report, 'utf8').includes('ids '));
+        const text = readFileSync(report, 'utf8');
+        const [worker, first, second, board] = text.split('ids ')[1].trim().split(' ');
+        const after = (await api<AppState>('GET', '/api/state')).body;
+        const own = after.panes.filter((pane) => pane.sessionId === session.id);
+        expect(own.find((pane) => pane.id === worker)).toMatchObject({ adapter: 'codex', title: 'Worker' });
+        expect(own.find((pane) => pane.id === board)).toMatchObject({ adapter: 'tasks' });
+        expect(own.filter((pane) => pane.adapter === 'tasks')).toHaveLength(1);
+        const tasks = after.tasks.filter((task) => task.createdBy === claudeId);
+        expect(tasks.map((task) => task.id).sort()).toEqual([first, second].sort());
+        expect(tasks.find((task) => task.id === second)).toMatchObject({
+            title: 'Second, renamed',
+            prompt: 'the second step',
+            dependsOn: [first],
+            parentId: first,
+            status: 'queued',
+        });
+        expect(text).toContain('wait for itself');
+        expect(text).toContain('only a running task can be marked done');
+        expect(text).toContain('cancelled');
+        expect(text).toContain('removed');
+        expect(text).toContain(`after: ${first}  parent: ${first}`);
+
+        socket.close();
+        await api('DELETE', `/api/sessions/${session.id}`);
+        rmSync(report, { force: true });
+    });
+
+    it('queue a prompt for several agents at once and check what tasks wait for', async () => {
+        const { body: state } = await api<AppState>('GET', '/api/state');
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: state.projects[0].id,
+            title: 'broadcast',
+            panes: [{ adapter: 'shell' }, { adapter: 'opencode' }, { adapter: 'codex' }],
+        });
+        const [shellId, opencodeId, codexId] = paneIds(session.layout);
+        expect((await api('POST', '/api/tasks', { prompt: 'hi', paneIds: [shellId] })).status).toBe(400);
+        const { status, body: tasks } = await api<Task[]>('POST', '/api/tasks', {
+            prompt: 'run the tests',
+            paneIds: [opencodeId, codexId],
+        });
+        expect(status).toBe(201);
+        expect(tasks.map((task) => task.paneId)).toEqual([opencodeId, codexId]);
+        expect((await api('POST', '/api/tasks', { prompt: 'x', paneIds: [codexId], dependsOn: ['nope'] })).status).toBe(
+            400,
+        );
+        expect(
+            (
+                await api('POST', '/api/tasks', {
+                    prompt: 'x',
+                    adapter: 'codex',
+                    sessionId: session.id,
+                    parentId: 'nope',
+                })
+            ).status,
+        ).toBe(400);
+        expect(
+            (await api<AppState>('GET', '/api/state')).body.panes.filter((pane) => pane.sessionId === session.id),
+        ).toHaveLength(3);
+        const { body: later } = await api<Task[]>('POST', '/api/tasks', {
+            prompt: 'summarize',
+            paneIds: [codexId],
+            dependsOn: tasks.map((task) => task.id),
+        });
+        expect(later[0].dependsOn).toEqual(tasks.map((task) => task.id));
+        expect((await api('PATCH', `/api/tasks/${later[0].id}`, { action: 'cancel' })).status).toBe(200);
+        expect((await api('PATCH', `/api/tasks/${later[0].id}`, { action: 'retry' })).status).toBe(200);
+        expect((await api('DELETE', `/api/tasks/${later[0].id}`)).status).toBe(200);
+        await api('DELETE', `/api/sessions/${session.id}`);
+        const left = (await api<AppState>('GET', '/api/state')).body.tasks.filter((task) =>
+            tasks.some((entry) => entry.id === task.id),
+        );
+        expect(left.map((task) => task.status)).toEqual(['cancelled', 'cancelled']);
     });
 
     it('give Claude the pane notes and hold them while Claude edits them', async () => {

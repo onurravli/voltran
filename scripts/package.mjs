@@ -30,7 +30,7 @@ for (const name of readdirSync(daemonOut).filter((file) => file.endsWith('.js'))
     writeFileSync(file, code);
 }
 
-for (const name of ['notes-hook.sh', 'statusline.sh']) {
+for (const name of ['notes-hook.sh', 'statusline.sh', 'task.sh', 'tasks-guide.md']) {
     cpSync(join(root, 'packages/daemon/src', name), join(daemonOut, name));
 }
 mkdirSync(join(daemonOut, 'opencode-plugin'));

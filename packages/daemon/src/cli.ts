@@ -445,6 +445,7 @@ const PANE_ADAPTERS = new Set([
     'preview',
     'changes',
     'editor',
+    'tasks',
 ]);
 
 // A pane is its adapter's name and the rest of the words as they were typed: arguments for an agent,
@@ -471,7 +472,7 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
             const rest = spec.slice(adapter.length).trim();
             if (!PANE_ADAPTERS.has(adapter)) {
                 throw new Error(
-                    `unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell, command, preview, changes or editor`,
+                    `unknown pane "${adapter}"; use claude, codex, opencode, antigravity, shell, command, preview, changes, editor or tasks`,
                 );
             }
             if (adapter === 'command' && !rest) {
@@ -483,7 +484,7 @@ export function parseNewArgs(args: string[], cwd = process.cwd()): NewSessionArg
             if (adapter === 'shell' && rest) {
                 throw new Error('a shell pane takes no arguments; use --pane "command …" to run a command');
             }
-            if ((adapter === 'changes' || adapter === 'editor') && rest) {
+            if ((adapter === 'changes' || adapter === 'editor' || adapter === 'tasks') && rest) {
                 throw new Error(`a ${adapter} pane takes no arguments`);
             }
             result.panes.push(rest ? ({ adapter, command: rest } as PaneSpec) : ({ adapter } as PaneSpec));

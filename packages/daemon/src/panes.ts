@@ -13,6 +13,7 @@ import {
     isCodexHookEvent,
     isOpencodeEvent,
     resolveBinary,
+    TASK_SCRIPT,
     type ClaudeHookEvent,
     type CodexHookEvent,
     type OpencodeEvent,
@@ -76,6 +77,7 @@ export interface PaneManagerOptions {
     onPaneRecord: (pane: Pane) => void;
     onAttention: (pane: Pane, status: AttentionStatus, body: string) => void;
     onExit?: (pane: Pane, exitCode: number) => void;
+    onStatus?: (pane: Pane, previous: PaneStatus, change: StatusChange) => void;
     notes?: {
         guide: string;
         file: (pane: Pane) => string | null;
@@ -95,6 +97,7 @@ const KILL_GRACE_MS = 3000;
 const VIEWER_SIGNAL_DELAY_MS = 750;
 const SHUTDOWN_FLUSH_MS = 1000;
 const ECHO_WINDOW_MS = 400;
+const SUBMIT_DELAY_MS = 120;
 
 // Leaving the alternate screen restores the saved cursor, and with nothing saved that is the top of
 // the screen, where the notice that follows would overwrite the output. xterm saves a cursor per
@@ -211,6 +214,49 @@ export class PaneManager {
         }
     }
 
+    // Types a prompt the way a paste does, then Enter on its own, as the composer does: inside the same
+    // write an agent can take Enter as part of the paste.
+    submit(id: string, text: string): boolean {
+        const runtime = this.runtimes.get(id);
+        const pty = runtime?.pty;
+        if (!runtime || !pty) {
+            return false;
+        }
+        const clean = text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '');
+        this.input(
+            id,
+            runtime.term.modes.bracketedPasteMode ? `\x1b[200~${clean}\x1b[201~` : clean.replace(/\n/g, ' '),
+        );
+        setTimeout(() => {
+            if (runtime.pty === pty) {
+                this.input(id, '\r');
+            }
+        }, SUBMIT_DELAY_MS);
+        return true;
+    }
+
+    // Starts the process of a pane no window has opened yet, or one that exited, so a queued task can
+    // run in it.
+    wake(id: string): void {
+        const runtime = this.runtimes.get(id);
+        if (!runtime || runtime.pty || adapterFor(runtime.pane.adapter).kind === 'page') {
+            return;
+        }
+        if (runtime.pane.ended) {
+            this.restart(id);
+        } else {
+            this.spawn(runtime);
+        }
+    }
+
+    running(id: string): boolean {
+        return Boolean(this.runtimes.get(id)?.pty);
+    }
+
+    status(id: string): PaneStatus | null {
+        return this.runtimes.get(id)?.state.status ?? null;
+    }
+
     resize(id: string, cols: number, rows: number): void {
         const runtime = this.runtimes.get(id);
         if (!runtime || !Number.isFinite(cols) || !Number.isFinite(rows)) {
@@ -285,6 +331,10 @@ export class PaneManager {
     private hookedRuntime(id: string, secret: string): Runtime | null {
         const runtime = this.runtimes.get(id);
         return runtime?.hookSecret && safeEqual(secret, runtime.hookSecret) ? runtime : null;
+    }
+
+    isReport(id: string, secret: string): boolean {
+        return this.hookedRuntime(id, secret) !== null;
     }
 
     isClaudeReport(id: string, secret: string): boolean {
@@ -544,6 +594,7 @@ export class PaneManager {
                       VOLTRAN_HOOK_SECRET: secret,
                       VOLTRAN_HOOK_HEADER: this.hookHeader(pane.id, secret)!,
                       VOLTRAN_URL: this.options.url,
+                      VOLTRAN_TASK: TASK_SCRIPT,
                   }
                 : {}),
         };
@@ -736,6 +787,9 @@ export class PaneManager {
         this.options.onChange();
         if (previous !== change.status && isAttention(change.status)) {
             this.options.onAttention(runtime.pane, change.status, change.detail ?? '');
+        }
+        if (previous !== change.status) {
+            this.options.onStatus?.(runtime.pane, previous, change);
         }
     }
 

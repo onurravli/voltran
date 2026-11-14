@@ -47,6 +47,8 @@ export const OPENCODE_PLUGIN = fileURLToPath(new URL('./opencode-plugin', import
 export const NOTES_HOOK = fileURLToPath(new URL('./notes-hook.sh', import.meta.url));
 export const STATUS_LINE = fileURLToPath(new URL('./statusline.sh', import.meta.url));
 export const STATUS_LINE_EVENT = 'StatusLine';
+export const TASK_SCRIPT = fileURLToPath(new URL('./task.sh', import.meta.url));
+export const TASKS_GUIDE = fileURLToPath(new URL('./tasks-guide.md', import.meta.url));
 
 interface AdapterDefinition {
     id: AdapterId;
@@ -95,7 +97,7 @@ const DEFINITIONS: AdapterDefinition[] = [
             const args = splitArgs(pane.command ?? '') ?? [];
             const subcommand = args[0] === 'mini' ? args.splice(0, 1) : [];
             const session = pane.agentSessionId ? ['--session', pane.agentSessionId] : [];
-            const instructions = notesOf(context).flatMap((notes) => [notes.guide, notes.file]);
+            const instructions = [...notesOf(context).flatMap((notes) => [notes.guide, notes.file]), TASKS_GUIDE];
             return {
                 file: 'opencode',
                 args: [...subcommand, '--standalone', ...session, ...args],
@@ -190,6 +192,18 @@ const DEFINITIONS: AdapterDefinition[] = [
         binary: null,
         launch: () => {
             throw new Error('an editor pane runs no process');
+        },
+    },
+    {
+        id: 'tasks',
+        label: 'Tasks',
+        kind: 'page',
+        statusSource: 'process',
+        resumable: false,
+        reportsHooks: false,
+        binary: null,
+        launch: () => {
+            throw new Error('a tasks pane runs no process');
         },
     },
 ];
@@ -410,6 +424,7 @@ const SESSION_SCOPED_ENV = [
     'VOLTRAN_NOTES',
     'VOLTRAN_PROJECT_NOTES',
     'VOLTRAN_STATUSLINE',
+    'VOLTRAN_TASK',
 ];
 
 export function childEnv(
@@ -522,7 +537,11 @@ export function claudeHookSettings(notes: NotesPaths[]): object {
         hooks[event] = [{ hooks: [{ type: 'command', command: hookCommand(event), timeout: 5 }] }];
     }
     const statusLine = { type: 'command', command: `sh ${shellQuote(STATUS_LINE)}` };
+    const tasksGuide = {
+        hooks: [{ type: 'command', command: `cat ${shellQuote(TASKS_GUIDE)}; exit 0`, timeout: 5 }],
+    };
     if (notes.length === 0) {
+        hooks.SessionStart.push(tasksGuide);
         return { hooks, statusLine };
     }
     const notesHook = (mode: string, { scope, guide }: NotesPaths): object => ({
@@ -530,7 +549,7 @@ export function claudeHookSettings(notes: NotesPaths[]): object {
         command: `sh ${shellQuote(NOTES_HOOK)} ${mode} ${scope} ${shellQuote(guide)}; exit 0`,
         timeout: 5,
     });
-    hooks.SessionStart.push({ hooks: notes.map((each) => notesHook('session-start', each)) });
+    hooks.SessionStart.push({ hooks: notes.map((each) => notesHook('session-start', each)) }, tasksGuide);
     hooks.UserPromptSubmit.push({ hooks: notes.map((each) => notesHook('prompt', each)) });
     hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: notes.map((each) => notesHook('pre-tool-use', each)) });
     return {

@@ -16,6 +16,7 @@ import {
     opencodeArgsProblem,
     opencodeConfigContent,
     splitArgs,
+    TASKS_GUIDE,
     STATUS_LINE,
     voltranSessionId,
 } from './adapters.ts';
@@ -218,7 +219,10 @@ describe('opencode adapter', () => {
     });
 
     it('adds the Voltran plugin to the configuration it passes', () => {
-        expect(JSON.parse(launch({}).env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({ plugins: [OPENCODE_PLUGIN] });
+        expect(JSON.parse(launch({}).env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({
+            plugins: [OPENCODE_PLUGIN],
+            instructions: [TASKS_GUIDE],
+        });
     });
 
     it("gives OpenCode the notes guide and the pane's notes as instructions, after the user's own", () => {
@@ -227,14 +231,20 @@ describe('opencode adapter', () => {
                 ?.OPENCODE_CONFIG_CONTENT ?? '',
         );
         expect(config).toEqual({
-            instructions: ['mine.md', '/n/GUIDE.md', '/n/p/notes.md'],
+            instructions: ['mine.md', '/n/GUIDE.md', '/n/p/notes.md', TASKS_GUIDE],
             plugins: [OPENCODE_PLUGIN],
         });
     });
 
     it("adds the project's notes and their guide after the pane's", () => {
         const config = JSON.parse(launch({}, {}, '/n/p/notes.md', '/pn/q/notes.md').env?.OPENCODE_CONFIG_CONTENT ?? '');
-        expect(config.instructions).toEqual(['/n/GUIDE.md', '/n/p/notes.md', '/pn/GUIDE.md', '/pn/q/notes.md']);
+        expect(config.instructions).toEqual([
+            '/n/GUIDE.md',
+            '/n/p/notes.md',
+            '/pn/GUIDE.md',
+            '/pn/q/notes.md',
+            TASKS_GUIDE,
+        ]);
     });
 });
 
@@ -263,6 +273,7 @@ describe('claudeHookSettings', () => {
         expect(settings.hooks.SessionStart.map((entry) => entry.hooks[0].command)).toEqual([
             expect.stringContaining('/api/hooks/$VOLTRAN_PANE_ID/SessionStart'),
             `sh ${hook} session-start pane ${guide}; exit 0`,
+            `cat '${TASKS_GUIDE.replace(/'/g, `'\\''`)}'; exit 0`,
         ]);
         expect(settings.hooks.UserPromptSubmit[1].hooks[0].command).toBe(`sh ${hook} prompt pane ${guide}; exit 0`);
         expect(settings.hooks.PreToolUse[1]).toMatchObject({
@@ -314,7 +325,10 @@ describe('claudeHookSettings', () => {
     it('leaves out the notes hooks and permissions when the pane has no notes', () => {
         const bare = claudeHookSettings([]) as Settings;
         expect(bare.permissions).toBeUndefined();
-        expect(bare.hooks.SessionStart).toHaveLength(1);
+        expect(bare.hooks.SessionStart.map((entry) => entry.hooks[0].command)).toEqual([
+            expect.stringContaining('/api/hooks/$VOLTRAN_PANE_ID/SessionStart'),
+            expect.stringContaining('tasks-guide.md'),
+        ]);
     });
 });
 
@@ -336,8 +350,12 @@ describe('opencodeConfigContent', () => {
     });
 
     it('ignores a value that is not a JSON object', () => {
-        expect(JSON.parse(opencodeConfigContent('nope'))).toEqual({ plugins: [OPENCODE_PLUGIN] });
-        expect(JSON.parse(opencodeConfigContent('[1]'))).toEqual({ plugins: [OPENCODE_PLUGIN] });
+        expect(JSON.parse(opencodeConfigContent('nope'))).toEqual({
+            plugins: [OPENCODE_PLUGIN],
+        });
+        expect(JSON.parse(opencodeConfigContent('[1]'))).toEqual({
+            plugins: [OPENCODE_PLUGIN],
+        });
     });
 });
 

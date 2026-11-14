@@ -59,6 +59,7 @@ const app = {
         pane('c3', 'c'),
     ],
     workspaces: [],
+    tasks: [],
     git: {},
     adapters: [],
     usage: null,
