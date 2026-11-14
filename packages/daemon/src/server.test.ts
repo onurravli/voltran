@@ -45,14 +45,15 @@ import { contentSecurityPolicy } from './server.ts';
 
 // Stands in for the real CLI: runs the exact hook commands Voltran handed it through --settings,
 // so the env plumbing and the per-pane secret are exercised end to end. With --notes-test it also
-// starts a session and writes the pane's notes the way Claude's Write tool would; with --title-test it
+// starts a session and writes the pane's notes the way Claude's Write tool would, and with
+// --project-notes-test its project's notes; with --title-test it
 // writes a transcript in which Claude has named the conversation and stops; with --conversation-test it
 // writes a short conversation and stops; with --usage-test it renders
 // its status line with the account's usage limits.
 const FAKE_CLAUDE = `#!/bin/sh
 echo "fake claude $*"
 settings=$2
-hook() { node -e 'const s=JSON.parse(process.argv[1]); process.stdout.write(s.hooks[process.argv[2]][Number(process.argv[3])].hooks[0].command)' "$settings" "$1" "$2"; }
+hook() { node -e 'const s=JSON.parse(process.argv[1]); process.stdout.write(s.hooks[process.argv[2]][Number(process.argv[3])].hooks[Number(process.argv[4] ?? 0)].command)' "$settings" "$1" "$2" "$3"; }
 printf '{"session_id":"7e57c1a0-0000-4000-8000-000000000001","prompt":"hi from fake claude"}' | sh -c "$(hook UserPromptSubmit 0)"
 case "$*" in *--notes-test*)
     sh -c "$(hook SessionStart 1)" < /dev/null
@@ -60,6 +61,14 @@ case "$*" in *--notes-test*)
     printf '%s' "$call" | sh -c "$(hook PreToolUse 0)"
     sleep 1
     printf 'agent progress\\n' > "$VOLTRAN_NOTES"
+    printf '%s' "$call" | sh -c "$(hook PostToolUse 0)"
+;; esac
+case "$*" in *--project-notes-test*)
+    sh -c "$(hook SessionStart 1 1)" < /dev/null
+    call='{"session_id":"7e57c1a0-0000-4000-8000-000000000001","tool_name":"Edit","tool_input":{"file_path":"'"$VOLTRAN_PROJECT_NOTES"'"}}'
+    printf '%s' "$call" | sh -c "$(hook PreToolUse 0)"
+    sleep 1
+    printf 'use pnpm\\n' > "$VOLTRAN_PROJECT_NOTES"
     printf '%s' "$call" | sh -c "$(hook PostToolUse 0)"
 ;; esac
 case "$*" in *--title-test*)
@@ -1076,6 +1085,72 @@ describe('agent panes', () => {
         await api('DELETE', `/api/sessions/${session.id}`);
     });
 
+    it("give Claude its project's notes, hold them while Claude edits them and tell the project's other panes", async () => {
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', {
+            path: mkdtempSync(join(home, 'project-notes-')),
+        });
+        const { body: other } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'other session',
+            panes: [{ adapter: 'shell' }],
+        });
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'project notes hooks',
+            panes: [{ adapter: 'claude', command: '--project-notes-test' }],
+        });
+        const [paneId] = paneIds(session.layout);
+        const [otherPaneId] = paneIds(other.layout);
+        const notesFile = join(home, 'data', 'project-notes', project.id, 'notes.md');
+
+        let output = '';
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/panes/${paneId}`, {
+            headers: { Authorization: `Bearer ${daemon.token}` },
+        });
+        socket.on('message', (data, isBinary) => {
+            if (isBinary) {
+                output += data.toString();
+            }
+        });
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+        socket.send(JSON.stringify({ type: 'resize', cols: 200, rows: 40 }));
+
+        const meta = async (): Promise<NotesMeta | undefined> =>
+            (await api<AppState>('GET', '/api/state')).body.projects.find((entry) => entry.id === project.id)?.notes;
+        await until(async () => (await meta())?.lock === 'agent');
+        const { body: shown } = await api<PaneNotes>('GET', `/api/projects/${project.id}/notes`);
+        expect(
+            (
+                await api('POST', `/api/projects/${project.id}/notes/lock`, {
+                    holder: 'window-cccc',
+                    version: shown.version,
+                })
+            ).status,
+        ).toBe(409);
+        await until(async () => {
+            const notes = await meta();
+            return notes?.updatedBy === 'agent' && notes.lock === null;
+        });
+        expect((await api<PaneNotes>('GET', `/api/projects/${project.id}/notes`)).body.content).toBe('use pnpm\n');
+        await until(() => output.replace(/\s+/g, ' ').includes(`Project notes file: ${notesFile}`));
+        expect(output).toContain('# Voltran project notes');
+        expect(output).not.toContain('Voltran did not answer');
+        const marks = join(home, 'data', 'notes');
+        expect(existsSync(join(marks, `${otherPaneId}.project.changed`))).toBe(true);
+        expect(existsSync(join(marks, `${paneId}.project.changed`))).toBe(false);
+        expect(
+            (
+                await fetch(`${base}/api/hooks/${paneId}/project-notes`, {
+                    headers: { Authorization: `Bearer ${daemon.token}` },
+                })
+            ).status,
+        ).toBe(403);
+
+        socket.close();
+        await api('DELETE', `/api/projects/${project.id}`);
+        expect(existsSync(join(home, 'data', 'project-notes', project.id))).toBe(false);
+    });
+
     it('track Codex status through the hooks Voltran passes it, once they report', async () => {
         const { body: state } = await api<AppState>('GET', '/api/state');
         const { body: session } = await api<Session>('POST', '/api/sessions', {
@@ -1220,7 +1295,7 @@ describe('notes', () => {
         });
         expect(saved).toMatchObject({ status: 200, body: { content: '# Plan\n' } });
         await until(() =>
-            events.some((event) => event.type === 'notes' && event.paneId === paneId && event.content === '# Plan\n'),
+            events.some((event) => event.type === 'notes' && event.id === paneId && event.content === '# Plan\n'),
         );
         await until(async () => (await meta())?.size === 7);
         expect(await meta()).toMatchObject({ updatedBy: 'user', lock: 'user', holder: 'window-aaaa' });
@@ -1242,6 +1317,60 @@ describe('notes', () => {
         socket.close();
         await api('DELETE', `/api/sessions/${session.id}`);
         expect(existsSync(join(home, 'data', 'notes', paneId))).toBe(false);
+    });
+
+    it('keeps a note per project and marks it changed for every pane of the project when the user saves', async () => {
+        const { body: project } = await api<{ id: string }>('POST', '/api/projects', {
+            path: mkdtempSync(join(home, 'notes-')),
+        });
+        const { body: session } = await api<Session>('POST', '/api/sessions', {
+            projectId: project.id,
+            title: 'project notes',
+            panes: [{ adapter: 'shell' }],
+        });
+        const [paneId] = paneIds(session.layout);
+        const events: ServerEvent[] = [];
+        const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/events`, {
+            headers: { Authorization: `Bearer ${daemon.token}` },
+        });
+        socket.on('message', (data) => events.push(JSON.parse(data.toString()) as ServerEvent));
+        await new Promise((resolveOpen) => socket.on('open', resolveOpen));
+
+        const { body: empty } = await api<PaneNotes>('GET', `/api/projects/${project.id}/notes`);
+        expect(empty.content).toBe('');
+        expect(
+            (
+                await api('POST', `/api/projects/${project.id}/notes/lock`, {
+                    holder: 'window-aaaa',
+                    version: empty.version,
+                })
+            ).status,
+        ).toBe(200);
+        const saved = await api<PaneNotes>('PUT', `/api/projects/${project.id}/notes`, {
+            content: 'conventions\n',
+            version: empty.version,
+            holder: 'window-aaaa',
+        });
+        expect(saved).toMatchObject({ status: 200, body: { content: 'conventions\n' } });
+        await until(() =>
+            events.some(
+                (event) =>
+                    event.type === 'notes' &&
+                    event.scope === 'project' &&
+                    event.id === project.id &&
+                    event.holder === 'window-aaaa',
+            ),
+        );
+        expect(readFileSync(join(home, 'data', 'project-notes', project.id, 'notes.md'), 'utf8')).toBe('conventions\n');
+        expect(existsSync(join(home, 'data', 'notes', `${paneId}.project.changed`))).toBe(true);
+        expect(existsSync(join(home, 'data', 'notes', `${paneId}.changed`))).toBe(false);
+        await api('POST', `/api/projects/${project.id}/notes/unlock`, { holder: 'window-aaaa' });
+        expect((await api('GET', '/api/projects/missing/notes')).status).toBe(404);
+
+        socket.close();
+        await api('DELETE', `/api/projects/${project.id}`);
+        expect(existsSync(join(home, 'data', 'project-notes', project.id))).toBe(false);
+        expect(existsSync(join(home, 'data', 'notes', `${paneId}.project.changed`))).toBe(false);
     });
 });
 

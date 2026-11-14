@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
     AppState,
     LayoutDirection,
+    NotesScope,
     PaneView,
     Session,
     Settings,
@@ -75,6 +76,7 @@ export interface UiState {
     collapsedProjects: Record<string, boolean>;
     expandedSessions: Record<string, boolean>;
     notesOpen: Record<string, boolean>;
+    notesProject: Record<string, boolean>;
     conversationOpen: Record<string, boolean>;
     worktreeProjects: Record<string, boolean>;
     notesFocus: { paneId: string; token: number } | null;
@@ -114,6 +116,7 @@ export interface UiState {
     toggleProject: (id: string) => void;
     toggleSessionPanes: (id: string) => void;
     toggleNotes: (paneId: string) => void;
+    showNotesOf: (paneId: string, scope: NotesScope) => void;
     toggleConversation: (paneId: string) => void;
     setWorktreeChoice: (projectId: string, on: boolean) => void;
     setShowArchived: (value: boolean) => void;
@@ -157,6 +160,7 @@ interface Persisted {
     collapsedProjects: Record<string, boolean>;
     expandedSessions: Record<string, boolean>;
     notesOpen: Record<string, boolean>;
+    notesProject: Record<string, boolean>;
     conversationOpen: Record<string, boolean>;
     worktreeProjects: Record<string, boolean>;
     showArchived: boolean;
@@ -186,6 +190,7 @@ function readPersisted(): Persisted {
                         ? parsed.expandedSessions
                         : {},
                 notesOpen: parsed.notesOpen && typeof parsed.notesOpen === 'object' ? parsed.notesOpen : {},
+                notesProject: parsed.notesProject && typeof parsed.notesProject === 'object' ? parsed.notesProject : {},
                 conversationOpen:
                     parsed.conversationOpen && typeof parsed.conversationOpen === 'object'
                         ? parsed.conversationOpen
@@ -214,6 +219,7 @@ function readPersisted(): Persisted {
         collapsedProjects: {},
         expandedSessions: {},
         notesOpen: {},
+        notesProject: {},
         conversationOpen: {},
         worktreeProjects: {},
         showArchived: false,
@@ -282,8 +288,15 @@ export const useUi = create<UiState>((set, get) => ({
     installable: false,
 
     setApp: (app) => {
-        const { selectedSessionId, selectedWorkspaceId, focusedPaneId, maximizedPaneId, notesOpen, conversationOpen } =
-            get();
+        const {
+            selectedSessionId,
+            selectedWorkspaceId,
+            focusedPaneId,
+            maximizedPaneId,
+            notesOpen,
+            notesProject,
+            conversationOpen,
+        } = get();
         const workspaceExists =
             selectedWorkspaceId !== null && app.workspaces.some((workspace) => workspace.id === selectedWorkspaceId);
         const sessionExists =
@@ -297,6 +310,7 @@ export const useUi = create<UiState>((set, get) => ({
             app,
             sessionSelection: pickedSessions(get().sessionSelection, app, get().showArchived),
             notesOpen: live(notesOpen),
+            notesProject: live(notesProject),
             conversationOpen: live(conversationOpen),
             selectedWorkspaceId: workspaceExists ? selectedWorkspaceId : null,
             selectedSessionId: workspaceExists
@@ -375,7 +389,7 @@ export const useUi = create<UiState>((set, get) => ({
     toggleSessionPanes: (id) =>
         set({ expandedSessions: { ...get().expandedSessions, [id]: !get().expandedSessions[id] } }),
     toggleNotes: (paneId) => {
-        markNotesSeen(paneId);
+        markNotesSeen('pane', paneId);
         const { [paneId]: open, ...rest } = get().notesOpen;
         set(
             open
@@ -385,6 +399,14 @@ export const useUi = create<UiState>((set, get) => ({
                       notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 },
                   },
         );
+    },
+    showNotesOf: (paneId, scope) => {
+        const { [paneId]: _, ...rest } = get().notesProject;
+        set({
+            notesOpen: { ...get().notesOpen, [paneId]: true },
+            notesProject: scope === 'project' ? { ...rest, [paneId]: true } : rest,
+            notesFocus: { paneId, token: (get().notesFocus?.token ?? 0) + 1 },
+        });
     },
     toggleConversation: (paneId) => {
         const { [paneId]: open, ...rest } = get().conversationOpen;
@@ -489,6 +511,7 @@ useUi.subscribe((state) => {
         collapsedProjects: state.collapsedProjects,
         expandedSessions: state.expandedSessions,
         notesOpen: state.notesOpen,
+        notesProject: state.notesProject,
         conversationOpen: state.conversationOpen,
         worktreeProjects: state.worktreeProjects,
         showArchived: state.showArchived,

@@ -89,7 +89,12 @@ export function connectEvents(): () => void {
             } else if (event.type === 'attention') {
                 notifyAttention(event);
             } else if (event.type === 'notes') {
-                applyNotesEvent(event.paneId, { content: event.content, version: event.version }, event.holder);
+                applyNotesEvent(
+                    event.scope,
+                    event.id,
+                    { content: event.content, version: event.version },
+                    event.holder,
+                );
             }
         };
         current.onclose = () => {

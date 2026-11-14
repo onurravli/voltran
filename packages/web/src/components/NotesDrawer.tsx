@@ -1,26 +1,45 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import type { PaneView } from '@voltran/shared';
-import { blockedBy, markNotesSeen, notesFor } from '../notes.ts';
+import type { NotesScope, PaneView, ProjectView } from '@voltran/shared';
+import { blockedBy, markNotesSeen, notesFor, notesFresh } from '../notes.ts';
 import { useUi } from '../store.ts';
 import { keys } from '../shortcuts.ts';
 import { peekTerminal } from '../terminals.ts';
 import { CloseIcon } from './Icons.tsx';
 
-export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: string | null; hint: string }) {
-    const editor = notesFor(pane.id);
+export function NotesDrawer({
+    pane,
+    project,
+    agent,
+    hint,
+}: {
+    pane: PaneView;
+    project: ProjectView | undefined;
+    agent: string | null;
+    hint: string;
+}) {
+    const wantsProject = useUi((state) => state.notesProject[pane.id] === true);
+    const scope: NotesScope = wantsProject && project ? 'project' : 'pane';
+    const id = scope === 'project' && project ? project.id : pane.id;
+    const meta = scope === 'project' && project ? project.notes : pane.notes;
+    const editor = notesFor(scope, id);
     const notes = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
     const focusToken = useUi((state) => (state.notesFocus?.paneId === pane.id ? state.notesFocus.token : null));
     const drawer = useRef<HTMLElement>(null);
     const textarea = useRef<HTMLTextAreaElement>(null);
-    const blocked = blockedBy(pane.notes, notes.holding);
-    const writer = agent ?? 'The agent';
+    const blocked = blockedBy(meta, notes.holding);
+    const writer = scope === 'pane' && agent ? agent : 'An agent';
 
     useEffect(() => {
         void editor.load();
-        const element = drawer.current;
         return () => {
             void editor.flush();
-            markNotesSeen(pane.id);
+            markNotesSeen(scope, id);
+        };
+    }, [editor, scope, id]);
+
+    useEffect(() => {
+        const element = drawer.current;
+        return () => {
             if (
                 !document.activeElement ||
                 document.activeElement === document.body ||
@@ -29,7 +48,7 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
                 peekTerminal(pane.id)?.focus();
             }
         };
-    }, [editor, pane.id]);
+    }, [pane.id]);
 
     useEffect(() => {
         if (focusToken !== null) {
@@ -38,8 +57,8 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
     }, [focusToken]);
 
     useEffect(() => {
-        markNotesSeen(pane.id);
-    }, [pane.id, pane.notes.updatedAt]);
+        markNotesSeen(scope, id);
+    }, [scope, id, meta.updatedAt]);
 
     const status = notes.conflict
         ? ''
@@ -53,16 +72,50 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
                 ? 'Editing'
                 : notes.holding
                   ? 'Saved'
-                  : pane.notes.updatedBy === 'agent'
-                    ? agent
+                  : meta.updatedBy === 'agent'
+                    ? scope === 'pane' && agent
                         ? `Updated by ${agent}`
-                        : 'Changed on disk'
+                        : 'Changed by an agent'
                     : '';
 
+    const tab = (value: NotesScope, label: string, title: string, fresh: boolean) => (
+        <button
+            type="button"
+            role="tab"
+            aria-selected={scope === value}
+            className={`notes__tab${scope === value ? ' is-active' : ''}${fresh ? ' is-fresh' : ''}`}
+            title={title}
+            onClick={() => useUi.getState().showNotesOf(pane.id, value)}
+        >
+            {label}
+        </button>
+    );
+
     return (
-        <aside ref={drawer} className="notes" aria-label={`Notes for ${pane.title}`}>
+        <aside
+            ref={drawer}
+            className="notes"
+            aria-label={scope === 'project' && project ? `Notes for ${project.name}` : `Notes for ${pane.title}`}
+        >
             <div className="notes__header">
-                <span className="notes__title">Notes</span>
+                {project ? (
+                    <div className="notes__tabs" role="tablist" aria-label="Notes">
+                        {tab(
+                            'pane',
+                            'Pane',
+                            'Notes for this pane',
+                            scope !== 'pane' && notesFresh('pane', pane.id, pane.notes),
+                        )}
+                        {tab(
+                            'project',
+                            'Project',
+                            `Notes for every session of ${project.name}`,
+                            scope !== 'project' && notesFresh('project', project.id, project.notes),
+                        )}
+                    </div>
+                ) : (
+                    <span className="notes__title">Notes</span>
+                )}
                 <span className="notes__status" aria-live="polite">
                     {status}
                 </span>
@@ -95,8 +148,12 @@ export function NotesDrawer({ pane, agent, hint }: { pane: PaneView; agent: stri
             <textarea
                 ref={textarea}
                 className="notes__text"
-                aria-label="Notes"
-                placeholder={hint}
+                aria-label={scope === 'project' ? 'Project notes' : 'Notes'}
+                placeholder={
+                    scope === 'project' && project
+                        ? `Notes for every session of ${project.name}. Claude Code and OpenCode read them when a session starts; other agents find them at $VOLTRAN_PROJECT_NOTES.`
+                        : hint
+                }
                 spellCheck={false}
                 value={notes.text}
                 readOnly={blocked !== null || !notes.loaded}

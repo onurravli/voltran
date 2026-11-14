@@ -26,10 +26,12 @@ import {
     type MovePaneBody,
     type NotesLockBody,
     type NotesMeta,
+    type NotesScope,
     type Pane,
     type PaneNotes,
     type PaneSpec,
     type Project,
+    type ProjectView,
     type SaveNotesBody,
     type ServerEvent,
     type Session,
@@ -66,7 +68,7 @@ import { GitWatcher, commandRunner, type GitRunner } from './git.ts';
 import { PENDING_TITLE, SessionNamer } from './naming.ts';
 import { AttachmentRefused, AttachmentStore } from './attachments.ts';
 import { claudeCommands } from './commands.ts';
-import { NotesRefused, NotesStore } from './notes.ts';
+import { NOTES_GUIDE, NotesRefused, NotesStore, PROJECT_NOTES_GUIDE } from './notes.ts';
 import { PaneManager } from './panes.ts';
 import { mergeUsage } from './statusline.ts';
 import type { Store } from './store.ts';
@@ -86,6 +88,7 @@ export interface HubOptions {
     adapters: AdapterInfo[];
     scrollbackDir: string;
     notesDir: string;
+    projectNotesDir: string;
     attachmentsDir: string;
     hooksDir: string;
     url: string;
@@ -106,6 +109,8 @@ const TITLE_RETRY_MS = 4000;
 const MAX_TITLE = 200;
 const MAX_COMMAND = 4000;
 const NOTES_HOLDER = /^[A-Za-z0-9-]{8,64}$/;
+const PANE_NOTES_CHANGED = '.changed';
+const PROJECT_NOTES_CHANGED = '.project.changed';
 
 const requireString = (value: unknown, field: string, max: number): string => {
     if (typeof value !== 'string' || !value.trim()) {
@@ -171,6 +176,7 @@ export class Hub {
     private readonly changes: SessionChangesReader;
     private readonly files: ProjectFiles;
     private readonly notes: NotesStore;
+    private readonly projectNotes: NotesStore;
     private readonly attachments: AttachmentStore;
     private readonly claudeConfig: string | null;
     private readonly worktrees: Worktrees;
@@ -194,7 +200,34 @@ export class Hub {
         );
         this.notes = new NotesStore({
             dir: options.notesDir,
-            onChange: (change) => this.emit({ type: 'notes', ...change }),
+            guide: NOTES_GUIDE,
+            onChange: (change) => {
+                if (change.by === 'user') {
+                    this.notes.markChanged(change.id, PANE_NOTES_CHANGED);
+                }
+                this.emit({ type: 'notes', scope: 'pane', ...change });
+            },
+            onMeta: () => this.scheduleBroadcast(),
+        });
+        this.projectNotes = new NotesStore({
+            dir: options.projectNotesDir,
+            guide: PROJECT_NOTES_GUIDE,
+            onChange: (change) => {
+                const editor = change.by === 'agent' ? change.holder : null;
+                for (const session of this.store.sessionsOfProject(change.id)) {
+                    for (const pane of this.store.panesOfSession(session.id)) {
+                        if (pane.id !== editor && pane.adapter !== 'subagent') {
+                            this.notes.markChanged(pane.id, PROJECT_NOTES_CHANGED);
+                        }
+                    }
+                }
+                this.emit({
+                    type: 'notes',
+                    scope: 'project',
+                    ...change,
+                    holder: change.by === 'user' ? change.holder : null,
+                });
+            },
             onMeta: () => this.scheduleBroadcast(),
         });
         this.panes = new PaneManager({
@@ -211,15 +244,22 @@ export class Hub {
             notes: {
                 guide: this.notes.guide,
                 file: (pane) => (pane.adapter === 'subagent' ? null : this.notes.file(pane.id)),
+                projectGuide: this.projectNotes.guide,
+                projectFile: (pane) => {
+                    const projectId = this.store.getSession(pane.sessionId)?.projectId;
+                    return pane.adapter === 'subagent' || !projectId ? null : this.projectNotes.file(projectId);
+                },
             },
         });
         for (const pane of this.store.listPanes()) {
             this.panes.load(pane);
         }
         this.notes.load(this.store.listPanes().map((pane) => pane.id));
+        this.projectNotes.load(this.store.listProjects().map((project) => project.id));
         this.attachments = new AttachmentStore(options.attachmentsDir);
         this.attachments.load(this.store.listPanes().map((pane) => pane.id));
         this.notes.watch();
+        this.projectNotes.watch();
         this.pruneWorkspaces();
         const gitRunner = options.gitRunner ?? commandRunner({ ...options.baseEnv, PATH: options.path });
         this.git = new GitWatcher({
@@ -241,7 +281,9 @@ export class Hub {
 
     state(): AppState {
         return {
-            projects: this.store.listProjects(),
+            projects: this.store
+                .listProjects()
+                .map((project): ProjectView => ({ ...project, notes: this.projectNotes.meta(project.id) })),
             sessions: this.store.listSessions(),
             panes: this.panes.views().map((view) => ({ ...view, notes: this.notes.meta(view.id) })),
             workspaces: this.store.listWorkspaces(),
@@ -280,6 +322,7 @@ export class Hub {
 
     shutdown(): Promise<void> {
         this.notes.close();
+        this.projectNotes.close();
         this.namingTimers.forEach(clearTimeout);
         this.namingTimers.clear();
         if (this.broadcastTimer) {
@@ -365,6 +408,7 @@ export class Hub {
             this.removeSessionPanes(session.id);
         }
         this.store.deleteProject(id);
+        this.projectNotes.remove(id);
         this.pruneWorkspaces();
         this.scheduleBroadcast();
         for (const session of sessions) {
@@ -696,8 +740,15 @@ export class Hub {
 
     // The notes hook asks the daemon for the notes instead of reading the file itself: the folder is
     // the agent's, and a shell cannot open a file without following a link planted there.
-    hookNotes(paneId: string, secret: string): string | null {
-        return this.panes.isClaudeReport(paneId, secret) ? this.notes.current(paneId) : null;
+    hookNotes(paneId: string, secret: string, scope: NotesScope): string | null {
+        if (!this.panes.isClaudeReport(paneId, secret)) {
+            return null;
+        }
+        if (scope === 'pane') {
+            return this.notes.current(paneId);
+        }
+        const projectId = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '')?.projectId;
+        return projectId ? this.projectNotes.current(projectId) : '';
     }
 
     private statusLine(paneId: string, secret: string, payload: Record<string, unknown>): boolean {
@@ -777,39 +828,50 @@ export class Hub {
         }
     }
 
-    paneNotes(id: string): PaneNotes {
-        this.mustGetPane(id);
-        return this.notes.read(id);
+    readNotes(scope: NotesScope, id: string): PaneNotes {
+        return this.notesOf(scope, id).read(id);
     }
 
-    lockNotes(id: string, body: NotesLockBody): NotesMeta {
-        this.mustGetPane(id);
+    lockNotes(scope: NotesScope, id: string, body: NotesLockBody): NotesMeta {
+        const notes = this.notesOf(scope, id);
         const holder = notesHolder(body?.holder);
         if (body.version !== undefined && typeof body.version !== 'string') {
             throw new HttpError(400, 'version must be a string');
         }
-        return refusedAsHttp(() => this.notes.lock(id, holder, body.version));
+        return refusedAsHttp(() => notes.lock(id, holder, body.version));
     }
 
-    unlockNotes(id: string, body: NotesLockBody): void {
-        this.mustGetPane(id);
-        this.notes.unlock(id, notesHolder(body?.holder));
+    unlockNotes(scope: NotesScope, id: string, body: NotesLockBody): void {
+        this.notesOf(scope, id).unlock(id, notesHolder(body?.holder));
     }
 
-    saveNotes(id: string, body: SaveNotesBody): PaneNotes {
-        this.mustGetPane(id);
+    saveNotes(scope: NotesScope, id: string, body: SaveNotesBody): PaneNotes {
+        const notes = this.notesOf(scope, id);
         const holder = notesHolder(body?.holder);
         if (typeof body.content !== 'string' || typeof body.version !== 'string') {
             throw new HttpError(400, 'content and version are required');
         }
-        return refusedAsHttp(() => this.notes.save(id, holder, body.version, body.content));
+        return refusedAsHttp(() => notes.save(id, holder, body.version, body.content));
+    }
+
+    private notesOf(scope: NotesScope, id: string): NotesStore {
+        if (scope === 'project') {
+            this.mustGetProject(id);
+            return this.projectNotes;
+        }
+        this.mustGetPane(id);
+        return this.notes;
     }
 
     // Claude names the file it is about to edit, so the drawer can wait instead of racing it. Other
     // agents give no notice; their writes show up through the notes watcher.
     private trackNotesEdit(paneId: string, event: string, payload: Record<string, unknown>): void {
+        const projectId = this.store.getSession(this.store.getPane(paneId)?.sessionId ?? '')?.projectId;
         if (event === 'Stop' || event === 'SessionEnd') {
             this.notes.agentDone(paneId);
+            if (projectId) {
+                this.projectNotes.agentDone(projectId, paneId);
+            }
             return;
         }
         if (event !== 'PreToolUse' && event !== 'PostToolUse') {
@@ -817,13 +879,21 @@ export class Hub {
         }
         const input = payload.tool_input;
         const file = input && typeof input === 'object' ? (input as Record<string, unknown>).file_path : undefined;
-        if ((payload.tool_name !== 'Edit' && payload.tool_name !== 'Write') || !this.notes.isFile(paneId, file)) {
+        if (payload.tool_name !== 'Edit' && payload.tool_name !== 'Write') {
             return;
         }
-        if (event === 'PreToolUse') {
-            this.notes.agentEditing(paneId);
-        } else {
-            this.notes.agentDone(paneId);
+        if (this.notes.isFile(paneId, file)) {
+            if (event === 'PreToolUse') {
+                this.notes.agentEditing(paneId);
+            } else {
+                this.notes.agentDone(paneId);
+            }
+        } else if (projectId && this.projectNotes.idOf(file) === projectId) {
+            if (event === 'PreToolUse') {
+                this.projectNotes.agentEditing(projectId, paneId);
+            } else {
+                this.projectNotes.agentDone(projectId, paneId);
+            }
         }
     }
 

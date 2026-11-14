@@ -16,17 +16,17 @@ import {
     writeFileSync,
     type FSWatcher,
 } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { MAX_NOTES_BYTES, type NotesAuthor, type NotesMeta, type PaneNotes } from '@voltran/shared';
 
 const FILE = 'notes.md';
 const GUIDE = 'GUIDE.md';
-const CHANGED = '.changed';
 const LEASE_MS = 10_000;
 const AGENT_EDIT_MS = 10_000;
 const RELOAD_DELAY_MS = 100;
 const READ_LIMIT = 1024 * 1024;
-const PANE_ID = /^[A-Za-z0-9-]{1,64}$/;
+const ID = /^[A-Za-z0-9-]{1,64}$/;
+export const CHANGED_MARKS = ['.project.changed', '.changed'];
 
 export class NotesRefused extends Error {
     readonly status: number;
@@ -38,13 +38,14 @@ export class NotesRefused extends Error {
 }
 
 export interface NotesChange extends PaneNotes {
-    paneId: string;
+    id: string;
     by: NotesAuthor;
     holder: string | null;
 }
 
 export interface NotesStoreOptions {
     dir: string;
+    guide: string;
     onChange: (change: NotesChange) => void;
     onMeta: () => void;
 }
@@ -75,6 +76,22 @@ compaction.
   place and keep what the user wrote unless they ask otherwise.
 - Keep it short, well under 8 KB.
 - If a write fails because the file or its folder is read-only, the user is editing it: try again
+  later, and never change its permissions.
+`;
+
+export const PROJECT_NOTES_GUIDE = `# Voltran project notes
+
+The file notes.md named below (its path is also in $VOLTRAN_PROJECT_NOTES) is a notebook the user
+and every agent share across all sessions and worktrees of this project. It outlives restarts,
+resumed sessions and compaction.
+
+- Read it for context: the user may keep conventions, decisions and plans for the whole project there.
+- Write there only what other sessions need too, such as a decision or a convention; keep the progress
+  of your own task in the pane notes.
+- Other agents and the user edit it too: edit it in place and keep what they wrote unless the user
+  asks otherwise.
+- Keep it short, well under 8 KB.
+- If a write fails because the file or its folder is read-only, someone is editing it: try again
   later, and never change its permissions.
 `;
 
@@ -156,7 +173,7 @@ function readNote(fd: number, size: number): string {
     return buffer.subarray(0, length).toString('utf8');
 }
 
-// Each pane's note lives in a folder of its own, so a lock can make the folder read-only too: a
+// Each note (a pane's, or a project's in a second store) lives in a folder of its own, so a lock can make the folder read-only too: a
 // read-only file alone does not stop a write that replaces it through a rename.
 export class NotesStore {
     private readonly dir: string;
@@ -165,7 +182,7 @@ export class NotesStore {
     private watcher: FSWatcher | null = null;
 
     constructor(options: NotesStoreOptions) {
-        this.dir = options.dir;
+        this.dir = resolve(options.dir);
         this.options = options;
     }
 
@@ -174,16 +191,17 @@ export class NotesStore {
     }
 
     // A lock does not outlive the daemon that took it, and a deleted pane leaves no note behind.
-    load(paneIds: Iterable<string>): void {
+    load(ids: Iterable<string>): void {
         mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-        replaceFile(this.dir, GUIDE, NOTES_GUIDE, 0o600);
-        const known = new Set(paneIds);
+        replaceFile(this.dir, GUIDE, this.options.guide, 0o600);
+        const known = new Set(ids);
         for (const name of readdirSync(this.dir)) {
-            const paneId = name.endsWith(CHANGED) ? name.slice(0, -CHANGED.length) : name;
-            if (known.has(paneId)) {
-                this.setWritable(paneId, true);
-            } else if (PANE_ID.test(paneId)) {
-                this.removeFiles(paneId);
+            const mark = CHANGED_MARKS.find((suffix) => name.endsWith(suffix));
+            const id = mark ? name.slice(0, -mark.length) : name;
+            if (known.has(id)) {
+                this.setWritable(id, true);
+            } else if (ID.test(id)) {
+                this.removeFiles(id);
             }
         }
     }
@@ -298,25 +316,43 @@ export class NotesStore {
         note.version = versionOf(content);
         note.updatedAt = Date.now();
         note.updatedBy = 'user';
-        replaceFile(this.dir, `${paneId}${CHANGED}`, '', 0o600);
         this.setLock(paneId, note, 'user', holder);
-        this.options.onChange({ paneId, content, version: note.version, by: 'user', holder });
+        this.options.onChange({ id: paneId, content, version: note.version, by: 'user', holder });
         this.options.onMeta();
         return { content, version: note.version };
     }
 
-    agentEditing(paneId: string): void {
+    // The id of the note whose file this is, if it is one.
+    idOf(path: unknown): string | null {
+        if (typeof path !== 'string') {
+            return null;
+        }
+        const file = resolve(path);
+        const id = basename(dirname(file));
+        return basename(file) === FILE && dirname(dirname(file)) === this.dir && ID.test(id) ? id : null;
+    }
+
+    // Marks that the user changed a note, for the notes hook to show it again on the next prompt.
+    markChanged(paneId: string, mark: string): void {
+        this.dirOf(paneId);
+        replaceFile(this.dir, `${paneId}${mark}`, '', 0o600);
+    }
+
+    // The editor is the pane whose agent writes, which a change it makes reports as its holder.
+    agentEditing(paneId: string, editor: string | null = null): void {
         const note = this.note(paneId);
         if (note.lock?.by !== 'user') {
-            this.setLock(paneId, note, 'agent', null);
+            this.setLock(paneId, note, 'agent', editor);
         }
     }
 
-    agentDone(paneId: string): void {
+    // Without an editor, any agent's lock ends; with one, only the lock that editor holds.
+    agentDone(paneId: string, editor?: string): void {
         const note = this.notes.get(paneId);
-        if (note?.lock?.by === 'agent') {
+        if (note?.lock?.by === 'agent' && (editor === undefined || note.lock.holder === editor)) {
+            const editor = note.lock.holder;
             this.release(paneId, note, true);
-            this.reload(paneId, note);
+            this.reload(paneId, note, editor);
         }
     }
 
@@ -344,7 +380,7 @@ export class NotesStore {
         return note;
     }
 
-    private reload(paneId: string, note: Note): void {
+    private reload(paneId: string, note: Note, editor: string | null = null): void {
         const { content, updatedAt } = this.readFile(paneId);
         const version = versionOf(content);
         if (version === note.version) {
@@ -354,7 +390,8 @@ export class NotesStore {
         note.version = version;
         note.updatedAt = updatedAt ?? Date.now();
         note.updatedBy = 'agent';
-        this.options.onChange({ paneId, content, version, by: 'agent', holder: null });
+        const holder = editor ?? (note.lock?.by === 'agent' ? note.lock.holder : null);
+        this.options.onChange({ id: paneId, content, version, by: 'agent', holder });
         this.options.onMeta();
     }
 
@@ -435,7 +472,9 @@ export class NotesStore {
         const dir = this.dirOf(paneId);
         chmodFolder(dir, 0o700);
         rmSync(dir, { recursive: true, force: true });
-        rmSync(join(this.dir, `${paneId}${CHANGED}`), { force: true });
+        for (const mark of CHANGED_MARKS) {
+            rmSync(join(this.dir, `${paneId}${mark}`), { force: true });
+        }
     }
 
     // The pane's folder, as a real folder: whatever else stands at its path is removed first.
@@ -452,7 +491,7 @@ export class NotesStore {
     }
 
     private dirOf(paneId: string): string {
-        if (!PANE_ID.test(paneId)) {
+        if (!ID.test(paneId)) {
             throw new Error(`invalid pane id "${paneId}"`);
         }
         return join(this.dir, paneId);

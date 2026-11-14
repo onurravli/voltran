@@ -2549,6 +2549,50 @@ button.git-count:hover {
     font-weight: 600;
 }
 
+.notes__tabs {
+    display: flex;
+    gap: 2px;
+    margin-left: -6px;
+}
+
+.notes__tab {
+    position: relative;
+    padding: 3px 7px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-faint);
+    font: inherit;
+    font-size: calc(12px * var(--ui-scale));
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.notes__tab:hover {
+    color: var(--text-muted);
+}
+
+.notes__tab.is-active {
+    color: var(--text);
+    background: var(--fill-strong);
+}
+
+.notes__tab:focus-visible {
+    outline: 1px solid var(--focus);
+    outline-offset: -1px;
+}
+
+.notes__tab.is-fresh::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    right: 1px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--finished);
+}
+
 .notes__status {
     flex: 1;
     min-width: 0;

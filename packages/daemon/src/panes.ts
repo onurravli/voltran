@@ -76,7 +76,12 @@ export interface PaneManagerOptions {
     onPaneRecord: (pane: Pane) => void;
     onAttention: (pane: Pane, status: AttentionStatus, body: string) => void;
     onExit?: (pane: Pane, exitCode: number) => void;
-    notes?: { guide: string; file: (pane: Pane) => string | null };
+    notes?: {
+        guide: string;
+        file: (pane: Pane) => string | null;
+        projectGuide: string;
+        projectFile: (pane: Pane) => string | null;
+    };
     heuristicQuietMs?: number;
     hooksSilenceMs?: number;
     startupPromptMs?: number;
@@ -518,6 +523,7 @@ export class PaneManager {
         }
         const subagentRunning = pane.adapter === 'subagent' && this.isFollowedTranscript(pane.command);
         const notesFile = this.options.notes?.file(pane) ?? null;
+        const projectNotesFile = this.options.notes?.projectFile(pane) ?? null;
         const spec = adapter.launch({
             pane,
             shell: this.options.shell,
@@ -525,10 +531,13 @@ export class PaneManager {
             baseEnv: this.options.baseEnv,
             notesFile,
             notesGuide: this.options.notes?.guide ?? null,
+            projectNotesFile,
+            projectNotesGuide: this.options.notes?.projectGuide ?? null,
         });
         const extraEnv: Record<string, string> = {
             ...spec.env,
             ...(notesFile ? { VOLTRAN_NOTES: notesFile } : {}),
+            ...(projectNotesFile ? { VOLTRAN_PROJECT_NOTES: projectNotesFile } : {}),
             ...(secret
                 ? {
                       VOLTRAN_PANE_ID: pane.id,

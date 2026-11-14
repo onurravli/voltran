@@ -172,7 +172,14 @@ only, which Claude's sandbox also takes as write access; OpenCode gets `GUIDE.md
 name opened with O_EXCL, then a rename), modes change only on real files and folders, and a linked,
 hard-linked or non-regular notes file reads as empty and never has its mode changed (`openNote`). `NOTES_GUIDE` is the
 one copy of what agents are told. A daemon start restores permissions and deletes the notes of panes
-that no longer exist.
+that no longer exist. Project notes are a second `NotesStore` keyed by project id in
+`~/.voltran/project-notes` (`PROJECT_NOTES_GUIDE`, `$VOLTRAN_PROJECT_NOTES`, routes under
+`/api/projects/:id/notes`, `ProjectView.notes`); the `notes` event carries a `scope`. `notes-hook.sh`
+takes the scope as its second argument and runs as one hook per scope, so each has the whole output
+budget. Its "changed" marks sit next to the pane's folder (`<pane>.changed`, `<pane>.project.changed`):
+a user save marks the pane, and any change to a project's notes marks every pane of the project but
+the one whose agent wrote it (the agent lock's holder). The drawer's Pane/Project tab is
+`notesProject` in the web store.
 
 **Update notice.** `daemon/src/updates.ts` (`UpdateChecker`) is the daemon's only request of its own to
 the internet: `fetchLatest` asks `registry.npmjs.org/voltran/latest` with no headers of Voltran's own, at

@@ -1,11 +1,11 @@
-import type { NotesLockBody, NotesMeta, PaneNotes, SaveNotesBody } from '@voltran/shared';
+import type { NotesLockBody, NotesMeta, NotesScope, PaneNotes, SaveNotesBody } from '@voltran/shared';
 import { api } from './api.ts';
 
 export interface NotesApi {
-    read(paneId: string): Promise<PaneNotes>;
-    lock(paneId: string, body: NotesLockBody): Promise<NotesMeta>;
-    unlock(paneId: string, body: NotesLockBody): Promise<void>;
-    save(paneId: string, body: SaveNotesBody, keepalive?: boolean): Promise<PaneNotes>;
+    read(id: string): Promise<PaneNotes>;
+    lock(id: string, body: NotesLockBody): Promise<NotesMeta>;
+    unlock(id: string, body: NotesLockBody): Promise<void>;
+    save(id: string, body: SaveNotesBody, keepalive?: boolean): Promise<PaneNotes>;
 }
 
 export interface NotesSnapshot {
@@ -29,7 +29,7 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 // agent waits only while the user is actually typing. The draft is never replaced by a change from
 // elsewhere: when a save is refused, it stays until the user keeps it or loads the other version.
 export class NotesEditor {
-    readonly paneId: string;
+    readonly id: string;
     private readonly api: NotesApi;
     private readonly holder: string;
     private content = '';
@@ -47,8 +47,8 @@ export class NotesEditor {
     private readonly listeners = new Set<() => void>();
     private snapshot: NotesSnapshot;
 
-    constructor(paneId: string, notesApi: NotesApi, holder: string) {
-        this.paneId = paneId;
+    constructor(id: string, notesApi: NotesApi, holder: string) {
+        this.id = id;
         this.api = notesApi;
         this.holder = holder;
         this.snapshot = this.compute();
@@ -65,7 +65,7 @@ export class NotesEditor {
         if (this.loaded) {
             return Promise.resolve();
         }
-        this.loading ??= this.api.read(this.paneId).then(
+        this.loading ??= this.api.read(this.id).then(
             (latest) => this.applyRemote(latest, null),
             (error) => {
                 this.loading = null;
@@ -141,7 +141,7 @@ export class NotesEditor {
 
     private acquire(): Promise<boolean> {
         this.acquiring ??= this.api
-            .lock(this.paneId, { holder: this.holder, version: this.version })
+            .lock(this.id, { holder: this.holder, version: this.version })
             .then(
                 () => {
                     this.holding = true;
@@ -166,7 +166,7 @@ export class NotesEditor {
             return;
         }
         this.renewedAt = Date.now();
-        this.api.lock(this.paneId, { holder: this.holder }).catch((error) => this.refused(error));
+        this.api.lock(this.id, { holder: this.holder }).catch((error) => this.refused(error));
     }
 
     private scheduleSave(): void {
@@ -201,7 +201,7 @@ export class NotesEditor {
         const text = this.draft;
         try {
             const saved = await this.api.save(
-                this.paneId,
+                this.id,
                 { content: text, version: this.version, holder: this.holder },
                 keepalive,
             );
@@ -230,7 +230,7 @@ export class NotesEditor {
         }
         this.holding = false;
         this.notify();
-        this.api.unlock(this.paneId, { holder: this.holder }).catch(() => undefined);
+        this.api.unlock(this.id, { holder: this.holder }).catch(() => undefined);
     }
 
     private refused(error: unknown): void {
@@ -240,7 +240,7 @@ export class NotesEditor {
             this.conflict = message(error);
         }
         this.notify();
-        this.api.read(this.paneId).then(
+        this.api.read(this.id).then(
             (latest) => this.applyRemote(latest, null),
             () => undefined,
         );
@@ -275,49 +275,54 @@ export class NotesEditor {
     }
 }
 
-const defaultApi: NotesApi = {
-    read: (paneId) => api.paneNotes(paneId),
-    lock: (paneId, body) => api.lockNotes(paneId, body),
-    unlock: (paneId, body) => api.unlockNotes(paneId, body),
-    save: (paneId, body, keepalive) => api.saveNotes(paneId, body, keepalive),
-};
+const scopedApi = (scope: NotesScope): NotesApi => ({
+    read: (id) => api.readNotes(scope, id),
+    lock: (id, body) => api.lockNotes(scope, id, body),
+    unlock: (id, body) => api.unlockNotes(scope, id, body),
+    save: (id, body, keepalive) => api.saveNotes(scope, id, body, keepalive),
+});
 
-const editors = new Map<string, NotesEditor>();
+const apis: Record<NotesScope, NotesApi> = { pane: scopedApi('pane'), project: scopedApi('project') };
 
-export function notesFor(paneId: string): NotesEditor {
-    let editor = editors.get(paneId);
+// A project's notes have one editor per window, which every pane of the project shows.
+const editors: Record<NotesScope, Map<string, NotesEditor>> = { pane: new Map(), project: new Map() };
+
+export function notesFor(scope: NotesScope, id: string): NotesEditor {
+    let editor = editors[scope].get(id);
     if (!editor) {
-        editor = new NotesEditor(paneId, defaultApi, NOTES_HOLDER);
-        editors.set(paneId, editor);
+        editor = new NotesEditor(id, apis[scope], NOTES_HOLDER);
+        editors[scope].set(id, editor);
     }
     return editor;
 }
 
-export function applyNotesEvent(paneId: string, latest: PaneNotes, holder: string | null): void {
-    editors.get(paneId)?.applyRemote(latest, holder);
+export function applyNotesEvent(scope: NotesScope, id: string, latest: PaneNotes, holder: string | null): void {
+    editors[scope].get(id)?.applyRemote(latest, holder);
 }
 
-export function disposeNotesExcept(liveIds: Set<string>): void {
-    for (const paneId of editors.keys()) {
-        if (!liveIds.has(paneId)) {
-            editors.delete(paneId);
+export function disposeNotesExcept(scope: NotesScope, liveIds: Set<string>): void {
+    for (const id of editors[scope].keys()) {
+        if (!liveIds.has(id)) {
+            editors[scope].delete(id);
         }
     }
 }
 
 export function flushNotesOnExit(): void {
-    editors.forEach((editor) => editor.flushOnExit());
+    for (const scope of ['pane', 'project'] as const) {
+        editors[scope].forEach((editor) => editor.flushOnExit());
+    }
 }
 
 const openedAt = Date.now();
 const seenAt = new Map<string, number>();
 
-export function markNotesSeen(paneId: string): void {
-    seenAt.set(paneId, Date.now());
+export function markNotesSeen(scope: NotesScope, id: string): void {
+    seenAt.set(`${scope}:${id}`, Date.now());
 }
 
-export function notesFresh(paneId: string, meta: NotesMeta): boolean {
-    return meta.updatedBy === 'agent' && (meta.updatedAt ?? 0) > (seenAt.get(paneId) ?? openedAt);
+export function notesFresh(scope: NotesScope, id: string, meta: NotesMeta): boolean {
+    return meta.updatedBy === 'agent' && (meta.updatedAt ?? 0) > (seenAt.get(`${scope}:${id}`) ?? openedAt);
 }
 
 export function blockedBy(meta: NotesMeta, holding: boolean): 'agent' | 'window' | null {

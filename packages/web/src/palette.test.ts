@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AppState, PaneView, Session } from '@voltran/shared';
+import type { AppState, PaneView, ProjectView, Session } from '@voltran/shared';
 import { destinations, filterItems } from './palette.ts';
 
 const items = [
@@ -53,7 +53,7 @@ const pane = (id: string, sessionId: string, title: string, status: PaneView['st
     ({ id, sessionId, title, status }) as PaneView;
 
 const app = {
-    projects: [{ id: 'project', name: 'checkout', path: '/tmp', color: '#7aa2f7', createdAt: 0 }],
+    projects: [{ id: 'project', name: 'checkout', path: '/tmp', color: '#7aa2f7', createdAt: 0 } as ProjectView],
     sessions: [session('one', 'Fix flaky total'), session('two', 'Old spike', true)],
     panes: [
         pane('a', 'one', 'Claude', 'needs-input'),

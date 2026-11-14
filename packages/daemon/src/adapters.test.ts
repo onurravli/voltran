@@ -11,6 +11,7 @@ import {
     CODEX_HOOK_EVENTS,
     codexHookArgs,
     NOTES_HOOK,
+    type NotesPaths,
     OPENCODE_PLUGIN,
     opencodeArgsProblem,
     opencodeConfigContent,
@@ -78,6 +79,8 @@ describe('claude adapter', () => {
             baseEnv,
             notesFile: null,
             notesGuide: null,
+            projectNotesFile: null,
+            projectNotesGuide: null,
         });
     const settings = expect.stringMatching(/^\{"hooks":/);
 
@@ -179,7 +182,12 @@ describe('opencode adapter', () => {
         createdAt: 0,
         ...overrides,
     });
-    const launch = (overrides: Partial<Pane>, baseEnv: NodeJS.ProcessEnv = {}, notesFile: string | null = null) =>
+    const launch = (
+        overrides: Partial<Pane>,
+        baseEnv: NodeJS.ProcessEnv = {},
+        notesFile: string | null = null,
+        projectNotesFile: string | null = null,
+    ) =>
         adapterFor('opencode').launch({
             pane: pane(overrides),
             shell: '/bin/zsh',
@@ -187,6 +195,8 @@ describe('opencode adapter', () => {
             baseEnv,
             notesFile,
             notesGuide: '/n/GUIDE.md',
+            projectNotesFile,
+            projectNotesGuide: '/pn/GUIDE.md',
         });
 
     it('runs its own server on the pane session, with the arguments after the ones Voltran sets', () => {
@@ -221,6 +231,11 @@ describe('opencode adapter', () => {
             plugins: [OPENCODE_PLUGIN],
         });
     });
+
+    it("adds the project's notes and their guide after the pane's", () => {
+        const config = JSON.parse(launch({}, {}, '/n/p/notes.md', '/pn/q/notes.md').env?.OPENCODE_CONFIG_CONTENT ?? '');
+        expect(config.instructions).toEqual(['/n/GUIDE.md', '/n/p/notes.md', '/pn/GUIDE.md', '/pn/q/notes.md']);
+    });
 });
 
 describe('claudeHookSettings', () => {
@@ -228,10 +243,18 @@ describe('claudeHookSettings', () => {
         hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>;
         permissions?: { allow: string[] };
     };
-    const notesOf = (pane: string) => ({
-        file: `/home/o'b/.voltran/notes/${pane}/notes.md`,
-        guide: "/home/o'b/.voltran/notes/GUIDE.md",
-    });
+    const notesOf = (pane: string): NotesPaths[] => [
+        {
+            scope: 'pane',
+            file: `/home/o'b/.voltran/notes/${pane}/notes.md`,
+            guide: "/home/o'b/.voltran/notes/GUIDE.md",
+        },
+    ];
+    const projectNotes: NotesPaths = {
+        scope: 'project',
+        file: '/h/.voltran/project-notes/project-1/notes.md',
+        guide: '/h/.voltran/project-notes/GUIDE.md',
+    };
     const settings = claudeHookSettings(notesOf('pane-1')) as Settings;
 
     it('adds the notes hooks after the status reports, quoting their paths', () => {
@@ -239,12 +262,12 @@ describe('claudeHookSettings', () => {
         const guide = `'/home/o'\\''b/.voltran/notes/GUIDE.md'`;
         expect(settings.hooks.SessionStart.map((entry) => entry.hooks[0].command)).toEqual([
             expect.stringContaining('/api/hooks/$VOLTRAN_PANE_ID/SessionStart'),
-            `sh ${hook} session-start ${guide}; exit 0`,
+            `sh ${hook} session-start pane ${guide}; exit 0`,
         ]);
-        expect(settings.hooks.UserPromptSubmit[1].hooks[0].command).toBe(`sh ${hook} prompt ${guide}; exit 0`);
+        expect(settings.hooks.UserPromptSubmit[1].hooks[0].command).toBe(`sh ${hook} prompt pane ${guide}; exit 0`);
         expect(settings.hooks.PreToolUse[1]).toMatchObject({
             matcher: 'Edit|Write',
-            hooks: [{ command: `sh ${hook} pre-tool-use ${guide}; exit 0` }],
+            hooks: [{ command: `sh ${hook} pre-tool-use pane ${guide}; exit 0` }],
         });
         expect(settings.hooks.Stop).toHaveLength(1);
     });
@@ -267,8 +290,29 @@ describe('claudeHookSettings', () => {
         ]);
     });
 
+    it("runs one notes hook per scope and opens the project's notes folder too", () => {
+        const both = claudeHookSettings([...notesOf('pane-1'), projectNotes]) as Settings;
+        const hook = `'${NOTES_HOOK.replace(/'/g, `'\\''`)}'`;
+        for (const [event, mode] of [
+            ['SessionStart', 'session-start'],
+            ['UserPromptSubmit', 'prompt'],
+            ['PreToolUse', 'pre-tool-use'],
+        ]) {
+            expect(both.hooks[event][1].hooks.map((entry) => entry.command)).toEqual([
+                expect.stringContaining(`${mode} pane `),
+                `sh ${hook} ${mode} project '/h/.voltran/project-notes/GUIDE.md'; exit 0`,
+            ]);
+        }
+        expect(both.permissions?.allow).toEqual([
+            "Read(//home/o'b/.voltran/notes/pane-1/**)",
+            "Edit(//home/o'b/.voltran/notes/pane-1/**)",
+            'Read(//h/.voltran/project-notes/project-1/**)',
+            'Edit(//h/.voltran/project-notes/project-1/**)',
+        ]);
+    });
+
     it('leaves out the notes hooks and permissions when the pane has no notes', () => {
-        const bare = claudeHookSettings(null) as Settings;
+        const bare = claudeHookSettings([]) as Settings;
         expect(bare.permissions).toBeUndefined();
         expect(bare.hooks.SessionStart).toHaveLength(1);
     });

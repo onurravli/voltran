@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_NOTES_BYTES } from '@voltran/shared';
-import { NotesRefused, NotesStore, type NotesChange } from './notes.ts';
+import { NOTES_GUIDE, NotesRefused, NotesStore, type NotesChange } from './notes.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -35,7 +35,17 @@ function setup(): { dir: string; store: NotesStore; changes: NotesChange[]; meta
     const dir = mkdtempSync(join(tmpdir(), 'voltran-notes-'));
     const changes: NotesChange[] = [];
     let metas = 0;
-    const store = new NotesStore({ dir, onChange: (change) => changes.push(change), onMeta: () => metas++ });
+    const store = new NotesStore({
+        dir,
+        guide: NOTES_GUIDE,
+        onChange: (change) => {
+            changes.push(change);
+            if (change.by === 'user') {
+                store.markChanged(change.id, '.changed');
+            }
+        },
+        onMeta: () => metas++,
+    });
     cleanups.push(() => {
         store.close();
         chmodAll(dir);
@@ -115,7 +125,7 @@ describe('NotesStore', () => {
         const saved = store.save(paneId, HOLDER, version, '# Plan\n');
         expect(readFileSync(join(dir, paneId, 'notes.md'), 'utf8')).toBe('# Plan\n');
         expect(saved.version).not.toBe(version);
-        expect(changes.at(-1)).toMatchObject({ paneId, content: '# Plan\n', by: 'user', holder: HOLDER });
+        expect(changes.at(-1)).toMatchObject({ id: paneId, content: '# Plan\n', by: 'user', holder: HOLDER });
         expect(existsSync(join(dir, `${paneId}.changed`))).toBe(true);
         expect(store.meta(paneId)).toMatchObject({ size: 7, updatedBy: 'user', lock: 'user', holder: HOLDER });
 
@@ -288,7 +298,30 @@ describe('NotesStore', () => {
         writeFileSync(file, 'progress: step 2\n');
         store.agentDone(paneId);
         expect(store.meta(paneId)).toMatchObject({ lock: null, updatedBy: 'agent' });
-        expect(changes.at(-1)).toMatchObject({ paneId, content: 'progress: step 2\n', by: 'agent', holder: null });
+        expect(changes.at(-1)).toMatchObject({ id: paneId, content: 'progress: step 2\n', by: 'agent', holder: null });
+    });
+
+    it('ends an agent lock taken for one editor only when that editor is done', () => {
+        const { store, changes } = setup();
+        const projectId = randomUUID();
+        store.agentEditing(projectId, 'pane-a');
+        writeFileSync(store.file(projectId), 'decision\n');
+        store.agentDone(projectId, 'pane-b');
+        expect(store.meta(projectId)).toMatchObject({ lock: 'agent' });
+        store.agentDone(projectId, 'pane-a');
+        expect(store.meta(projectId)).toMatchObject({ lock: null, updatedBy: 'agent' });
+        expect(changes.at(-1)).toMatchObject({ id: projectId, by: 'agent', holder: 'pane-a' });
+    });
+
+    it('names the note a path is the file of', () => {
+        const { dir, store } = setup();
+        const id = randomUUID();
+        expect(store.idOf(store.file(id))).toBe(id);
+        expect(store.idOf(join(dir, id, '..', id, 'notes.md'))).toBe(id);
+        expect(store.idOf(join(dir, id, 'other.md'))).toBeNull();
+        expect(store.idOf(join(dir, 'GUIDE.md'))).toBeNull();
+        expect(store.idOf(join(tmpdir(), id, 'notes.md'))).toBeNull();
+        expect(store.idOf(42)).toBeNull();
     });
 
     // FSEvents drops what happens before its stream is running, so the write is repeated until the
@@ -303,7 +336,7 @@ describe('NotesStore', () => {
             writeFileSync(file, `written by codex ${attempt}\n`);
             await until(() => changes.length > 0, 600).catch(() => undefined);
         }
-        expect(changes.at(-1)).toMatchObject({ paneId, by: 'agent' });
+        expect(changes.at(-1)).toMatchObject({ id: paneId, by: 'agent' });
         expect(store.read(paneId).content).toBe(changes.at(-1)?.content);
     });
 
@@ -316,6 +349,7 @@ describe('NotesStore', () => {
             writeFileSync(join(dir, paneId, 'notes.md'), `${paneId}\n`, { mode: 0o400 });
             chmodSync(join(dir, paneId), 0o500);
             writeFileSync(join(dir, `${paneId}.changed`), '');
+            writeFileSync(join(dir, `${paneId}.project.changed`), '');
         }
         store.load([kept]);
         expect(statSync(join(dir, kept)).mode & 0o777).toBe(0o700);
@@ -323,6 +357,8 @@ describe('NotesStore', () => {
         expect(existsSync(join(dir, `${kept}.changed`))).toBe(true);
         expect(existsSync(join(dir, gone))).toBe(false);
         expect(existsSync(join(dir, `${gone}.changed`))).toBe(false);
+        expect(existsSync(join(dir, `${kept}.project.changed`))).toBe(true);
+        expect(existsSync(join(dir, `${gone}.project.changed`))).toBe(false);
     });
 
     it("deletes a pane's note even while it is locked", () => {

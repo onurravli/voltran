@@ -524,7 +524,7 @@ async function newSession(args: string[]): Promise<void> {
     const started = await startIfNeeded(api);
     try {
         const state = await api.request<AppState>('GET', '/api/state');
-        let project = state.projects.find((entry) => entry.path === parsed.path);
+        let project: Project | undefined = state.projects.find((entry) => entry.path === parsed.path);
         if (!project) {
             project = await api.request<Project>('POST', '/api/projects', { path: parsed.path });
             console.log(`Added project ${project.name} → ${project.path}`);

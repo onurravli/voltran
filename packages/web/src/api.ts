@@ -14,6 +14,7 @@ import type {
     MovePaneBody,
     NotesLockBody,
     NotesMeta,
+    NotesScope,
     Pane,
     PaneNotes,
     Project,
@@ -150,6 +151,9 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
     return parsed as T;
 }
 
+const notesPath = (scope: NotesScope, id: string): string =>
+    `/api/${scope === 'pane' ? 'panes' : 'projects'}/${encodeURIComponent(id)}/notes`;
+
 export const api = {
     createProject: (body: CreateProjectBody) => request<Project>('POST', '/api/projects', body),
     updateProject: (id: string, body: UpdateProjectBody) => request<Project>('PATCH', `/api/projects/${id}`, body),
@@ -174,11 +178,13 @@ export const api = {
     commands: (paneId: string) => request<SlashCommand[]>('GET', `/api/panes/${encodeURIComponent(paneId)}/commands`),
     attach: (paneId: string, image: Blob) =>
         request<{ path: string }>('POST', `/api/panes/${encodeURIComponent(paneId)}/attachments`, image),
-    paneNotes: (id: string) => request<PaneNotes>('GET', `/api/panes/${id}/notes`),
-    saveNotes: (id: string, body: SaveNotesBody, keepalive = false) =>
-        request<PaneNotes>('PUT', `/api/panes/${id}/notes`, body, keepalive),
-    lockNotes: (id: string, body: NotesLockBody) => request<NotesMeta>('POST', `/api/panes/${id}/notes/lock`, body),
-    unlockNotes: (id: string, body: NotesLockBody) => request<void>('POST', `/api/panes/${id}/notes/unlock`, body),
+    readNotes: (scope: NotesScope, id: string) => request<PaneNotes>('GET', notesPath(scope, id)),
+    saveNotes: (scope: NotesScope, id: string, body: SaveNotesBody, keepalive = false) =>
+        request<PaneNotes>('PUT', notesPath(scope, id), body, keepalive),
+    lockNotes: (scope: NotesScope, id: string, body: NotesLockBody) =>
+        request<NotesMeta>('POST', `${notesPath(scope, id)}/lock`, body),
+    unlockNotes: (scope: NotesScope, id: string, body: NotesLockBody) =>
+        request<void>('POST', `${notesPath(scope, id)}/unlock`, body),
     updateSettings: (patch: SettingsPatch) => request<SettingsState>('PATCH', '/api/settings', patch),
     openSettings: () => request<{ path: string }>('POST', '/api/settings/open'),
     editSettings: (body: EditSettingsBody) => request<Pane>('POST', '/api/settings/edit', body),
