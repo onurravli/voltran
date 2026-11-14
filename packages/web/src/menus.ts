@@ -413,7 +413,16 @@ export function paneMenu(pane: PaneView): MenuItem[] {
         pane.adapter === 'changes' ||
         pane.adapter === 'editor'
             ? []
-            : [{ label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) }]),
+            : [
+                  { label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) },
+                  {
+                      label: 'Show project notes',
+                      onSelect: () => {
+                          revealPane(pane.sessionId, pane.id);
+                          useUi.getState().showNotesOf(pane.id, 'project');
+                      },
+                  },
+              ]),
         {
             label: adapter?.resumable ? 'Restart and resume' : 'Restart',
             separated: true,

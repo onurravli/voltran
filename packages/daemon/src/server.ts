@@ -372,20 +372,23 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('POST', '/api/panes/:id/attachments', async (req, res, [id]) =>
         sendJson(res, 201, hub.attach(id, await readBytes(req, MAX_ATTACHMENT_BYTES))),
     );
-    route('GET', '/api/panes/:id/notes', (_req, res, [id]) => sendJson(res, 200, hub.paneNotes(id)));
-    route('PUT', '/api/panes/:id/notes', async (req, res, [id]) =>
-        sendJson(res, 200, hub.saveNotes(id, await readJson(req))),
-    );
-    route('POST', '/api/panes/:id/notes/lock', async (req, res, [id]) =>
-        sendJson(res, 200, hub.lockNotes(id, await readJson(req))),
-    );
-    route('POST', '/api/panes/:id/notes/unlock', async (req, res, [id]) => {
-        hub.unlockNotes(id, await readJson(req));
-        sendJson(res, 200, { ok: true });
-    });
+    for (const [scope, base] of [
+        ['pane', '/api/panes/:id/notes'],
+        ['project', '/api/projects/:id/notes'],
+    ] as const) {
+        route('GET', base, (_req, res, [id]) => sendJson(res, 200, hub.readNotes(scope, id)));
+        route('PUT', base, async (req, res, [id]) => sendJson(res, 200, hub.saveNotes(scope, id, await readJson(req))));
+        route('POST', `${base}/lock`, async (req, res, [id]) =>
+            sendJson(res, 200, hub.lockNotes(scope, id, await readJson(req))),
+        );
+        route('POST', `${base}/unlock`, async (req, res, [id]) => {
+            hub.unlockNotes(scope, id, await readJson(req));
+            sendJson(res, 200, { ok: true });
+        });
+    }
 
     const hookPattern = /^\/api\/hooks\/([^/]+)\/([A-Za-z]+)$/;
-    const hookNotesPattern = /^\/api\/hooks\/([^/]+)\/notes$/;
+    const hookNotesPattern = /^\/api\/hooks\/([^/]+)\/(notes|project-notes)$/;
 
     const handleHook = async (
         req: IncomingMessage,
@@ -403,9 +406,10 @@ export function createVoltranServer(options: ServerOptions): Server {
         sendJson(res, accepted ? 200 : 403, accepted ? { ok: true } : { error: 'hook refused' });
     };
 
-    const handleHookNotes = (req: IncomingMessage, res: ServerResponse, paneId: string): void => {
+    const handleHookNotes = (req: IncomingMessage, res: ServerResponse, paneId: string, route: string): void => {
         const secret = bearerToken(req);
-        const notes = secret ? hub.hookNotes(decodeURIComponent(paneId), secret) : null;
+        const scope = route === 'notes' ? 'pane' : 'project';
+        const notes = secret ? hub.hookNotes(decodeURIComponent(paneId), secret, scope) : null;
         if (notes === null) {
             sendJson(res, secret ? 403 : 401, { error: secret ? 'hook refused' : 'missing hook secret' });
             return;
@@ -455,7 +459,7 @@ export function createVoltranServer(options: ServerOptions): Server {
                 if (hookMatch) {
                     await handleHook(req, res, hookMatch[1], hookMatch[2]);
                 } else {
-                    handleHookNotes(req, res, hookNotesMatch![1]);
+                    handleHookNotes(req, res, hookNotesMatch![1], hookNotesMatch![2]);
                 }
                 return;
             }

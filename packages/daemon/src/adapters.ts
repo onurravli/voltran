@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { accessSync, constants } from 'node:fs';
 import { delimiter, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AdapterId, AdapterInfo, Pane, PaneKind, StatusSource } from '@voltran/shared';
+import type { AdapterId, AdapterInfo, NotesScope, Pane, PaneKind, StatusSource } from '@voltran/shared';
 import { userStatusLine } from './statusline.ts';
 import { isClaudeSessionId } from './transcripts.ts';
 
@@ -20,6 +20,26 @@ export interface LaunchContext {
     baseEnv: NodeJS.ProcessEnv;
     notesFile: string | null;
     notesGuide: string | null;
+    projectNotesFile: string | null;
+    projectNotesGuide: string | null;
+}
+
+export interface NotesPaths {
+    scope: NotesScope;
+    file: string;
+    guide: string;
+}
+
+// The notes a pane's agent is told about: its own, then its project's.
+export function notesOf(context: LaunchContext): NotesPaths[] {
+    const notes: NotesPaths[] = [];
+    if (context.notesFile && context.notesGuide) {
+        notes.push({ scope: 'pane', file: context.notesFile, guide: context.notesGuide });
+    }
+    if (context.projectNotesFile && context.projectNotesGuide) {
+        notes.push({ scope: 'project', file: context.projectNotesFile, guide: context.projectNotesGuide });
+    }
+    return notes;
 }
 
 const SUBAGENT_VIEWER = fileURLToPath(new URL(`./subagent-view${extname(import.meta.url)}`, import.meta.url));
@@ -51,9 +71,9 @@ const DEFINITIONS: AdapterDefinition[] = [
         resumable: true,
         reportsHooks: true,
         binary: 'claude',
-        launch: ({ pane, baseEnv, notesFile, notesGuide }) => {
-            const notes = notesFile && notesGuide ? { file: notesFile, guide: notesGuide } : null;
-            const args = ['--settings', JSON.stringify(claudeHookSettings(notes))];
+        launch: (context) => {
+            const { pane, baseEnv } = context;
+            const args = ['--settings', JSON.stringify(claudeHookSettings(notesOf(context)))];
             if (isClaudeSessionId(pane.agentSessionId)) {
                 args.push(pane.agentResumable ? '--resume' : '--session-id', pane.agentSessionId);
             }
@@ -70,11 +90,12 @@ const DEFINITIONS: AdapterDefinition[] = [
         resumable: true,
         reportsHooks: true,
         binary: 'opencode',
-        launch: ({ pane, baseEnv, notesFile, notesGuide }) => {
+        launch: (context) => {
+            const { pane, baseEnv } = context;
             const args = splitArgs(pane.command ?? '') ?? [];
             const subcommand = args[0] === 'mini' ? args.splice(0, 1) : [];
             const session = pane.agentSessionId ? ['--session', pane.agentSessionId] : [];
-            const instructions = notesFile && notesGuide ? [notesGuide, notesFile] : [];
+            const instructions = notesOf(context).flatMap((notes) => [notes.guide, notes.file]);
             return {
                 file: 'opencode',
                 args: [...subcommand, '--standalone', ...session, ...args],
@@ -387,6 +408,7 @@ const SESSION_SCOPED_ENV = [
     'VOLTRAN_HOOK_HEADER',
     'VOLTRAN_URL',
     'VOLTRAN_NOTES',
+    'VOLTRAN_PROJECT_NOTES',
     'VOLTRAN_STATUSLINE',
 ];
 
@@ -490,30 +512,32 @@ export function codexHookArgs(): string[] {
 
 // Hooks must never slow down or block the agent: short curl timeout, no output, always exit 0.
 // The per-pane secret only authorizes status reports for that one pane. The notes hooks print the
-// pane's notes into Claude's context and refuse its edits while the user is typing in them. The
-// settings are built for each pane, because the rule that lets Claude edit its notes without asking
-// also opens that folder to its sandbox, and no pane may write another pane's notes.
-export function claudeHookSettings(notes: { file: string; guide: string } | null): object {
+// pane's notes and its project's into Claude's context and refuse its edits while the user is typing
+// in them. The settings are built for each pane, because the rule that lets Claude edit its notes
+// without asking also opens that folder to its sandbox, and no pane may write another pane's notes
+// or another project's.
+export function claudeHookSettings(notes: NotesPaths[]): object {
     const hooks: Record<string, unknown[]> = {};
     for (const event of CLAUDE_HOOK_EVENTS) {
         hooks[event] = [{ hooks: [{ type: 'command', command: hookCommand(event), timeout: 5 }] }];
     }
     const statusLine = { type: 'command', command: `sh ${shellQuote(STATUS_LINE)}` };
-    if (!notes) {
+    if (notes.length === 0) {
         return { hooks, statusLine };
     }
-    const notesHook = (mode: string): object => ({
+    const notesHook = (mode: string, { scope, guide }: NotesPaths): object => ({
         type: 'command',
-        command: `sh ${shellQuote(NOTES_HOOK)} ${mode} ${shellQuote(notes.guide)}; exit 0`,
+        command: `sh ${shellQuote(NOTES_HOOK)} ${mode} ${scope} ${shellQuote(guide)}; exit 0`,
         timeout: 5,
     });
-    hooks.SessionStart.push({ hooks: [notesHook('session-start')] });
-    hooks.UserPromptSubmit.push({ hooks: [notesHook('prompt')] });
-    hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: [notesHook('pre-tool-use')] });
-    const folder = dirname(notes.file);
+    hooks.SessionStart.push({ hooks: notes.map((each) => notesHook('session-start', each)) });
+    hooks.UserPromptSubmit.push({ hooks: notes.map((each) => notesHook('prompt', each)) });
+    hooks.PreToolUse.push({ matcher: 'Edit|Write', hooks: notes.map((each) => notesHook('pre-tool-use', each)) });
     return {
         hooks,
         statusLine,
-        permissions: { allow: [`Read(/${folder}/**)`, `Edit(/${folder}/**)`] },
+        permissions: {
+            allow: notes.flatMap(({ file }) => [`Read(/${dirname(file)}/**)`, `Edit(/${dirname(file)}/**)`]),
+        },
     };
 }

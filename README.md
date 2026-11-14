@@ -297,6 +297,12 @@ or when you leave the drawer. While Claude is editing them, the drawer waits for
 save is refused anyway, for example because the notes are open in another window, your text stays
 and you choose between keeping it and loading the other version.
 
+Every project has notes too, shared by all of its sessions and worktrees: the **Project** tab of the
+same drawer, or **Show project notes** in a pane's menu. Keep there what every session should know,
+such as conventions and decisions. Claude Code and OpenCode in any pane of the project get them the
+same way as the pane's own, and Claude sees them again on its next prompt after you or another agent
+change them. Every pane has their path in `$VOLTRAN_PROJECT_NOTES`. They are deleted with the project.
+
 ### Shortcuts
 
 Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The exceptions are ⌘K
@@ -464,7 +470,9 @@ packages/
   that print them into Claude's context and refuse its edits while you type, and permission to read
   and edit their own pane's notes folder without asking, and no other pane's.
   OpenCode panes get them, with a short guide, as instructions. The lock while you type makes the
-  file and its folder read-only on disk and expires if the window goes away.
+  file and its folder read-only on disk and expires if the window goes away. A project's notes are
+  `~/.voltran/project-notes/<project>/notes.md` and work the same way, with permission for that
+  project's folder only.
 - **Codex status.** Voltran starts Codex with its hooks as `-c` overrides, which add to your own
   hooks. Codex runs a hook only after you trust it: the first Codex pane asks "Hooks need review",
   and **Trust all and continue** lets every later pane report prompts, tools, approval requests

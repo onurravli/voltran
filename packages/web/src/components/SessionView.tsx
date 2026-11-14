@@ -1,6 +1,16 @@
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import type { AdapterInfo, DropEdge, GitStatus, Layout, PaneKind, PaneView, Project, Session } from '@voltran/shared';
+import type {
+    AdapterInfo,
+    DropEdge,
+    GitStatus,
+    Layout,
+    PaneKind,
+    PaneView,
+    Project,
+    ProjectView,
+    Session,
+} from '@voltran/shared';
 import { STATUS_LABEL, movePane, paneIds } from '@voltran/shared';
 import { api } from '../api.ts';
 import { PANE_DRAG_TYPE, dropEdgeAt } from '../drag.ts';
@@ -168,6 +178,12 @@ function FindBar({ paneId }: { paneId: string }) {
                 <CloseIcon size={14} />
             </button>
         </div>
+    );
+}
+
+function notesFreshIn(pane: PaneView, project: ProjectView | undefined): boolean {
+    return (
+        notesFresh('pane', pane.id, pane.notes) || (project ? notesFresh('project', project.id, project.notes) : false)
     );
 }
 
@@ -420,7 +436,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 {hasNotes ? (
                     <button
                         type="button"
-                        className={`icon-button pane__notes-toggle${pane.notes.size > 0 ? ' has-notes' : ''}${!notesOpen && notesFresh(pane.id, pane.notes) ? ' is-fresh' : ''}`}
+                        className={`icon-button pane__notes-toggle${pane.notes.size > 0 || (project?.notes.size ?? 0) > 0 ? ' has-notes' : ''}${!notesOpen && notesFreshIn(pane, project) ? ' is-fresh' : ''}`}
                         aria-expanded={notesOpen}
                         title={notesOpen ? `Hide notes (${keys('⌃⌥E')})` : `Show notes (${keys('⌃⌥E')})`}
                         onClick={() => useUi.getState().toggleNotes(pane.id)}
@@ -535,6 +551,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                 {notesOpen ? (
                     <NotesDrawer
                         pane={pane}
+                        project={project}
                         agent={adapter?.kind === 'agent' ? adapter.label : null}
                         hint={notesHint(adapter)}
                     />

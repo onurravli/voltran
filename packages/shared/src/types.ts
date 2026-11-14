@@ -248,6 +248,9 @@ export interface PaneRuntimeState {
 
 export type NotesAuthor = 'user' | 'agent';
 
+// A pane's own notes, or the notes every session of a project shares.
+export type NotesScope = 'pane' | 'project';
+
 export interface NotesMeta {
     size: number;
     updatedAt: number | null;
@@ -262,6 +265,8 @@ export interface PaneNotes {
 }
 
 export type PaneView = Pane & PaneRuntimeState & { notes: NotesMeta };
+
+export type ProjectView = Project & { notes: NotesMeta };
 
 export interface AdapterInfo {
     id: AdapterId;
@@ -284,7 +289,7 @@ export interface Usage {
 }
 
 export interface AppState {
-    projects: Project[];
+    projects: ProjectView[];
     sessions: Session[];
     panes: PaneView[];
     workspaces: Workspace[];
@@ -395,7 +400,7 @@ export type ServerEvent =
     | { type: 'state'; state: AppState }
     | ({ type: 'settings' } & SettingsState)
     | ({ type: 'version' } & VersionInfo)
-    | ({ type: 'notes'; paneId: string; by: NotesAuthor; holder: string | null } & PaneNotes)
+    | ({ type: 'notes'; scope: NotesScope; id: string; by: NotesAuthor; holder: string | null } & PaneNotes)
     | { type: 'reveal'; sessionId: string }
     | {
           type: 'attention';

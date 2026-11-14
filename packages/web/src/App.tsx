@@ -97,7 +97,8 @@ export function App() {
             const live = new Set(app.panes.map((pane) => pane.id));
             disposeTerminalsExcept(live);
             disposeEditorsExcept(live);
-            disposeNotesExcept(live);
+            disposeNotesExcept('pane', live);
+            disposeNotesExcept('project', new Set(app.projects.map((project) => project.id)));
         }
     }, [app]);
 
