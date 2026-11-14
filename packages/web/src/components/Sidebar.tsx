@@ -926,7 +926,6 @@ export function Sidebar() {
             >
                 <SearchIcon size={13} />
                 <span>Search or run…</span>
-                <Hotkey keys={keys('⌘K')} />
             </button>
 
             <ContextMenuArea
