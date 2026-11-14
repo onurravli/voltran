@@ -200,7 +200,11 @@ async function populate() {
     const webhooks = state.panes.filter((pane) => pane.sessionId === sessions.webhooks.id);
     const byAdapter = (adapter) => webhooks.find((pane) => pane.adapter === adapter).id;
     panes.webhooks = [byAdapter('claude'), byAdapter('shell'), byAdapter('command'), byAdapter('editor')];
-    return { sessions: Object.fromEntries(Object.entries(sessions).map(([key, session]) => [key, session.id])), panes };
+    return {
+        projects: { checkout: checkout.id },
+        sessions: Object.fromEntries(Object.entries(sessions).map(([key, session]) => [key, session.id])),
+        panes,
+    };
 }
 
 async function stage(ids) {
@@ -252,24 +256,120 @@ async function composite({ dark, light }) {
     return canvas.toDataURL('image/png').split(',')[1];
 }
 
-async function shoot(ids) {
+async function signIn(browser, viewport, deviceScaleFactor, initScript, arg) {
     const { code } = await (
         await fetch(`${base}/api/login-code`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${readFileSync(join(home, 'token'), 'utf8').trim()}` },
         })
     ).json();
+    const context = await browser.newContext({ viewport, deviceScaleFactor, colorScheme: 'dark' });
+    // Keyboard labels follow the platform, and the README shows the Mac ones.
+    await context.addInitScript(() => Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }));
+    await context.addInitScript(initScript, arg);
+    const page = await context.newPage();
+    await page.goto(`${base}/auth?code=${code}`);
+    return { context, page };
+}
+
+async function bothThemes(context, page, name) {
+    await api('PATCH', '/api/settings', { appearance: 'dark' });
+    await page.waitForTimeout(2000);
+    const dark = await page.screenshot();
+    await api('PATCH', '/api/settings', { appearance: 'light' });
+    await page.waitForTimeout(2000);
+    const light = await page.screenshot();
+    const composer = await context.newPage();
+    const png = await composer.evaluate(composite, {
+        dark: dark.toString('base64'),
+        light: light.toString('base64'),
+    });
+    await composer.close();
+    writeFileSync(join(OUT, name), Buffer.from(png, 'base64'));
+    console.log(`wrote ${join(OUT, name)}`);
+}
+
+async function until(check, what, ms = 90_000) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+        const value = await check();
+        if (value) {
+            return value;
+        }
+        await sleep(500);
+    }
+    throw new Error(`timed out waiting for ${what}`);
+}
+
+const LEAD_PROMPT =
+    'Add `checkout replay-webhooks --since 24h`: it sends parked Stripe webhooks through the normal handler again and marks each one replayed. Split the work between agents and have the result reviewed.';
+
+// A lead Claude in a worktree delegates through task.sh to agents it opens next to itself (agent.mjs
+// plays every part); the images catch it with two tasks done, one running and two queued.
+async function crew(ids) {
+    const session = await api('POST', '/api/sessions', {
+        projectId: ids.projects.checkout,
+        title: 'Replay parked webhooks',
+        worktree: { branch: 'webhook-replay' },
+        panes: [{ adapter: 'claude', command: '--scene lead' }],
+    });
+    const lead = (await api('GET', '/api/state')).panes.find((pane) => pane.sessionId === session.id).id;
+    await api('POST', '/api/tasks', { paneIds: [lead], title: 'Replay parked webhooks', prompt: LEAD_PROMPT });
+    const state = await until(async () => {
+        const now = await api('GET', '/api/state');
+        const tasks = now.tasks.filter((task) => task.projectId === ids.projects.checkout);
+        const count = (status) => tasks.filter((task) => task.status === status).length;
+        return tasks.length === 6 && count('done') === 2 && count('running') === 2 && count('queued') === 2
+            ? now
+            : null;
+    }, 'the delegated tasks');
+    const panes = state.panes.filter((pane) => pane.sessionId === session.id);
+    const of = (adapter) => panes.filter((pane) => pane.adapter === adapter).map((pane) => pane.id);
+    const [claude, helper] = [lead, of('claude').find((id) => id !== lead)];
+    await api('PATCH', `/api/sessions/${session.id}`, {
+        layout: split(
+            'vertical',
+            [
+                leaf(of('tasks')[0]),
+                split(
+                    'horizontal',
+                    [leaf(claude), leaf(of('codex')[0]), leaf(of('opencode')[0]), leaf(helper)],
+                    [31, 23, 23, 23],
+                ),
+            ],
+            [52, 48],
+        ),
+    });
+    const browser = await chromium.launch({ executablePath: chrome });
+    try {
+        const { context, page } = await signIn(
+            browser,
+            { width: 1440, height: 900 },
+            1,
+            (selected) => localStorage.setItem('voltran.ui', JSON.stringify({ selectedSessionId: selected })),
+            session.id,
+        );
+        await page.waitForTimeout(5000);
+        await page.mouse.move(0, 899);
+        await bothThemes(context, page, 'tasks.png');
+        await api('PATCH', '/api/settings', { appearance: 'dark' });
+        await page.locator('.agents-button').first().click();
+        await page.waitForTimeout(2500);
+        await page.mouse.move(0, 899);
+        await bothThemes(context, page, 'agents.png');
+    } finally {
+        await browser.close();
+    }
+}
+
+async function shoot(ids) {
     // Chrome does not capture the WebGL terminal canvas at a device scale of 2.
     const browser = await chromium.launch({ executablePath: chrome, args: ['--disable-webgl', '--disable-webgl2'] });
     try {
-        const context = await browser.newContext({
-            viewport: { width: 1600, height: 1000 },
-            deviceScaleFactor: 2,
-            colorScheme: 'dark',
-        });
-        // Keyboard labels follow the platform, and the README shows the Mac ones.
-        await context.addInitScript(() => Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }));
-        await context.addInitScript(
+        const { context, page } = await signIn(
+            browser,
+            { width: 1600, height: 1000 },
+            2,
             ({ session, editor }) => {
                 if (!localStorage.getItem('voltran.ui')) {
                     localStorage.setItem('voltran.ui', JSON.stringify({ selectedSessionId: session }));
@@ -286,8 +386,6 @@ async function shoot(ids) {
             },
             { session: ids.sessions.webhooks, editor: ids.panes.webhooks[3] },
         );
-        const page = await context.newPage();
-        await page.goto(`${base}/auth?code=${code}`);
         await page.waitForTimeout(1500);
         const open = async (title) => {
             await page.getByText(title, { exact: true }).first().click();
@@ -332,16 +430,7 @@ async function shoot(ids) {
             .click();
         await page.waitForTimeout(500);
         await page.mouse.click(5, 5);
-        const dark = await page.screenshot();
-        await api('PATCH', '/api/settings', { appearance: 'light' });
-        await page.waitForTimeout(2000);
-        const light = await page.screenshot();
-        const composer = await context.newPage();
-        const png = await composer.evaluate(composite, {
-            dark: dark.toString('base64'),
-            light: light.toString('base64'),
-        });
-        writeFileSync(join(OUT, 'screenshot.png'), Buffer.from(png, 'base64'));
+        await bothThemes(context, page, 'screenshot.png');
     } finally {
         await browser.close();
     }
@@ -351,8 +440,9 @@ try {
     setup();
     run('npm', ['run', 'build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
     voltran('up', '--no-open');
-    await shoot(await populate());
-    console.log(`wrote ${join(OUT, 'screenshot.png')}`);
+    const ids = await populate();
+    await shoot(ids);
+    await crew(ids);
 } finally {
     if (existsSync(join(home, 'token'))) {
         voltran('down');

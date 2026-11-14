@@ -560,15 +560,270 @@ function codexFooter() {
     return `${spin} ${bold('Working')} ${grey(`(${t} • esc to interrupt)`)}`;
 }
 
+// The feature images: a lead Claude in the webhook-replay worktree delegates through task.sh, and the
+// agents it opens there answer each prompt Voltran types in by its key.
+const CREW_SCENE = 'webhook-replay';
+const crew = scene === 'lead' || scene === CREW_SCENE;
+const CREW_WORK = [
+    {
+        key: 'every code path',
+        seconds: 3,
+        tools: [
+            ['Grep', 'park\\(|deadLetter', `Found ${bold('4')} files`],
+            ['Read', 'internal/webhooks/retry.go', `Read ${bold('112')} lines`],
+        ],
+        reply: 'Events are parked in two places: retry.go after the 8th failed attempt, and handler.go for unknown event types. Both write the raw payload, the last status and the attempt count to webhook_dead_letters; nothing reads them back yet.',
+    },
+    {
+        key: 'Add ListParked',
+        seconds: 5,
+        tools: [
+            ['Edit', 'internal/store/deadletters.go', `${green('+48')} ${red('-2')}`],
+            ['Write', 'migrations/0008_dead_letter_replayed_at.sql', `Wrote ${bold('5')} lines`],
+            ['Bash', 'go test ./internal/store/...', 'ok  github.com/lumenpay/api/internal/store  0.291s'],
+        ],
+        reply: 'Added ListParked(since, limit) and MarkReplayed(id) to DeadLetterStore, with migration 0008 for a replayed_at column and an index on parked_at. go test ./internal/store/... passes.',
+    },
+    {
+        key: 'replay-webhooks subcommand',
+        tools: [
+            ['Read', 'cmd/checkout/main.go', `Read ${bold('86')} lines`],
+            ['Write', 'cmd/checkout/replay.go', `Wrote ${bold('71')} lines`],
+        ],
+        working: 'Wiring --since and --dry-run into the replay command',
+    },
+];
+const crewTurns = [];
+const crewWork = (prompt) => CREW_WORK.find((work) => asked(prompt).includes(work.key));
+const asked = (prompt) =>
+    prompt
+        .split(/Your task:\s*/)
+        .at(-1)
+        .trim();
+const shortId = (id) => `${id.slice(0, 8)}…`;
+
+const codexHooks = {};
+for (let i = 0; i < args.length - 1; i++) {
+    const match = args[i] === '-c' && /^hooks\.(\w+)=.*command=("(?:[^"\\]|\\.)*")/.exec(args[i + 1]);
+    if (match) codexHooks[match[1]] = JSON.parse(match[2]);
+}
+function codexHook(event, payload) {
+    const command = codexHooks[event];
+    if (command) spawnSync('sh', ['-c', command], { input: JSON.stringify(payload) });
+}
+
+let crewBase = null;
+function crewHook(event, payload = {}) {
+    if (kind === 'claude') {
+        const names = { start: 'SessionStart', prompt: 'UserPromptSubmit', tool: 'PreToolUse', stop: 'Stop' };
+        const extra =
+            event === 'prompt'
+                ? { prompt: payload.text }
+                : event === 'tool'
+                  ? { tool_name: payload.text }
+                  : event === 'stop'
+                    ? { last_assistant_message: payload.text }
+                    : {};
+        claudeHook(names[event], { ...crewBase, ...extra });
+    } else if (kind === 'codex') {
+        const names = { start: 'SessionStart', prompt: 'UserPromptSubmit', tool: 'PreToolUse', stop: 'Stop' };
+        const extra =
+            event === 'prompt'
+                ? { prompt: payload.text }
+                : event === 'tool'
+                  ? { tool_name: payload.text }
+                  : event === 'stop'
+                    ? { last_assistant_message: payload.text }
+                    : {};
+        codexHook(names[event], { session_id: 'demo', cwd, ...extra });
+    } else if (event === 'start') {
+        opencodeHook('Ready', {});
+    } else if (event === 'prompt') {
+        opencodeHook('PromptSubmit', { prompt: payload.text });
+    } else if (event === 'tool') {
+        opencodeHook('ToolStart', { tool_name: payload.text });
+    } else if (event === 'stop') {
+        opencodeHook('TurnEnd', { outcome: 'completed', message: payload.text });
+    }
+}
+
+function task(...words) {
+    const result = spawnSync(process.env.VOLTRAN_TASK, words, { encoding: 'utf8' });
+    return result.stdout.trim().split('\n')[0];
+}
+
+async function lead(turn) {
+    const step = (name, argText, result) => {
+        turn.tools.push([name, argText, result]);
+        draw();
+    };
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    crewHook('tool', { text: 'Bash' });
+    step('Bash', '"$VOLTRAN_TASK" board', `pane ${shortId(task('board'))}`);
+    const agents = {};
+    for (const agent of ['claude', 'codex', 'opencode']) {
+        crewHook('tool', { text: 'Bash' });
+        agents[agent] = task('spawn', '--agent', agent);
+        step('Bash', `"$VOLTRAN_TASK" spawn --agent ${agent}`, `pane ${shortId(agents[agent])}`);
+        await pause(300);
+    }
+    const delegate = (to, title, prompt, after = []) => {
+        const id = task(
+            'delegate',
+            '--to',
+            agents[to],
+            '--title',
+            title,
+            ...after.flatMap((dep) => ['--after', dep]),
+            prompt,
+        );
+        const waits = after.length > 0 ? ` --after ${after.map(shortId).join(' --after ')}` : '';
+        step('Bash', `"$VOLTRAN_TASK" delegate --to ${shortId(agents[to])}${waits} --title "${title}"`, id);
+        return id;
+    };
+    const map = delegate(
+        'claude',
+        'Map where webhooks get parked',
+        'Find every code path that parks a webhook in webhook_dead_letters and say what each one stores. Read only, change nothing.',
+    );
+    const store = delegate(
+        'codex',
+        'Dead-letter store: list and mark',
+        'Add ListParked(since, limit) and MarkReplayed(id) to DeadLetterStore in internal/store, with a migration for a replayed_at column. Keep go test ./internal/store/... green.',
+    );
+    const command = delegate(
+        'opencode',
+        'replay-webhooks command',
+        'Add the `checkout replay-webhooks` subcommand: --since (default 24h) and --dry-run, list parked events with ListParked, send each through webhooks.Handler and MarkReplayed the ones that return 2xx.',
+        [map, store],
+    );
+    delegate(
+        'codex',
+        'Table tests for replay',
+        'Write table tests for replay-webhooks: an event that replays, one that fails again, --dry-run, and --since filtering.',
+        [command],
+    );
+    delegate(
+        'claude',
+        'Review the replay diff',
+        'Review the replay-webhooks command for double replays, a missing idempotency check and anything that logs a payload.',
+        [command],
+    );
+    turn.working = 'Waiting on the replay command and its tests';
+    draw();
+}
+
+async function crewPrompt(text) {
+    const prompt = asked(text);
+    const turn = { prompt, tools: [], reply: null, working: 'Working' };
+    crewTurns.push(turn);
+    crewHook('prompt', { text: prompt });
+    draw();
+    if (scene === 'lead') {
+        await lead(turn);
+        return;
+    }
+    const work = crewWork(text);
+    if (!work) return;
+    turn.working = work.working ?? 'Working';
+    for (const [name, argText, result] of work.tools) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        crewHook('tool', { text: name });
+        turn.tools.push([name, argText, result]);
+        draw();
+    }
+    if (work.seconds) {
+        await new Promise((resolve) => setTimeout(resolve, work.seconds * 1000));
+        turn.reply = work.reply;
+        draw();
+        crewHook('stop', { text: work.reply });
+    }
+}
+
+let typed = '';
+function crewInput(data) {
+    const text = data.toString('utf8');
+    if (text === '\r') {
+        const prompt = typed.trim();
+        typed = '';
+        if (prompt) crewPrompt(prompt);
+        return;
+    }
+    typed += text;
+}
+
+function crewLines() {
+    const w = cols();
+    const spinner = ['◐', '◓', '◑', '◒'][Math.floor(Date.now() / 250) % 4];
+    if (kind === 'claude') {
+        const out = [...claudeHeader(scene === 'lead' ? 'Opus 5.5' : 'Sonnet 5.5')];
+        for (const turn of crewTurns) {
+            out.push(...userPrompt(turn.prompt));
+            for (const [name, argText, result] of turn.tools) out.push(...tool(name, argText, [result]));
+            out.push(
+                ...(turn.reply
+                    ? said(turn.reply)
+                    : [`${orange('✽')} ${orange(`${turn.working}…`)} ${grey('(esc to interrupt)')}`, '']),
+            );
+        }
+        return [...out, ...inputBox(grey('? for shortcuts'))];
+    }
+    if (kind === 'codex') {
+        const box = Math.min(w, 60);
+        const out = [
+            `╭${'─'.repeat(box - 2)}╮`,
+            `│ ${pad(`${bold('>_ OpenAI Codex')} ${grey('(v0.58.0)')}`, box - 4)} │`,
+            `│ ${pad(`${grey('directory:')} ${tilde}`, box - 4)} │`,
+            `╰${'─'.repeat(box - 2)}╯`,
+            '',
+        ];
+        for (const turn of crewTurns) {
+            out.push(
+                ...wrap(turn.prompt, w - 2).map((line, i) => (i === 0 ? `${bold('›')} ${line}` : `  ${line}`)),
+                '',
+            );
+            for (const [name, argText, result] of turn.tools) {
+                out.push(
+                    `${bold('•')} ${bold(name === 'Bash' ? 'Ran' : name === 'Write' ? 'Added' : 'Edited')} ${argText}`,
+                );
+                out.push(`  ${grey('└')} ${result}`, '');
+            }
+            out.push(
+                ...(turn.reply
+                    ? [...wrap(turn.reply, w - 2).map((l) => `  ${l}`), '']
+                    : [`${spinner} ${bold('Working')}`]),
+            );
+        }
+        return [...out, '', `${grey('›')} ${grey('Ask Codex to do anything')}`];
+    }
+    const accent = rgb(157, 124, 216);
+    const out = [''];
+    for (const turn of crewTurns) {
+        out.push(...wrap(turn.prompt, w - 6).map((l) => `  ${accent('┃')} ${l}`), '');
+        for (const [name, argText] of turn.tools) {
+            out.push(`  ${grey(name === 'Read' ? '→' : '←')} ${name} ${grey(argText)}`);
+        }
+        out.push(
+            '',
+            ...(turn.reply
+                ? wrap(turn.reply, w - 4).map((l) => `  ${l}`)
+                : [`  ${accent(spinner)} ${grey(`${turn.working}…`)}`]),
+            '',
+        );
+    }
+    return [...out, `  ${grey('Build')}  ${accent('Claude Sonnet 5.5')} ${grey('Anthropic')}`];
+}
+
 function draw() {
     let lines;
-    if (kind === 'claude') lines = SCENES[scene]?.lines() ?? claudeHeader('Opus 5.5');
+    if (crew) lines = crewLines();
+    else if (kind === 'claude') lines = SCENES[scene]?.lines() ?? claudeHeader('Opus 5.5');
     else if (kind === 'opencode') lines = opencodeLines();
     else lines = codexLines();
     const w = cols();
     let out = `${E}?25l${E}H${E}2J${E}3J`;
     out += lines.map((l) => fit(l, w)).join('\r\n');
-    if (kind === 'codex') {
+    if (kind === 'codex' && !crew) {
         out += `\r\n${codexFooter()}\r\n\r\n${grey('›')} ${grey('Ask Codex to do anything')}\r\n\r\n${grey('  ⏎ send   ⌃T transcript   59% context left')}`;
     }
     process.stdout.write(out);
@@ -579,11 +834,18 @@ process.stdout.write(`${E}?25l`);
 process.on('SIGWINCH', draw);
 process.stdin.setRawMode?.(true);
 process.stdin.resume();
-process.stdin.on('data', () => {});
+process.stdin.on('data', crew ? crewInput : () => {});
 
 setTimeout(() => {
     draw();
-    if (kind === 'claude') {
+    if (crew) {
+        const sessionId = argValue('--session-id') ?? argValue('--resume') ?? randomUUID();
+        const transcript = join(DEMO, 'claude-projects', scene, `${sessionId}.jsonl`);
+        mkdirSync(dirname(transcript), { recursive: true });
+        appendFileSync(transcript, '');
+        crewBase = { session_id: sessionId, transcript_path: transcript, cwd };
+        crewHook('start');
+    } else if (kind === 'claude') {
         const sessionId = argValue('--session-id') ?? argValue('--resume') ?? randomUUID();
         const dir = join(DEMO, 'claude-projects', scene);
         mkdirSync(dir, { recursive: true });
