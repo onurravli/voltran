@@ -3,6 +3,38 @@
 Voltran follows [Semantic Versioning](https://semver.org/). The README describes each feature in
 full.
 
+## 1.3.0 (2026-11-14)
+
+- **Tasks** queue prompts for agent panes: Voltran types the next one once the agent has finished its
+  turn and keeps its last reply as the result. **Queue a task…** in an agent pane's menu, **New
+  task…** in ⌘K or a **Tasks** pane opens the composer, which sends a prompt to one agent, several at
+  once or a new Claude Code, Codex or OpenCode pane. **Start after** makes a task wait for others and
+  puts their results in front of its prompt, **Hand off context from** passes another pane's last
+  reply and notes along, and **Subtask of** files it under another task. A turn that ends with a
+  question keeps the task **Asking you** until you answer.
+- A **Tasks** pane shows the project's tasks as a graph of what waits for what, or as one queue per
+  agent that you can reorder, with **Retry**, **Mark done** and the rest on each task. The subagents
+  Claude Code runs during a task show under it as live subtasks.
+- Agents delegate to each other through `$VOLTRAN_TASK`: Claude Code, Codex and OpenCode can queue
+  tasks for other agents, open new agent panes, wait for results and rewire the plan, only in their
+  own project, while you follow it in the graph.
+- The **agents view** shows agents delegating to each other on a canvas: who gave work to whom, whose
+  results a task waits for and the subagents each one runs, beside the messages of the exchange, then
+  a summary once every task has finished. Pan, zoom and drag the nodes, which keep their place until
+  **Reset layout**; select a Claude Code agent for its thinking and tool calls. The robot button above
+  the panes or ⌘K → **Show the agents talking** opens it, and `"autoAgenticViewEnabled": true` in the
+  settings opens it by itself when an agent delegates.
+- Search in files from the editor pane with ⇧⌘F, seeded with the selection, with match case, whole
+  word and regular expression toggles; a result opens the file with the match selected.
+- Every project has **notes** of its own, shared by all of its sessions and worktrees: the **Project**
+  tab of the notes drawer, or **Show project notes** in a pane's menu. Claude Code and OpenCode get
+  them like the pane's own notes, and every pane has their path in `$VOLTRAN_PROJECT_NOTES`.
+- Drag the notes drawer's edge to resize it; Voltran keeps its width.
+- ⌘-click (Ctrl-click off a Mac) or Shift-click sessions of a project to pick several, then archive,
+  restore or delete them all at once from the right-click menu, or delete them with ⌫.
+- `editor.paddingTop` and `editor.paddingLeft` in the settings add space above the first line and
+  between the line numbers and the text.
+
 ## 1.2.0 (2026-10-31)
 
 - An **Editor** pane browses the session's folder as a file tree and edits its files, with tabs,
