@@ -123,6 +123,8 @@ describe('SettingsFile', () => {
                 minimap: true,
                 lineNumbers: 'off' as const,
                 lineHeight: 1.5,
+                paddingTop: 12,
+                paddingLeft: 8,
                 fontLigatures: true,
                 cursorStyle: 'block' as const,
                 cursorBlinking: 'solid' as const,

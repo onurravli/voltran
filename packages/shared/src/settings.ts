@@ -23,6 +23,8 @@ export interface Settings {
         minimap: boolean;
         lineNumbers: LineNumbers;
         lineHeight: number | null;
+        paddingTop: number;
+        paddingLeft: number;
         fontLigatures: boolean;
         cursorStyle: CursorStyle;
         cursorBlinking: CursorBlinking;
@@ -100,6 +102,7 @@ export const MIN_TAB_SIZE = 1;
 export const MAX_TAB_SIZE = 8;
 export const MIN_LINE_HEIGHT = 1;
 export const MAX_LINE_HEIGHT = 3;
+export const MAX_EDITOR_PADDING = 100;
 export const MAX_RULERS = 10;
 export const MAX_RULER_COLUMN = 500;
 export const MIN_AUTO_SAVE_DELAY = 100;
@@ -120,6 +123,8 @@ export const DEFAULT_SETTINGS: Settings = {
         minimap: false,
         lineNumbers: 'on',
         lineHeight: null,
+        paddingTop: 0,
+        paddingLeft: 0,
         fontLigatures: false,
         cursorStyle: 'line',
         cursorBlinking: 'blink',
@@ -224,6 +229,8 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['editor', 'minimap'], check: flag },
     { path: ['editor', 'lineNumbers'], check: oneOf(LINE_NUMBERS) },
     { path: ['editor', 'lineHeight'], check: lineHeight },
+    { path: ['editor', 'paddingTop'], check: wholeNumber(0, MAX_EDITOR_PADDING) },
+    { path: ['editor', 'paddingLeft'], check: wholeNumber(0, MAX_EDITOR_PADDING) },
     { path: ['editor', 'fontLigatures'], check: flag },
     { path: ['editor', 'cursorStyle'], check: oneOf(CURSOR_STYLES) },
     { path: ['editor', 'cursorBlinking'], check: oneOf(CURSOR_BLINKING) },

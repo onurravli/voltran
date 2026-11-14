@@ -241,6 +241,8 @@ describe('editorOptions', () => {
             fontFamily: 'JetBrains Mono',
             fontSize: 13,
             lineHeight: 0,
+            padding: { top: 0 },
+            lineDecorationsWidth: 10,
             wordWrap: 'off',
             minimap: { enabled: false },
             lineNumbers: 'on',
@@ -257,6 +259,8 @@ describe('editorOptions', () => {
             rulers: [80],
             autoClosingBrackets: false,
             stickyScroll: true,
+            paddingTop: 12,
+            paddingLeft: 8,
         };
         expect(editorOptions(own, terminal)).toMatchObject({
             fontFamily: 'Fira Code',
@@ -269,6 +273,8 @@ describe('editorOptions', () => {
             autoClosingBrackets: 'never',
             autoClosingQuotes: 'never',
             stickyScroll: { enabled: true },
+            padding: { top: 12 },
+            lineDecorationsWidth: 18,
         });
     });
 });

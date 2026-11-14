@@ -359,6 +359,8 @@ export interface EditorViewOptions {
     fontFamily: string;
     fontSize: number;
     lineHeight: number;
+    padding: { top: number };
+    lineDecorationsWidth: number;
     fontLigatures: boolean;
     wordWrap: 'on' | 'off';
     minimap: { enabled: boolean };
@@ -378,6 +380,9 @@ export interface EditorViewOptions {
     scrollBeyondLastLine: boolean;
 }
 
+// Monaco's own gap between the line numbers and the text, which paddingLeft widens.
+const LINE_DECORATIONS_WIDTH = 10;
+
 // The editor pane's settings as Monaco takes them; an empty font or a null size is the terminal's,
 // and a null line height (0 to Monaco) the font's own.
 export function editorOptions(
@@ -389,6 +394,8 @@ export function editorOptions(
         fontFamily: editor.fontFamily.trim() || terminal.family,
         fontSize: editor.fontSize ?? terminal.size,
         lineHeight: editor.lineHeight ?? 0,
+        padding: { top: editor.paddingTop },
+        lineDecorationsWidth: LINE_DECORATIONS_WIDTH + editor.paddingLeft,
         fontLigatures: editor.fontLigatures,
         wordWrap: editor.wordWrap ? 'on' : 'off',
         minimap: { enabled: editor.minimap },

@@ -29,6 +29,8 @@ describe('parseSettings', () => {
                 minimap: true,
                 lineNumbers: 'relative',
                 lineHeight: 1.5,
+                paddingTop: 12,
+                paddingLeft: 8,
                 fontLigatures: true,
                 cursorStyle: 'block',
                 cursorBlinking: 'solid',
@@ -91,6 +93,8 @@ describe('parseSettings', () => {
         const { settings, problems } = parseSettings({
             editor: {
                 lineHeight: 5,
+                paddingTop: -4,
+                paddingLeft: 200,
                 cursorStyle: 'beam',
                 renderWhitespace: true,
                 rulers: [80, 0],
@@ -101,6 +105,8 @@ describe('parseSettings', () => {
         expect(settings).toEqual(DEFAULT_SETTINGS);
         expect(problems).toEqual([
             '"editor.lineHeight" must be null for the font\'s own, or a multiple of the font size from 1 to 3',
+            '"editor.paddingTop" must be a whole number from 0 to 100',
+            '"editor.paddingLeft" must be a whole number from 0 to 100',
             '"editor.cursorStyle" must be "line", "block" or "underline"',
             '"editor.renderWhitespace" must be "none", "boundary", "selection", "trailing" or "all"',
             '"editor.rulers" must be a list of at most 10 columns, each a whole number from 1 to 500',

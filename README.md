@@ -375,6 +375,8 @@ the default app**, it opens in your system's editor instead. The file takes comm
         "minimap": false,
         "lineNumbers": "on",           // "on", "relative" or "off"
         "lineHeight": null,            // null is the font's own; 1 to 3 times the font size
+        "paddingTop": 0,               // pixels above the first line, 0 to 100
+        "paddingLeft": 0,              // pixels between the line numbers and the text, 0 to 100
         "fontLigatures": false,
         "cursorStyle": "line",         // "line", "block" or "underline"
         "cursorBlinking": "blink",     // "blink", "smooth", "phase", "expand" or "solid"
