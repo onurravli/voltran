@@ -53,6 +53,7 @@ describe('parseSettings', () => {
             },
             git: { pullRequests: false },
             updates: { check: false },
+            autoAgenticViewEnabled: true,
         };
         expect(parseSettings(raw)).toEqual({ settings: raw, problems: [] });
     });

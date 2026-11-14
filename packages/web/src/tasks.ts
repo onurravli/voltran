@@ -1,4 +1,5 @@
 import type { AppState, PaneView, Task } from '@voltran/shared';
+import { duration } from './agents.ts';
 
 // What the graph shows for a task: a queued task is blocked while something it waits for is not done,
 // and a running task whose turn ended with a question is asking the user.
@@ -25,18 +26,7 @@ export function taskPhase(task: Task, byId: Map<string, Task>): TaskPhase {
 }
 
 export function elapsed(task: Task, now: number): string | null {
-    if (task.startedAt === null) {
-        return null;
-    }
-    const seconds = Math.max(0, Math.round(((task.finishedAt ?? now) - task.startedAt) / 1000));
-    if (seconds < 60) {
-        return `${seconds}s`;
-    }
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) {
-        return `${minutes}m ${seconds % 60}s`;
-    }
-    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+    return task.startedAt === null ? null : duration((task.finishedAt ?? now) - task.startedAt);
 }
 
 // The agent panes of a project that are not archived: the ones a task can go to.

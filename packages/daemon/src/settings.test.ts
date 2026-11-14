@@ -147,6 +147,7 @@ describe('SettingsFile', () => {
             },
             git: { pullRequests: false },
             updates: { check: false },
+            autoAgenticViewEnabled: true,
         };
         expect(parseSettings(parse(settingsFileText(settings), [], { allowTrailingComma: true }))).toEqual({
             settings,

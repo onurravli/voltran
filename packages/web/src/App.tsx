@@ -6,6 +6,7 @@ import { selectedWorkspace, useUi } from './store.ts';
 import { disposeNotesExcept, flushNotesOnExit } from './notes.ts';
 import { disposeEditorsExcept } from './editor-session.ts';
 import { disposeTerminalsExcept } from './terminals.ts';
+import { AgentsView } from './components/AgentsView.tsx';
 import { ChangesView } from './components/ChangesView.tsx';
 import { Dialogs, PaneMenu, ToastView } from './components/Dialogs.tsx';
 import { FolderIcon, VoltranMark } from './components/Icons.tsx';
@@ -75,6 +76,7 @@ export function App() {
     const sidebarRight = useUi((state) => state.sidebarPosition === 'right');
     const zen = useUi((state) => state.zen);
     const changesSessionId = useUi((state) => state.changesSessionId);
+    const agentsOpen = useUi((state) => state.agents?.open ?? false);
     const workspace = useUi(selectedWorkspace);
     const session = app?.sessions.find((entry) => entry.id === selectedSessionId);
     const showing = Boolean(workspace || session);
@@ -129,6 +131,7 @@ export function App() {
                     <Welcome />
                 )}
                 {changesSessionId ? <ChangesView key={changesSessionId} sessionId={changesSessionId} /> : null}
+                {agentsOpen && app ? <AgentsView /> : null}
             </main>
             <Dialogs />
             <PaneMenu />

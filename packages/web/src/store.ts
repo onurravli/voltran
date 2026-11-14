@@ -13,6 +13,7 @@ import type {
     Workspace,
 } from '@voltran/shared';
 import { DEFAULT_SETTINGS, SIDEBAR_POSITIONS, applySettingsPatch, needsAttention, paneIds } from '@voltran/shared';
+import { type AgentsExchange, exchangeFinished, exchangeSince, exchangeTasks, followDelegations } from './agents.ts';
 import { api } from './api.ts';
 import { DEFAULT_FONT, DEFAULT_UI_FONT, parseFont, parseUiFont, type TerminalFont, type UiFont } from './fonts.ts';
 import { DEFAULT_NOTES_WIDTH, clampNotesWidth, markNotesSeen } from './notes.ts';
@@ -74,6 +75,7 @@ export interface UiState {
     focusToken: number;
     pendingReveal: string | null;
     changesSessionId: string | null;
+    agents: AgentsExchange | null;
     maximizedPaneId: string | null;
     draggingPaneId: string | null;
     draggingSessionId: string | null;
@@ -115,6 +117,8 @@ export interface UiState {
     focusPane: (id: string | null, enter?: boolean) => void;
     revealSession: (id: string) => void;
     openChanges: (sessionId: string | null) => void;
+    openAgents: (projectId: string) => void;
+    closeAgents: () => void;
     toggleMaximize: (id: string) => void;
     setDraggingPane: (id: string | null) => void;
     setDraggingSession: (id: string | null) => void;
@@ -253,6 +257,7 @@ const systemScheme = (): Scheme => (darkScheme.matches ? 'dark' : 'light');
 let toastId = 0;
 const lastFocused = new Map<string, string>();
 let migrated = false;
+let seenTasks: Set<string> | null = null;
 
 // What this window shows, as settings. Before settings.json existed these lived in localStorage,
 // and they still cache the file there so a reload paints the right theme and font straight away.
@@ -266,6 +271,8 @@ function shownSettings(state: UiState): Settings {
         editor: state.settingsFile?.settings.editor ?? DEFAULT_SETTINGS.editor,
         git: state.settingsFile?.settings.git ?? DEFAULT_SETTINGS.git,
         updates: state.settingsFile?.settings.updates ?? DEFAULT_SETTINGS.updates,
+        autoAgenticViewEnabled:
+            state.settingsFile?.settings.autoAgenticViewEnabled ?? DEFAULT_SETTINGS.autoAgenticViewEnabled,
     };
 }
 
@@ -285,6 +292,7 @@ export const useUi = create<UiState>((set, get) => ({
     focusToken: 0,
     pendingReveal: null,
     changesSessionId: null,
+    agents: null,
     maximizedPaneId: null,
     draggingPaneId: null,
     draggingSessionId: null,
@@ -320,8 +328,20 @@ export const useUi = create<UiState>((set, get) => ({
             Object.keys(open).some((id) => !paneIds.has(id))
                 ? Object.fromEntries(Object.entries(open).filter(([id]) => paneIds.has(id)))
                 : open;
+        const followed = followDelegations(
+            get().agents,
+            seenTasks,
+            app.tasks,
+            get().settingsFile?.settings.autoAgenticViewEnabled ?? DEFAULT_SETTINGS.autoAgenticViewEnabled,
+        );
+        seenTasks = followed.seen;
+        const agents =
+            followed.exchange && app.projects.some((project) => project.id === followed.exchange?.projectId)
+                ? followed.exchange
+                : null;
         const next = {
             app,
+            agents,
             sessionSelection: pickedSessions(get().sessionSelection, app, get().showArchived),
             notesOpen: live(notesOpen),
             notesProject: live(notesProject),
@@ -382,6 +402,23 @@ export const useUi = create<UiState>((set, get) => ({
     },
     openChanges: (changesSessionId) =>
         set(changesSessionId ? { changesSessionId } : { changesSessionId, focusToken: get().focusToken + 1 }),
+    openAgents: (projectId) => {
+        const current = get().agents;
+        const tasks = get().app?.tasks ?? [];
+        const exchange =
+            current?.projectId === projectId ? current : { projectId, since: exchangeSince(tasks, projectId) };
+        set({
+            agents: {
+                ...exchange,
+                open: true,
+                finished: exchangeFinished(exchangeTasks(tasks, exchange)),
+            },
+        });
+    },
+    closeAgents: () => {
+        const current = get().agents;
+        set({ agents: current ? { ...current, open: false } : null, focusToken: get().focusToken + 1 });
+    },
     focusPane: (id, enter = true) => {
         const state = get();
         const view = state.selectedWorkspaceId ?? state.selectedSessionId;

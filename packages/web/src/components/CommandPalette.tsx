@@ -132,6 +132,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const themeIds = useUi((state) => state.themeIds);
     const setTheme = useUi((state) => state.setTheme);
     const saveSettings = useUi((state) => state.saveSettings);
+    const autoAgents = useUi(
+        (state) => state.settingsFile?.settings.autoAgenticViewEnabled ?? DEFAULT_SETTINGS.autoAgenticViewEnabled,
+    );
     const sidebarPosition = useUi((state) => state.sidebarPosition);
     const systemScheme = useUi((state) => state.systemScheme);
     const app = useUi((state) => state.app);
@@ -267,6 +270,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                                       sessionId: taskProject.id,
                                   }),
                           },
+                          {
+                              id: 'agents-view',
+                              label: 'Show the agents talking',
+                              keywords: 'agentic conversation delegate tasks summary orchestrate',
+                              run: () => useUi.getState().openAgents(taskProject.projectId),
+                          },
                       ]
                     : []),
                 {
@@ -401,6 +410,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     keywords: 'code monaco gutter relative',
                     hint: `now ${LINE_NUMBER_LABELS[editor.lineNumbers]}`,
                     run: () => saveSettings({ editor: { lineNumbers: nextLineNumbers } }),
+                },
+                {
+                    id: 'agents-auto',
+                    label: autoAgents
+                        ? 'Stop opening the agents view when agents delegate'
+                        : 'Open the agents view when agents delegate',
+                    keywords: 'autoAgenticViewEnabled agentic conversation tasks summary',
+                    run: () => saveSettings({ autoAgenticViewEnabled: !autoAgents }),
                 },
                 {
                     id: 'sidebar-side',

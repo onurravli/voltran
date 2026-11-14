@@ -132,7 +132,9 @@ export function settingsFileText(settings: Settings): string {
         '    "updates": {',
         '        // once a day, ask registry.npmjs.org for the latest version and say when there is a newer one',
         `        "check": ${settings.updates.check}`,
-        '    }',
+        '    },',
+        '    // open the agents view whenever an agent hands work to another agent, and a summary when they finish',
+        `    "autoAgenticViewEnabled": ${settings.autoAgenticViewEnabled}`,
         '}',
         '',
     ].join('\n');

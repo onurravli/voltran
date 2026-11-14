@@ -215,7 +215,13 @@ task, or the session's tasks view), the options as `X-Voltran-*` headers and the
 the script needs no JSON; `tasks-guide.md` tells Claude (a `SessionStart` hook) and OpenCode (an
 instruction) how, so keep it in step with the script. `shared/src/tasks.ts` holds the types and
 `layoutTasks`, the graph's columns; the web app's `TasksView` (a `tasks` page pane) draws it, with a
-running task's live subagents as synthetic subtasks (`withSubagents`), and `TaskDialog` composes tasks.
+running task's live subagents as synthetic subtasks (`withSubagents`), and `TaskDialog` composes tasks. The agents view
+(`components/AgentsView.tsx`, an overlay like the changes view) draws one exchange as a flowchart
+(`flowLinks`, `layoutFlow`) beside its messages, and then a summary; `web/src/agents.ts` holds its DOM-free parts. `followDelegations` runs on every
+state in `setApp`: with `autoAgenticViewEnabled` on, a task with `createdBy` the window has not seen opens
+it (a new exchange, unless one with unfinished tasks is in that project or on screen), and the end of
+every task in the exchange opens it again for the summary; a retry makes it unfinished again. ⌘K opens it
+at `exchangeSince`: the oldest unfinished task, else the root task of the last delegation.
 
 **Layout** is a tree in `shared/src/layout.ts` (`insertPane`, `removePane`, `movePane`). The web app
 edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hub rejects a layout

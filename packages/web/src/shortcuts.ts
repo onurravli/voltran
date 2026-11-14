@@ -431,7 +431,7 @@ export function visibleFocusedPane(): string | null {
 
 function findablePane(): string | null {
     const state = useUi.getState();
-    const paneId = state.dialog || state.changesSessionId ? null : visibleFocusedPane();
+    const paneId = state.dialog || state.changesSessionId || state.agents?.open ? null : visibleFocusedPane();
     return paneId && peekTerminal(paneId) ? paneId : null;
 }
 

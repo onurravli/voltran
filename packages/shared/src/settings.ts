@@ -47,6 +47,7 @@ export interface Settings {
     };
     git: { pullRequests: boolean };
     updates: { check: boolean };
+    autoAgenticViewEnabled: boolean;
 }
 
 export interface SettingsPatch {
@@ -58,6 +59,7 @@ export interface SettingsPatch {
     editor?: Partial<Settings['editor']>;
     git?: Partial<Settings['git']>;
     updates?: Partial<Settings['updates']>;
+    autoAgenticViewEnabled?: boolean;
 }
 
 export interface SettingsState {
@@ -147,6 +149,7 @@ export const DEFAULT_SETTINGS: Settings = {
     },
     git: { pullRequests: true },
     updates: { check: true },
+    autoAgenticViewEnabled: false,
 };
 
 type Check = (value: unknown) => string | null;
@@ -252,6 +255,7 @@ const LEAVES: { path: Path; check: Check }[] = [
     { path: ['editor', 'autoSaveDelay'], check: wholeNumber(MIN_AUTO_SAVE_DELAY, MAX_AUTO_SAVE_DELAY) },
     { path: ['git', 'pullRequests'], check: flag },
     { path: ['updates', 'check'], check: flag },
+    { path: ['autoAgenticViewEnabled'], check: flag },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -315,6 +319,7 @@ export function applySettingsPatch(settings: Settings, patch: SettingsPatch): Se
         editor: { ...settings.editor, ...patch.editor },
         git: { ...settings.git, ...patch.git },
         updates: { ...settings.updates, ...patch.updates },
+        autoAgenticViewEnabled: patch.autoAgenticViewEnabled ?? settings.autoAgenticViewEnabled,
     };
 }
 
