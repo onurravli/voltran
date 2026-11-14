@@ -71,6 +71,7 @@ export function App() {
     const selectedSessionId = useUi((state) => state.selectedSessionId);
     const sidebarHidden = useUi((state) => state.sidebarHidden);
     const sidebarWidth = useUi((state) => state.sidebarWidth);
+    const notesWidth = useUi((state) => state.notesWidth);
     const sidebarRight = useUi((state) => state.sidebarPosition === 'right');
     const zen = useUi((state) => state.zen);
     const changesSessionId = useUi((state) => state.changesSessionId);
@@ -109,7 +110,12 @@ export function App() {
     return (
         <div
             className={`app${hideSidebar ? ' app--no-sidebar' : ''}${zen && showing ? ' app--zen' : ''}${sidebarRight ? ' app--sidebar-right' : ''}`}
-            style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+            style={
+                {
+                    '--sidebar-width': `${sidebarWidth}px`,
+                    '--notes-preferred': `${notesWidth}px`,
+                } as React.CSSProperties
+            }
         >
             <Sidebar />
             <main className="main">

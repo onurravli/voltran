@@ -334,3 +334,21 @@ export function blockedBy(meta: NotesMeta, holding: boolean): 'agent' | 'window'
     }
     return meta.lock === 'user' && meta.holder !== NOTES_HOLDER ? 'window' : null;
 }
+
+export const DEFAULT_NOTES_WIDTH = 300;
+export const MIN_NOTES_WIDTH = 180;
+export const MAX_NOTES_WIDTH = 900;
+export const NOTES_WIDTH_STEP = 16;
+export const CLOSE_NOTES_BELOW = 80;
+
+export function clampNotesWidth(width: unknown): number {
+    if (typeof width !== 'number' || !Number.isFinite(width)) {
+        return DEFAULT_NOTES_WIDTH;
+    }
+    return Math.min(MAX_NOTES_WIDTH, Math.max(MIN_NOTES_WIDTH, Math.round(width)));
+}
+
+// Dragged past the minimum, the drawer stays at it until the pointer is well to the right, then closes.
+export function draggedNotesWidth(width: number): number | null {
+    return width < CLOSE_NOTES_BELOW ? null : clampNotesWidth(width);
+}

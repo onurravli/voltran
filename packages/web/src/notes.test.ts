@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NotesMeta, PaneNotes } from '@voltran/shared';
-import { NotesEditor, RELEASE_DELAY_MS, RENEW_EVERY_MS, SAVE_DELAY_MS, type NotesApi } from './notes.ts';
+import {
+    CLOSE_NOTES_BELOW,
+    DEFAULT_NOTES_WIDTH,
+    MAX_NOTES_WIDTH,
+    MIN_NOTES_WIDTH,
+    NotesEditor,
+    RELEASE_DELAY_MS,
+    RENEW_EVERY_MS,
+    SAVE_DELAY_MS,
+    clampNotesWidth,
+    draggedNotesWidth,
+    type NotesApi,
+} from './notes.ts';
 
 const META: NotesMeta = { size: 0, updatedAt: null, updatedBy: null, lock: 'user', holder: 'window-me' };
 
@@ -164,5 +176,21 @@ describe('NotesEditor', () => {
         await vi.advanceTimersByTimeAsync(0);
         editor.flushOnExit();
         expect(calls.at(-1)).toBe('save "last words" @v0 keepalive');
+    });
+});
+
+describe('notes width', () => {
+    it('keeps widths inside the allowed range and falls back to the default', () => {
+        expect(clampNotesWidth(320.4)).toBe(320);
+        expect(clampNotesWidth(MIN_NOTES_WIDTH - 40)).toBe(MIN_NOTES_WIDTH);
+        expect(clampNotesWidth(MAX_NOTES_WIDTH + 40)).toBe(MAX_NOTES_WIDTH);
+        expect(clampNotesWidth('320')).toBe(DEFAULT_NOTES_WIDTH);
+        expect(clampNotesWidth(Number.NaN)).toBe(DEFAULT_NOTES_WIDTH);
+    });
+
+    it('closes the drawer once dragged well past the minimum', () => {
+        expect(draggedNotesWidth(MIN_NOTES_WIDTH - 20)).toBe(MIN_NOTES_WIDTH);
+        expect(draggedNotesWidth(CLOSE_NOTES_BELOW)).toBe(MIN_NOTES_WIDTH);
+        expect(draggedNotesWidth(CLOSE_NOTES_BELOW - 1)).toBeNull();
     });
 });

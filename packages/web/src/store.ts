@@ -15,7 +15,7 @@ import type {
 import { DEFAULT_SETTINGS, SIDEBAR_POSITIONS, applySettingsPatch, needsAttention, paneIds } from '@voltran/shared';
 import { api } from './api.ts';
 import { DEFAULT_FONT, DEFAULT_UI_FONT, parseFont, parseUiFont, type TerminalFont, type UiFont } from './fonts.ts';
-import { markNotesSeen } from './notes.ts';
+import { DEFAULT_NOTES_WIDTH, clampNotesWidth, markNotesSeen } from './notes.ts';
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, type RowSelection } from './sidebar.ts';
 import { parseThemeChoice, parseThemeId, schemeOf, themeById, type Appearance, type Scheme } from './themes.ts';
 
@@ -83,6 +83,7 @@ export interface UiState {
     showArchived: boolean;
     sidebarHidden: boolean;
     sidebarWidth: number;
+    notesWidth: number;
     sidebarPosition: SidebarPosition;
     zen: boolean;
     terminalFont: TerminalFont;
@@ -122,6 +123,7 @@ export interface UiState {
     setShowArchived: (value: boolean) => void;
     toggleSidebar: () => void;
     setSidebarWidth: (width: number) => void;
+    setNotesWidth: (width: number) => void;
     setZen: (zen: boolean, maximizedPaneId: string | null) => void;
     setTerminalFont: (font: TerminalFont) => void;
     setUiFont: (font: UiFont) => void;
@@ -166,6 +168,7 @@ interface Persisted {
     showArchived: boolean;
     sidebarHidden: boolean;
     sidebarWidth: number;
+    notesWidth: number;
     sidebarPosition: SidebarPosition;
     terminalFont: TerminalFont;
     uiFont: UiFont;
@@ -202,6 +205,7 @@ function readPersisted(): Persisted {
                 showArchived: parsed.showArchived === true,
                 sidebarHidden: parsed.sidebarHidden === true,
                 sidebarWidth: clampSidebarWidth(parsed.sidebarWidth),
+                notesWidth: clampNotesWidth(parsed.notesWidth),
                 sidebarPosition:
                     SIDEBAR_POSITIONS.find((position) => position === parsed.sidebarPosition) ??
                     DEFAULT_SETTINGS.sidebar.position,
@@ -225,6 +229,7 @@ function readPersisted(): Persisted {
         showArchived: false,
         sidebarHidden: false,
         sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+        notesWidth: DEFAULT_NOTES_WIDTH,
         sidebarPosition: DEFAULT_SETTINGS.sidebar.position,
         terminalFont: DEFAULT_FONT,
         uiFont: DEFAULT_UI_FONT,
@@ -423,6 +428,7 @@ export const useUi = create<UiState>((set, get) => ({
     setShowArchived: (value) => set({ showArchived: value }),
     toggleSidebar: () => set({ sidebarHidden: !get().sidebarHidden }),
     setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
+    setNotesWidth: (width) => set({ notesWidth: clampNotesWidth(width) }),
     setZen: (zen, maximizedPaneId) => set({ zen, maximizedPaneId }),
     setTerminalFont: (font) => set({ terminalFont: parseFont(font) }),
     setUiFont: (font) => set({ uiFont: parseUiFont(font) }),
@@ -517,6 +523,7 @@ useUi.subscribe((state) => {
         showArchived: state.showArchived,
         sidebarHidden: state.sidebarHidden,
         sidebarWidth: state.sidebarWidth,
+        notesWidth: state.notesWidth,
         sidebarPosition: state.sidebarPosition,
         terminalFont: state.terminalFont,
         uiFont: state.uiFont,

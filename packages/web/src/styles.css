@@ -2501,7 +2501,7 @@ button.git-count:hover {
 }
 
 .pane__body {
-    --notes-width: min(calc(300px * var(--ui-scale)), 50%);
+    --notes-width: min(var(--notes-preferred, 300px), max(50%, 100% - 160px));
     position: relative;
     flex: 1;
     min-height: 0;
@@ -2531,6 +2531,47 @@ button.git-count:hover {
     width: var(--notes-width);
     background: color-mix(in srgb, var(--text) 2.5%, var(--hull));
     box-shadow: -1px 0 0 var(--line-soft);
+}
+
+.pane__body:has(.notes__resizer.is-dragging) {
+    cursor: col-resize;
+    user-select: none;
+}
+
+.pane__body:has(.notes__resizer.is-dragging) iframe {
+    pointer-events: none;
+}
+
+.notes__resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    z-index: 1;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.notes__resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(50% - 1px);
+    width: 2px;
+    border-radius: 2px;
+    transition: background 120ms var(--ease);
+}
+
+.notes__resizer:hover::after,
+.notes__resizer:focus-visible::after,
+.notes__resizer.is-dragging::after {
+    background: var(--line-strong);
+}
+
+.notes__resizer:focus-visible {
+    outline: none;
 }
 
 .notes__header {

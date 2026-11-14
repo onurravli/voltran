@@ -1,6 +1,25 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import {
+    type KeyboardEvent,
+    type PointerEvent,
+    type RefObject,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 import type { NotesScope, PaneView, ProjectView } from '@voltran/shared';
-import { blockedBy, markNotesSeen, notesFor, notesFresh } from '../notes.ts';
+import {
+    DEFAULT_NOTES_WIDTH,
+    MAX_NOTES_WIDTH,
+    MIN_NOTES_WIDTH,
+    NOTES_WIDTH_STEP,
+    blockedBy,
+    clampNotesWidth,
+    draggedNotesWidth,
+    markNotesSeen,
+    notesFor,
+    notesFresh,
+} from '../notes.ts';
 import { useUi } from '../store.ts';
 import { keys } from '../shortcuts.ts';
 import { peekTerminal } from '../terminals.ts';
@@ -97,6 +116,7 @@ export function NotesDrawer({
             className="notes"
             aria-label={scope === 'project' && project ? `Notes for ${project.name}` : `Notes for ${pane.title}`}
         >
+            <NotesResizer paneId={pane.id} drawer={drawer} />
             <div className="notes__header">
                 {project ? (
                     <div className="notes__tabs" role="tablist" aria-label="Notes">
@@ -167,5 +187,72 @@ export function NotesDrawer({
                 }}
             />
         </aside>
+    );
+}
+
+// The pane caps the drawer (see `.pane__body`), so a drag works from the width it shows.
+function NotesResizer({ paneId, drawer }: { paneId: string; drawer: RefObject<HTMLElement | null> }) {
+    const width = useUi((state) => state.notesWidth);
+    const setNotesWidth = useUi((state) => state.setNotesWidth);
+    const drag = useRef<{ x: number; width: number; max: number } | null>(null);
+    const [dragging, setDragging] = useState(false);
+
+    const shown = (): number => drawer.current?.getBoundingClientRect().width ?? width;
+    const limit = (): number => {
+        const body = drawer.current?.parentElement?.getBoundingClientRect().width;
+        return body ? Math.max(body / 2, body - 160) : MAX_NOTES_WIDTH;
+    };
+    const start = (event: PointerEvent<HTMLDivElement>): void => {
+        if (event.button !== 0) {
+            return;
+        }
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { x: event.clientX, width: shown(), max: limit() };
+        setDragging(true);
+    };
+    const end = (): void => {
+        drag.current = null;
+        setDragging(false);
+    };
+    const step = (event: KeyboardEvent<HTMLDivElement>): void => {
+        const delta = event.key === 'ArrowLeft' ? NOTES_WIDTH_STEP : event.key === 'ArrowRight' ? -NOTES_WIDTH_STEP : 0;
+        if (delta !== 0) {
+            event.preventDefault();
+            setNotesWidth(Math.min(shown() + delta, limit()));
+        }
+    };
+
+    return (
+        <div
+            className={`notes__resizer${dragging ? ' is-dragging' : ''}`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Notes width"
+            aria-valuemin={MIN_NOTES_WIDTH}
+            aria-valuemax={MAX_NOTES_WIDTH}
+            aria-valuenow={clampNotesWidth(width)}
+            tabIndex={0}
+            title="Drag to resize, double-click to reset"
+            onPointerDown={start}
+            onPointerMove={(event) => {
+                if (!drag.current) {
+                    return;
+                }
+                const next = draggedNotesWidth(drag.current.width - (event.clientX - drag.current.x));
+                if (next !== null) {
+                    setNotesWidth(Math.min(next, drag.current.max));
+                } else {
+                    setNotesWidth(drag.current.width);
+                    end();
+                    useUi.getState().toggleNotes(paneId);
+                }
+            }}
+            onPointerUp={end}
+            onPointerCancel={end}
+            onLostPointerCapture={end}
+            onDoubleClick={() => setNotesWidth(DEFAULT_NOTES_WIDTH)}
+            onKeyDown={step}
+        />
     );
 }
