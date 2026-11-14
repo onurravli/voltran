@@ -7,6 +7,7 @@
 A local control room for running many coding agents and terminals at once. Instead of a dozen
 terminal windows, you get one window with your projects, a session per piece of work, and split
 panes for the agents, shells and dev servers in it. Voltran tells you which agent is waiting on you.
+Everything runs in a browser window.
 
 It works with any folder and any agent CLI. Claude Code gets first-class status through its hooks,
 including the subagents it runs, OpenCode through a plugin Voltran gives it, and Codex through hooks
