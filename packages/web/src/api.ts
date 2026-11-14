@@ -22,6 +22,8 @@ import type {
     ProjectGit,
     SavedFile,
     SaveNotesBody,
+    SearchQuery,
+    SearchResult,
     Session,
     SessionChanges,
     SettingsPatch,
@@ -199,6 +201,8 @@ export const api = {
             `/api/sessions/${sessionId}/files/tree?${new URLSearchParams(paths.map((path) => ['path', path]))}`,
         ),
     allFiles: (sessionId: string) => request<ProjectFileList>('GET', `/api/sessions/${sessionId}/files/all`),
+    searchFiles: (sessionId: string, query: SearchQuery) =>
+        request<SearchResult>('POST', `/api/sessions/${sessionId}/files/search`, query),
     readFile: (sessionId: string, path: string, known: string | null) =>
         request<EditorFile>(
             'GET',

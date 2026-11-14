@@ -132,6 +132,36 @@ export interface ProjectFileList {
     truncated: boolean;
 }
 
+export interface SearchQuery {
+    text: string;
+    caseSensitive: boolean;
+    wholeWord: boolean;
+    regex: boolean;
+}
+
+// One match in a file. `line` and `column` count from 1 and `column`/`length` in UTF-16 units, as the
+// editor does; `preview` is a clipped copy of the line that holds the match at `previewStart`.
+export interface SearchMatch {
+    line: number;
+    column: number;
+    length: number;
+    preview: string;
+    previewStart: number;
+}
+
+export interface SearchFile {
+    path: string;
+    matches: SearchMatch[];
+}
+
+export interface SearchResult {
+    files: SearchFile[];
+    matches: number;
+    searched: number;
+    // Why the search stopped before it went through every file, if it did.
+    truncated: 'matches' | 'time' | 'files' | null;
+}
+
 // A file opened for editing. `version` names the bytes it was read from; a client that already
 // has that version gets `unchanged` and no text.
 export interface EditorFile {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS } from '@voltran/shared';
+import { DEFAULT_SETTINGS, type SearchResult } from '@voltran/shared';
 import {
     DEFAULT_TREE_WIDTH,
     MAX_TREE_WIDTH,
@@ -20,6 +20,7 @@ import {
     gitMarks,
     editorOptions,
     cleanOnSave,
+    searchSummary,
 } from './editor.ts';
 
 describe('matchFile', () => {
@@ -143,9 +144,33 @@ describe('editorCommand', () => {
         expect(editorCommand(key('ArrowLeft', { ctrlKey: true, altKey: true }), false)).toBeNull();
     });
 
+    it('searches in the files with ⇧⌘F or Ctrl+Shift+F', () => {
+        expect(editorCommand(key('KeyF', { metaKey: true, shiftKey: true }), true)).toBe('searchFiles');
+        expect(editorCommand(key('KeyF', { ctrlKey: true, shiftKey: true }), false)).toBe('searchFiles');
+        expect(editorCommand(key('KeyF', { metaKey: true }), true)).toBeNull();
+    });
+
     it('lists its keys for each platform', () => {
         expect(editorKeys(true)[0].keys).toBe('⌘S');
         expect(editorKeys(false)[0].keys).toBe('Ctrl+S');
+    });
+});
+
+describe('searchSummary', () => {
+    const result = (matches: number, files: number, truncated: SearchResult['truncated'] = null): SearchResult => ({
+        files: Array.from({ length: files }, (_, index) => ({ path: String(index), matches: [] })),
+        matches,
+        searched: 40,
+        truncated,
+    });
+
+    it('counts results and files, and says why a search stopped', () => {
+        expect(searchSummary(result(0, 0))).toBe('No results');
+        expect(searchSummary(result(1, 1))).toBe('1 result in 1 file');
+        expect(searchSummary(result(5, 2, 'time'))).toBe('5 results in 2 files; the search stopped after 40 files');
+        expect(searchSummary(result(5, 2, 'files'))).toBe(
+            '5 results in 2 files; only the first 40 files were searched',
+        );
     });
 });
 

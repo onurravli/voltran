@@ -98,6 +98,29 @@ describe('ProjectFiles', () => {
         });
     });
 
+    it('searches what git lists, skipping ignored, binary and outside files', async () => {
+        const root = repository();
+        const outside = folder();
+        writeFileSync(join(outside, 'secret.txt'), 'needle\n');
+        writeFileSync(join(root, '.gitignore'), 'dist/\n');
+        mkdirSync(join(root, 'src'));
+        mkdirSync(join(root, 'dist'));
+        writeFileSync(join(root, 'src', 'a.ts'), 'one\nthe needle here\n');
+        writeFileSync(join(root, 'dist', 'a.js'), 'needle\n');
+        writeFileSync(join(root, 'blob.bin'), Buffer.from([110, 101, 101, 100, 108, 101, 0]));
+        symlinkSync(join(outside, 'secret.txt'), join(root, 'away.txt'));
+
+        const result = await files().search(root, { text: 'NEEDLE' });
+        expect(result.truncated).toBeNull();
+        expect(result.files).toEqual([
+            {
+                path: 'src/a.ts',
+                matches: [{ line: 2, column: 5, length: 6, preview: 'the needle here', previewStart: 4 }],
+            },
+        ]);
+        await expect(files().search(root, { text: '(', regex: true })).rejects.toMatchObject({ status: 400 });
+    });
+
     it('lists a folder outside git without marking anything ignored', async () => {
         const root = folder();
         writeFileSync(join(root, 'notes.txt'), 'x');

@@ -20,6 +20,8 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import type {
     DirListing,
     EditorFile,
@@ -29,8 +31,10 @@ import type {
     FileTree,
     ProjectFileList,
     SavedFile,
+    SearchResult,
 } from '@voltran/shared';
 import type { GitRunner } from './git.ts';
+import { parseSearchQuery, type SearchJob, searchPattern } from './search.ts';
 
 export const MAX_EDIT_BYTES = 4 * 1024 * 1024;
 export const MAX_DIR_ENTRIES = 5000;
@@ -40,6 +44,9 @@ const MAX_PATH = 4096;
 const IGNORE_BATCH = 1000;
 const HIDDEN = new Set(['.git', '.DS_Store']);
 const WALK_SKIPPED = new Set(['.git', 'node_modules']);
+const SEARCH_WORKER = fileURLToPath(new URL(`./search-worker${extname(import.meta.url)}`, import.meta.url));
+const SEARCH_BUDGET_MS = 8000;
+const SEARCH_TIMEOUT_MS = 15_000;
 const QUIET = ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false'];
 
 export class FilesError extends Error {
@@ -158,6 +165,7 @@ export function systemTrash(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = 
 export class ProjectFiles {
     private readonly run: GitRunner;
     private readonly trash: Trash;
+    private readonly searches = new Map<string, Worker>();
 
     constructor(options: { run: GitRunner; trash: Trash }) {
         this.run = options.run;
@@ -368,6 +376,56 @@ export class ProjectFiles {
         }
         files.sort();
         return { files: files.slice(0, MAX_LISTED_FILES), truncated: files.length > MAX_LISTED_FILES };
+    }
+
+    // Searches the files `list` names in a worker thread, so a slow regular expression never holds up
+    // the daemon: it stops itself after a budget, is ended after a timeout, and a new search of the
+    // same folder ends the one before it.
+    async search(root: string, body: unknown): Promise<SearchResult> {
+        const query = parseSearchQuery(body);
+        if (typeof query === 'string') {
+            throw new FilesError(400, query);
+        }
+        const pattern = searchPattern(query);
+        if (typeof pattern === 'string') {
+            throw new FilesError(400, pattern);
+        }
+        const realRoot = this.realRoot(root);
+        this.searches.get(realRoot)?.terminate();
+        const listed = await this.list(realRoot);
+        const job: SearchJob = { root: realRoot, files: listed.files, query, budgetMs: SEARCH_BUDGET_MS };
+        const result = await new Promise<SearchResult>((resolve, reject) => {
+            const worker = new Worker(SEARCH_WORKER, { workerData: job });
+            this.searches.set(realRoot, worker);
+            const timer = setTimeout(() => {
+                void worker.terminate();
+                reject(new FilesError(408, 'the search took too long'));
+            }, SEARCH_TIMEOUT_MS);
+            const settle = (): void => {
+                clearTimeout(timer);
+                if (this.searches.get(realRoot) === worker) {
+                    this.searches.delete(realRoot);
+                }
+            };
+            worker.once('message', (message: { result?: SearchResult; error?: string }) => {
+                settle();
+                void worker.terminate();
+                if (message.result) {
+                    resolve(message.result);
+                } else {
+                    reject(new FilesError(400, message.error ?? 'the search failed'));
+                }
+            });
+            worker.once('error', (error) => {
+                settle();
+                reject(error);
+            });
+            worker.once('exit', () => {
+                settle();
+                reject(new FilesError(409, 'a newer search replaced this one'));
+            });
+        });
+        return listed.truncated && !result.truncated ? { ...result, truncated: 'files' } : result;
     }
 
     read(root: string, raw: unknown, known: string | null): EditorFile {

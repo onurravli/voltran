@@ -300,6 +300,9 @@ export function createVoltranServer(options: ServerOptions): Server {
     route('GET', '/api/sessions/:id/files/all', async (_req, res, [id]) =>
         sendJson(res, 200, await hub.sessionFileList(id)),
     );
+    route('POST', '/api/sessions/:id/files/search', async (req, res, [id]) =>
+        sendJson(res, 200, await hub.searchSessionFiles(id, await readJson(req))),
+    );
     route('GET', '/api/sessions/:id/files/read', async (req, res, [id]) => {
         const params = requestUrl(req).searchParams;
         sendJson(res, 200, await hub.readSessionFile(id, params.get('path') ?? '', params.get('known')));

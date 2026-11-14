@@ -6,7 +6,14 @@ import {
     useSyncExternalStore,
     type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { DEFAULT_SETTINGS, type ChangeState, type PaneView } from '@voltran/shared';
+import {
+    DEFAULT_SETTINGS,
+    type ChangeState,
+    type PaneView,
+    type SearchMatch,
+    type SearchQuery,
+    type SearchResult,
+} from '@voltran/shared';
 import { api } from '../api.ts';
 import {
     MAX_TREE_WIDTH,
@@ -20,6 +27,7 @@ import {
     nameProblem,
     parentOf,
     rankFiles,
+    searchSummary,
     type EditorCommand,
     type FileMatch,
 } from '../editor.ts';
@@ -36,6 +44,7 @@ import {
     ChevronIcon,
     CloseIcon,
     CollapseIcon,
+    FileIcon,
     NewFileIcon,
     NewFolderIcon,
     RestartIcon,
@@ -54,6 +63,15 @@ const GIT_MARKS: Record<ChangeState, { mark: string; label: string; folder: stri
     untracked: { mark: 'U', label: 'Untracked', folder: 'new files' },
     conflicted: { mark: '!', label: 'In conflict', folder: 'a conflict' },
 };
+
+type Sidebar = 'files' | 'search';
+
+interface Target {
+    path: string;
+    line: number;
+    column: number;
+    length: number;
+}
 
 type Editing =
     | { mode: 'create'; parent: string; kind: 'file' | 'dir' }
@@ -98,6 +116,12 @@ export function EditorView({ pane, focusToken }: { pane: PaneView; focusToken: n
     const [quickOpen, setQuickOpen] = useState(false);
     const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
     const [dragWidth, setDragWidth] = useState<number | null>(null);
+    const [sidebar, setSidebar] = useState<Sidebar>('files');
+    const [searchFocus, setSearchFocus] = useState<{ token: number; seed: string | null }>({
+        token: 0,
+        seed: null,
+    });
+    const [target, setTarget] = useState<Target | null>(null);
     const root = useRef<HTMLElement>(null);
     const host = useRef<HTMLDivElement>(null);
     const shown = useRef<string | null>(null);
@@ -195,6 +219,29 @@ export function EditorView({ pane, focusToken }: { pane: PaneView; focusToken: n
     }, [editor, activeModel, snapshot.active, session]);
 
     useEffect(() => {
+        if (!editor || !target || snapshot.active !== target.path) {
+            return;
+        }
+        if (activeTab?.state === 'binary' || activeTab?.state === 'tooLarge' || activeTab?.state === 'error') {
+            setTarget(null);
+            return;
+        }
+        if (!activeModel) {
+            return;
+        }
+        const range = {
+            startLineNumber: target.line,
+            startColumn: target.column,
+            endLineNumber: target.line,
+            endColumn: target.column + target.length,
+        };
+        editor.setSelection(range);
+        editor.revealRangeInCenterIfOutsideViewport(range);
+        editor.focus();
+        setTarget(null);
+    }, [editor, target, activeModel, activeTab?.state, snapshot.active]);
+
+    useEffect(() => {
         if (!focused || root.current?.contains(document.activeElement)) {
             return;
         }
@@ -210,6 +257,52 @@ export function EditorView({ pane, focusToken }: { pane: PaneView; focusToken: n
         session.reveal(path);
     };
 
+    const openMatch = (path: string, match: SearchMatch): void => {
+        setTarget({ path, line: match.line, column: match.column, length: match.length });
+        session.open(path);
+    };
+
+    const showSearch = (): void => {
+        const model = editor?.getModel();
+        const selection = editor?.getSelection();
+        const selected = model && selection && !selection.isEmpty() ? model.getValueInRange(selection) : '';
+        if (snapshot.treeHidden) {
+            session.toggleTree();
+        }
+        setSidebar('search');
+        setSearchFocus((current) => ({
+            token: current.token + 1,
+            seed: selected && !selected.includes('\n') && selected.length <= 200 ? selected : null,
+        }));
+    };
+
+    const switcher = (
+        <div className="editor__side-tabs" role="tablist" aria-label="Side bar">
+            <button
+                type="button"
+                role="tab"
+                className="icon-button"
+                aria-selected={sidebar === 'files'}
+                aria-label="Files"
+                title="Files"
+                onClick={() => setSidebar('files')}
+            >
+                <FileIcon size={14} />
+            </button>
+            <button
+                type="button"
+                role="tab"
+                className="icon-button"
+                aria-selected={sidebar === 'search'}
+                aria-label="Search in the files"
+                title={`Search in the files (${IS_MAC ? '⇧⌘F' : 'Ctrl+Shift+F'})`}
+                onClick={showSearch}
+            >
+                <SearchIcon size={14} />
+            </button>
+        </div>
+    );
+
     const run = (command: EditorCommand): void => {
         switch (command) {
             case 'save':
@@ -220,6 +313,9 @@ export function EditorView({ pane, focusToken }: { pane: PaneView; focusToken: n
                 break;
             case 'quickOpen':
                 setQuickOpen(true);
+                break;
+            case 'searchFiles':
+                showSearch();
                 break;
             case 'toggleTree':
                 session.toggleTree();
@@ -282,7 +378,22 @@ export function EditorView({ pane, focusToken }: { pane: PaneView; focusToken: n
         >
             {snapshot.treeHidden ? null : (
                 <>
-                    <FileTree session={session} snapshot={snapshot} cwd={cwd} onOpen={open} />
+                    <FileTree
+                        session={session}
+                        snapshot={snapshot}
+                        cwd={cwd}
+                        hidden={sidebar !== 'files'}
+                        switcher={switcher}
+                        onOpen={open}
+                    />
+                    <SearchPanel
+                        sessionId={pane.sessionId}
+                        active={snapshot.active}
+                        hidden={sidebar !== 'search'}
+                        focus={searchFocus}
+                        switcher={switcher}
+                        onOpen={openMatch}
+                    />
                     <div
                         className="editor__divider"
                         role="separator"
@@ -593,11 +704,15 @@ function FileTree({
     session,
     snapshot,
     cwd,
+    hidden,
+    switcher,
     onOpen,
 }: {
     session: EditorSession;
     snapshot: EditorSnapshot;
     cwd: string;
+    hidden: boolean;
+    switcher: React.ReactNode;
     onOpen: (path: string) => void;
 }) {
     const [editing, setEditing] = useState<Editing>(null);
@@ -781,8 +896,9 @@ function FileTree({
     };
 
     return (
-        <div className="editor__tree">
+        <div className="editor__tree" hidden={hidden}>
             <div className="tree__head">
+                {switcher}
                 <button
                     type="button"
                     className="icon-button"
@@ -968,6 +1084,238 @@ function QuickOpen({
                         <div className="quick-open__note">Only the first {files?.length} files are searched.</div>
                     ) : null}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+const SEARCH_DELAY_MS = 250;
+
+const SEARCH_OPTIONS: { key: 'caseSensitive' | 'wholeWord' | 'regex'; mark: string; label: string }[] = [
+    { key: 'caseSensitive', mark: 'Aa', label: 'Match case' },
+    { key: 'wholeWord', mark: 'ab', label: 'Match whole words' },
+    { key: 'regex', mark: '.*', label: 'Use a regular expression' },
+];
+
+function Preview({ match }: { match: SearchMatch }) {
+    const end = match.previewStart + match.length;
+    return (
+        <span className="search__preview">
+            {match.preview.slice(0, match.previewStart).trimStart()}
+            <mark>{match.preview.slice(match.previewStart, end)}</mark>
+            {match.preview.slice(end)}
+        </span>
+    );
+}
+
+function SearchPanel({
+    sessionId,
+    active,
+    hidden,
+    focus,
+    switcher,
+    onOpen,
+}: {
+    sessionId: string;
+    active: string | null;
+    hidden: boolean;
+    focus: { token: number; seed: string | null };
+    switcher: React.ReactNode;
+    onOpen: (path: string, match: SearchMatch) => void;
+}) {
+    const [query, setQuery] = useState<SearchQuery>({ text: '', caseSensitive: false, wholeWord: false, regex: false });
+    const [result, setResult] = useState<SearchResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [folded, setFolded] = useState<Set<string>>(new Set());
+    const [rerun, setRerun] = useState(0);
+    const input = useRef<HTMLInputElement>(null);
+    const list = useRef<HTMLDivElement>(null);
+    const sequence = useRef(0);
+
+    useEffect(() => {
+        if (focus.token === 0) {
+            return;
+        }
+        if (focus.seed !== null) {
+            setQuery((current) => ({ ...current, text: focus.seed as string }));
+        }
+        input.current?.focus();
+        requestAnimationFrame(() => input.current?.select());
+    }, [focus]);
+
+    useEffect(() => {
+        const run = ++sequence.current;
+        if (!query.text) {
+            setResult(null);
+            setError(null);
+            setBusy(false);
+            return;
+        }
+        setBusy(true);
+        const timer = setTimeout(() => {
+            api.searchFiles(sessionId, query)
+                .then((found) => {
+                    if (run === sequence.current) {
+                        setResult(found);
+                        setError(null);
+                        setFolded(new Set());
+                    }
+                })
+                .catch((reason) => {
+                    if (run === sequence.current) {
+                        setResult(null);
+                        setError(reason instanceof Error ? reason.message : String(reason));
+                    }
+                })
+                .finally(() => run === sequence.current && setBusy(false));
+        }, SEARCH_DELAY_MS);
+        return () => clearTimeout(timer);
+    }, [sessionId, query, rerun]);
+
+    const rows = (): HTMLElement[] => [...(list.current?.querySelectorAll<HTMLElement>('.search__row') ?? [])];
+
+    const onListKeyDown = (event: ReactKeyboardEvent<HTMLElement>): void => {
+        if (event.metaKey || event.ctrlKey || event.altKey) {
+            return;
+        }
+        const all = rows();
+        const index = all.indexOf(event.target as HTMLElement);
+        if (event.key === 'ArrowDown') {
+            all[Math.min(all.length - 1, index + 1)]?.focus();
+        } else if (event.key === 'ArrowUp') {
+            if (index <= 0) {
+                input.current?.focus();
+            } else {
+                all[index - 1]?.focus();
+            }
+        } else {
+            return;
+        }
+        event.preventDefault();
+    };
+
+    const toggleFold = (path: string): void =>
+        setFolded((current) => {
+            const next = new Set(current);
+            if (!next.delete(path)) {
+                next.add(path);
+            }
+            return next;
+        });
+
+    return (
+        <div className="editor__tree search" hidden={hidden}>
+            <div className="tree__head">
+                {switcher}
+                <button
+                    type="button"
+                    className="icon-button"
+                    title="Search again"
+                    aria-label="Search again"
+                    disabled={!query.text}
+                    onClick={() => setRerun((count) => count + 1)}
+                >
+                    <RestartIcon size={13} />
+                </button>
+                <button
+                    type="button"
+                    className="icon-button"
+                    title="Collapse the results"
+                    aria-label="Collapse the results"
+                    disabled={!result?.files.length}
+                    onClick={() => setFolded(new Set(result?.files.map((file) => file.path)))}
+                >
+                    <CollapseIcon size={14} />
+                </button>
+            </div>
+            <div className="search__form">
+                <div className="search__field">
+                    <input
+                        ref={input}
+                        className={`field__input field__input--mono search__input${error ? ' is-invalid' : ''}`}
+                        value={query.text}
+                        placeholder="Search"
+                        spellCheck={false}
+                        aria-label="Search in the files"
+                        aria-invalid={error !== null}
+                        onChange={(event) =>
+                            setQuery((current) => ({ ...current, text: event.target.value.replace(/\n/g, ' ') }))
+                        }
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                setRerun((count) => count + 1);
+                            } else if (event.key === 'ArrowDown') {
+                                event.preventDefault();
+                                rows()[0]?.focus();
+                            } else if (event.key === 'Escape' && query.text) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setQuery((current) => ({ ...current, text: '' }));
+                            }
+                        }}
+                    />
+                    <div className="search__options">
+                        {SEARCH_OPTIONS.map((option) => (
+                            <button
+                                key={option.key}
+                                type="button"
+                                className="search__option"
+                                aria-pressed={query[option.key]}
+                                aria-label={option.label}
+                                title={option.label}
+                                onClick={() =>
+                                    setQuery((current) => ({ ...current, [option.key]: !current[option.key] }))
+                                }
+                            >
+                                <span className={option.key === 'wholeWord' ? 'search__word' : undefined}>
+                                    {option.mark}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="search__summary" role="status">
+                    {error ?? (busy ? 'Searching…' : result ? searchSummary(result) : null)}
+                </div>
+            </div>
+            <div className="tree search__results" ref={list} onKeyDown={onListKeyDown}>
+                {result?.files.map((file) => {
+                    const open = !folded.has(file.path);
+                    const folder = parentOf(file.path);
+                    return (
+                        <div key={file.path} className="search__file">
+                            <button
+                                type="button"
+                                className={`tree__row search__row search__head${file.path === active ? ' is-active' : ''}`}
+                                title={file.path}
+                                aria-expanded={open}
+                                onClick={() => toggleFold(file.path)}
+                            >
+                                <span className="tree__twisty">
+                                    <ChevronIcon size={12} className={open ? 'is-open' : undefined} />
+                                </span>
+                                <span className="tree__name">{nameOf(file.path)}</span>
+                                {folder ? <span className="search__folder">{folder}</span> : null}
+                                <span className="search__count">{file.matches.length}</span>
+                            </button>
+                            {open
+                                ? file.matches.map((match) => (
+                                      <button
+                                          key={`${match.line}:${match.column}`}
+                                          type="button"
+                                          className="tree__row search__row search__match"
+                                          title={`${file.path}:${match.line}:${match.column}`}
+                                          onClick={() => onOpen(file.path, match)}
+                                      >
+                                          <Preview match={match} />
+                                      </button>
+                                  ))
+                                : null}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

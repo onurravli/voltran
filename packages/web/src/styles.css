@@ -1540,6 +1540,128 @@ kbd {
     color: var(--fault);
 }
 
+.editor__tree[hidden] {
+    display: none;
+}
+
+.editor__side-tabs {
+    display: flex;
+    gap: 2px;
+    margin-right: auto;
+}
+
+.editor__side-tabs .icon-button[aria-selected="true"] {
+    background: var(--fill-strong);
+    color: var(--text);
+}
+
+.search__form {
+    flex: none;
+    padding: 8px 8px 4px;
+}
+
+.search__field {
+    position: relative;
+}
+
+.search__input {
+    height: calc(28px * var(--ui-scale));
+    padding-right: 76px;
+    font-size: calc(12px * var(--ui-scale));
+}
+
+.search__input.is-invalid {
+    box-shadow: inset 0 0 0 1px var(--fault);
+}
+
+.search__options {
+    position: absolute;
+    top: 50%;
+    right: 3px;
+    display: flex;
+    gap: 1px;
+    transform: translateY(-50%);
+}
+
+.search__option {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: calc(10.5px * var(--ui-scale));
+    cursor: pointer;
+}
+
+.search__option:hover {
+    background: var(--fill);
+    color: var(--text);
+}
+
+.search__option[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--focus) 22%, transparent);
+    color: var(--text-strong);
+}
+
+.search__word {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.search__summary {
+    min-height: calc(18px * var(--ui-scale));
+    padding: 4px 2px 0;
+    color: var(--text-faint);
+    font-size: calc(11px * var(--ui-scale));
+}
+
+.search__head .search__folder {
+    min-width: 0;
+    margin-left: 6px;
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: calc(11px * var(--ui-scale));
+    text-overflow: ellipsis;
+}
+
+.search__head .tree__name {
+    flex: none;
+    max-width: 70%;
+}
+
+.search__count {
+    flex: none;
+    margin-left: auto;
+    padding: 0 5px 0 8px;
+    color: var(--text-faint);
+    font-size: calc(10.5px * var(--ui-scale));
+}
+
+.search__match {
+    padding-left: 30px;
+}
+
+.search__preview {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: calc(11.5px * var(--ui-scale));
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.search__preview mark {
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--signal) 28%, transparent);
+    color: var(--text-strong);
+}
+
 .tree__row--input {
     flex-wrap: wrap;
     cursor: default;

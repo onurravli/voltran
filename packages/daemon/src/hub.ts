@@ -36,6 +36,7 @@ import {
     type ServerEvent,
     type Session,
     type ProjectFileList,
+    type SearchResult,
     type SavedFile,
     type SessionChanges,
     type SlashCommand,
@@ -1075,6 +1076,11 @@ export class Hub {
     async sessionFileList(id: string): Promise<ProjectFileList> {
         const session = this.mustGetSession(id);
         return this.useFiles(() => this.files.list(session.cwd));
+    }
+
+    searchSessionFiles(id: string, query: unknown): Promise<SearchResult> {
+        const session = this.mustGetSession(id);
+        return this.useFiles(() => this.files.search(session.cwd, query));
     }
 
     readSessionFile(id: string, path: unknown, known: string | null): Promise<EditorFile> {

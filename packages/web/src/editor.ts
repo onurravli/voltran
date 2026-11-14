@@ -1,5 +1,6 @@
 import type {
     ChangeState,
+    SearchResult,
     CursorBlinking,
     CursorStyle,
     LineHighlight,
@@ -206,7 +207,15 @@ export interface ChordInput {
     shiftKey: boolean;
 }
 
-export type EditorCommand = 'save' | 'saveAll' | 'quickOpen' | 'toggleTree' | 'closeTab' | 'nextTab' | 'previousTab';
+export type EditorCommand =
+    | 'save'
+    | 'saveAll'
+    | 'quickOpen'
+    | 'searchFiles'
+    | 'toggleTree'
+    | 'closeTab'
+    | 'nextTab'
+    | 'previousTab';
 
 // The editor's own keys, which it handles before Monaco does. ⌘W, ⌃Tab and their like belong to the
 // browser, so a tab closes with ⌃W on a Mac and Alt+W elsewhere, and tabs step with ⌥⌘←/→ or
@@ -224,6 +233,9 @@ export function editorCommand(event: ChordInput, mac: boolean): EditorCommand | 
         if (!altKey && code === 'KeyB') {
             return 'toggleTree';
         }
+    }
+    if (primary && shiftKey && !altKey && code === 'KeyF') {
+        return 'searchFiles';
     }
     const close = mac ? ctrlKey && !metaKey && !altKey : altKey && !ctrlKey && !metaKey;
     if (close && !shiftKey && code === 'KeyW') {
@@ -247,6 +259,7 @@ export function editorKeys(mac: boolean): { keys: string; label: string }[] {
         { keys: pick('⌘S', 'Ctrl+S'), label: 'Save the file' },
         { keys: pick('⌥⌘S', 'Ctrl+Alt+S'), label: 'Save every file' },
         { keys: pick('⌘P', 'Ctrl+P'), label: 'Open a file by name' },
+        { keys: pick('⇧⌘F', 'Ctrl+Shift+F'), label: 'Search in the files' },
         { keys: pick('⌘B', 'Ctrl+B'), label: 'Show or hide the file tree' },
         { keys: pick('⌃W', 'Alt+W'), label: 'Close the tab' },
         { keys: pick('⌥⌘← / ⌥⌘→', 'Ctrl+Alt+PageUp / PageDown'), label: 'Previous / next tab' },
@@ -254,6 +267,25 @@ export function editorKeys(mac: boolean): { keys: string; label: string }[] {
         { keys: pick('⌘/', 'Ctrl+/'), label: 'Comment the line' },
         { keys: 'F1', label: "Every command of the editor's own" },
     ];
+}
+
+// What a search found, in a line under its field.
+export function searchSummary(result: SearchResult): string {
+    const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+    const found =
+        result.matches === 0
+            ? 'No results'
+            : `${count(result.matches, 'result', 'results')} in ${count(result.files.length, 'file', 'files')}`;
+    switch (result.truncated) {
+        case 'matches':
+            return `${found}; the search stopped there`;
+        case 'time':
+            return `${found}; the search stopped after ${count(result.searched, 'file', 'files')}`;
+        case 'files':
+            return `${found}; only the first ${count(result.searched, 'file', 'files')} were searched`;
+        default:
+            return found;
+    }
 }
 
 export interface TextEdit {

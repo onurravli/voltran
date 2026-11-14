@@ -239,7 +239,11 @@ the link itself. Reads return a `version` (a hash of the bytes) and answer `unch
 sends it; a save is refused with 409 unless the file is still the version the client edited (or it
 forces it), and writes in place to keep the mode and links. Text is valid UTF-8 without NUL, so a
 save never rewrites bytes the editor could not show. Trash goes to `~/.Trash` or the freedesktop.org
-trash (`systemTrash`), and reports `trashed: false` instead of deleting when it cannot. In the web app,
+trash (`systemTrash`), and reports `trashed: false` instead of deleting when it cannot. Search in
+files (⇧⌘F, `POST …/files/search`) goes through the files `list` names in a worker thread
+(`search.ts`, `search-worker.ts`) with JavaScript regular expressions, as Monaco's find has them, so a
+slow pattern never holds up the daemon: it stops itself after a budget, is ended after a timeout, and a
+newer search of the same folder ends it. In the web app,
 `editor-session.ts` (`EditorSession`, one per pane, kept across unmounts like `TerminalSession`) holds
 the tabs and a Monaco model per open file, polls the active file and the expanded folders, and applies
 a file changed on disk as one undoable edit (`minimalEdit`), or marks a conflict when it has unsaved
