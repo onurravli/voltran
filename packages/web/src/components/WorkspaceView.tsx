@@ -7,6 +7,7 @@ import { keys } from '../shortcuts.ts';
 import { useUi } from '../store.ts';
 import { draggedItem, dropIntoWorkspace, endDrag, saveHostLayout, type PaneHost } from '../workspace-actions.ts';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
+import { AgentsButton } from './AgentsView.tsx';
 import { SidebarIcon } from './Icons.tsx';
 import { LayoutNode, PaneBox, setSizesAt } from './SessionView.tsx';
 
@@ -15,6 +16,10 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
     const toggleSidebar = useUi((state) => state.toggleSidebar);
     const [renaming, setRenaming] = useState(false);
     const count = paneIds(workspace.layout).length;
+    const projectId = useUi((state) => {
+        const first = state.app?.panes.find((pane) => paneIds(workspace.layout).includes(pane.id));
+        return state.app?.sessions.find((session) => session.id === first?.sessionId)?.projectId ?? null;
+    });
 
     return (
         <header className="session-header">
@@ -44,6 +49,7 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
             </div>
             <span className="workspace__count">{count === 1 ? '1 pane' : `${count} panes`}</span>
             <div className="session-header__actions">
+                <AgentsButton projectId={projectId} />
                 <MoreMenu
                     label="Workspace actions"
                     items={() => workspaceMenu(workspace, () => setRenaming(true), 'header')}

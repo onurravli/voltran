@@ -1,33 +1,44 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { isFinished, type PaneView, type SubagentView, type Task } from '@voltran/shared';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type ConversationEntry, isFinished, type PaneView, type SubagentView, type Task } from '@voltran/shared';
 import {
+    type Activity,
+    activityOf,
     conversationOf,
     duration,
-    elbow,
     type ExchangeLine,
     excerpt,
     exchangeTasks,
     type FlowBox,
     flowLinks,
     layoutFlow,
+    mergeThread,
     type MessageKind,
     type Participant,
     participantsOf,
     subagentNodeId,
     summarize,
+    wire,
     YOU,
 } from '../agents.ts';
 import { api } from '../api.ts';
 import { renderMarkdown } from '../markdown.ts';
 import { reportError, useUi } from '../store.ts';
-import { PHASE_LABEL, subagentRef, taskPhase } from '../tasks.ts';
-import { CloseIcon } from './Icons.tsx';
-import { StatusLamp } from './StatusLamp.tsx';
+import {
+    type GraphPositions,
+    PHASE_LABEL,
+    type Point,
+    parsePositions,
+    storePositions,
+    subagentRef,
+    taskPhase,
+} from '../tasks.ts';
+import { AgentsIcon, CloseIcon } from './Icons.tsx';
 
 type Mode = 'flow' | 'summary';
 
-const BOX: FlowBox = { width: 236, height: 116, gapX: 36, gapY: 72, pad: 40 };
-const SUB_HEIGHT = 58;
+const BOX: FlowBox = { size: 84, subSize: 52, label: 56, gapX: 150, gapY: 28, subGap: 36, pad: 80 };
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 1.8;
 
 const VERB: Record<MessageKind, string> = {
     ask: 'asked',
@@ -38,6 +49,39 @@ const VERB: Record<MessageKind, string> = {
 };
 
 const LONG_TEXT = 900;
+const DRAG_THRESHOLD = 4;
+const POSITIONS_KEY = 'voltran.agentCanvas';
+const ACTIVITY_POLL_MS = 2000;
+
+function loadPositions(projectId: string): GraphPositions {
+    try {
+        return parsePositions(localStorage.getItem(POSITIONS_KEY), projectId);
+    } catch {
+        return {};
+    }
+}
+
+function savePositions(projectId: string, positions: GraphPositions): void {
+    try {
+        localStorage.setItem(
+            POSITIONS_KEY,
+            storePositions(localStorage.getItem(POSITIONS_KEY), projectId, positions, new Set(Object.keys(positions))),
+        );
+    } catch {}
+}
+
+interface Drag {
+    id: string;
+    pointer: number;
+    start: Point;
+    origin: Point;
+    at: Point | null;
+}
+
+type DragProps = Pick<
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
+    'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel'
+>;
 
 const Markdown = memo(function Markdown({ text }: { text: string }) {
     const html = useMemo(() => renderMarkdown(text), [text]);
@@ -136,60 +180,156 @@ interface NodeInfo {
     said: string | null;
 }
 
+interface View {
+    x: number;
+    y: number;
+    k: number;
+}
+
+interface Pan {
+    pointer: number;
+    start: Point;
+    origin: View;
+    moved: boolean;
+}
+
+const GLYPHS: Partial<Record<string, string>> = { claude: '✻', codex: '>_', opencode: '{ }' };
+
+const glyphOf = (who: Participant): string =>
+    who.id === YOU ? '◎' : ((who.adapter && GLYPHS[who.adapter]) ?? who.name.slice(0, 1));
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+type Badge = 'running' | 'asking' | 'waiting' | 'done' | 'failed' | 'cancelled';
+
+function badgeOf(info: NodeInfo, byId: Map<string, Task>): Badge | null {
+    if (info.current) {
+        const phase = taskPhase(info.current, byId);
+        return phase === 'running' ? 'running' : phase === 'asking' ? 'asking' : 'waiting';
+    }
+    if (info.own.length === 0) {
+        return null;
+    }
+    if (info.own.some((task) => task.status === 'failed')) {
+        return 'failed';
+    }
+    return info.own.every((task) => task.status === 'cancelled') ? 'cancelled' : 'done';
+}
+
+const BADGE_MARK: Record<Badge, string> = {
+    running: '',
+    asking: '?',
+    waiting: '…',
+    done: '✓',
+    failed: '!',
+    cancelled: '–',
+};
+
 function AgentNode({
     info,
     byId,
     at,
     selected,
+    dragging,
     now,
+    drag,
     onSelect,
 }: {
     info: NodeInfo;
     byId: Map<string, Task>;
-    at: { x: number; y: number };
+    at: Point;
     selected: boolean;
+    dragging: boolean;
     now: number;
+    drag: DragProps;
     onSelect: () => void;
 }) {
     const { who, own, current, said } = info;
     const phase = current ? taskPhase(current, byId) : null;
+    const badge = badgeOf(info, byId);
     const busy = own.reduce(
         (sum, task) => sum + (task.startedAt === null ? 0 : (task.finishedAt ?? now) - task.startedAt),
         0,
     );
     const done = own.filter((task) => task.status === 'done').length;
+    const state =
+        who.id === YOU
+            ? 'Gave tasks'
+            : current && phase
+              ? `${PHASE_LABEL[phase]} · ${current.title}`
+              : own.length > 0
+                ? `${done} of ${own.length} done · ${duration(busy)}`
+                : 'Delegating';
     return (
-        <button
-            type="button"
-            className={`flow-node${selected ? ' is-selected' : ''}`}
-            style={{ left: at.x, top: at.y, width: BOX.width, height: BOX.height }}
-            onClick={onSelect}
-            onDoubleClick={() => reveal(who.pane)}
-            title={who.pane ? `${who.pane.title}\nDouble-click to open its pane` : undefined}
+        <div
+            className={`canvas-node${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}`}
+            style={{ left: at.x, top: at.y, width: BOX.size }}
         >
-            <span className="flow-node__head">
-                <Avatar who={who} />
-                <span className="flow-node__name">{who.name}</span>
-                {who.pane ? <StatusLamp status={who.pane.status} size="sm" /> : null}
+            <button
+                type="button"
+                className="canvas-node__box"
+                style={{ width: BOX.size, height: BOX.size, '--who': who.color } as React.CSSProperties}
+                {...drag}
+                onClick={onSelect}
+                onDoubleClick={() => reveal(who.pane)}
+                title={`${who.pane?.title ?? who.name}${said ? `\n\n${excerpt(said, 300)}` : ''}\n\nDrag to move, double-click to open its pane`}
+            >
+                <span className="canvas-node__glyph">{glyphOf(who)}</span>
+                <span className="canvas-node__handle canvas-node__handle--in" aria-hidden />
+                <span className="canvas-node__handle canvas-node__handle--out" aria-hidden />
+                {badge ? (
+                    <span className={`canvas-node__badge canvas-node__badge--${badge}`} aria-label={badge}>
+                        {BADGE_MARK[badge]}
+                    </span>
+                ) : null}
+            </button>
+            <span className="canvas-node__label">
+                <span className="canvas-node__name">{who.name}</span>
+                <span className="canvas-node__state">{state}</span>
             </span>
-            <span className="flow-node__state">
-                {who.id === YOU
-                    ? 'You'
-                    : current && phase
-                      ? `${PHASE_LABEL[phase]} · ${current.title}`
-                      : own.length > 0
-                        ? `${done} of ${own.length} done`
-                        : 'Delegating'}
+        </div>
+    );
+}
+
+function SubagentNode({
+    agent,
+    at,
+    dragging,
+    drag,
+    onOpen,
+}: {
+    agent: SubagentView;
+    at: Point;
+    dragging: boolean;
+    drag: DragProps;
+    onOpen: () => void;
+}) {
+    return (
+        <div
+            className={`canvas-node canvas-node--sub${dragging ? ' is-dragging' : ''}`}
+            style={{ left: at.x, top: at.y, width: BOX.subSize }}
+        >
+            <button
+                type="button"
+                className="canvas-node__box"
+                style={{ width: BOX.subSize, height: BOX.subSize }}
+                {...drag}
+                onClick={onOpen}
+                title={`${agent.type}: ${agent.description}\nDrag to move, click to open its transcript`}
+            >
+                <span className="canvas-node__glyph">{agent.type.slice(0, 1)}</span>
+                <span className="canvas-node__badge canvas-node__badge--running" aria-hidden />
+            </button>
+            <span className="canvas-node__label">
+                <span className="canvas-node__name">{agent.type}</span>
+                <span className="canvas-node__state">{agent.description}</span>
             </span>
-            <span className="flow-node__said">{said ? excerpt(said) : ' '}</span>
-            <span className="flow-node__foot">
-                {own.length > 0 ? `${own.length} ${own.length === 1 ? 'task' : 'tasks'} · ${duration(busy)}` : ''}
-            </span>
-        </button>
+        </div>
     );
 }
 
 function Flow({
+    projectId,
     tasks,
     byId,
     people,
@@ -197,6 +337,7 @@ function Flow({
     now,
     onSelect,
 }: {
+    projectId: string;
     tasks: Task[];
     byId: Map<string, Task>;
     people: Participant[];
@@ -234,22 +375,189 @@ function Flow({
             }),
         [people, tasks, lines],
     );
+    const [moved, setMoved] = useState<GraphPositions>(() => loadPositions(projectId));
+    const [drag, setDrag] = useState<Drag | null>(null);
+    const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
+    const [pan, setPan] = useState<Pan | null>(null);
+    const viewport = useRef<HTMLDivElement>(null);
+    const touched = useRef(false);
+    const dragged = useRef(false);
+
+    const place = (id: string): Point | undefined =>
+        drag?.id === id && drag.at ? drag.at : (moved[id] ?? layout.at.get(id));
+
+    const extent = ids.reduce(
+        (size, id) => {
+            const at = place(id);
+            return at
+                ? {
+                      width: Math.max(size.width, at.x + BOX.size + BOX.pad),
+                      height: Math.max(size.height, at.y + BOX.size + BOX.label + BOX.pad),
+                  }
+                : size;
+        },
+        { width: layout.width, height: layout.height },
+    );
+
+    const fit = useCallback((): void => {
+        const box = viewport.current?.getBoundingClientRect();
+        if (!box || extent.width === 0) {
+            return;
+        }
+        const k = clamp(Math.min(box.width / extent.width, box.height / extent.height), MIN_ZOOM, 1);
+        setView({ k, x: (box.width - extent.width * k) / 2, y: (box.height - extent.height * k) / 2 });
+    }, [extent.width, extent.height]);
+
+    useLayoutEffect(() => {
+        if (!touched.current) {
+            fit();
+        }
+    }, [fit]);
+
+    const zoomAt = useCallback((factor: number, cx?: number, cy?: number): void => {
+        const box = viewport.current?.getBoundingClientRect();
+        if (!box) {
+            return;
+        }
+        touched.current = true;
+        const px = cx ?? box.width / 2;
+        const py = cy ?? box.height / 2;
+        setView((current) => {
+            const k = clamp(current.k * factor, MIN_ZOOM, MAX_ZOOM);
+            return { k, x: px - ((px - current.x) * k) / current.k, y: py - ((py - current.y) * k) / current.k };
+        });
+    }, []);
+
+    useEffect(() => {
+        const element = viewport.current;
+        if (!element) {
+            return;
+        }
+        const onWheel = (event: WheelEvent): void => {
+            event.preventDefault();
+            if (event.ctrlKey || event.metaKey) {
+                const box = element.getBoundingClientRect();
+                zoomAt(Math.exp(-event.deltaY * 0.01), event.clientX - box.left, event.clientY - box.top);
+            } else {
+                touched.current = true;
+                setView((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
+            }
+        };
+        element.addEventListener('wheel', onWheel, { passive: false });
+        return () => element.removeEventListener('wheel', onWheel);
+    }, [zoomAt]);
+
+    const dragProps = (id: string): DragProps => ({
+        onPointerDown: (event) => {
+            event.stopPropagation();
+            dragged.current = false;
+            const origin = place(id);
+            if (event.button !== 0 || !origin) {
+                return;
+            }
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setDrag({ id, pointer: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin, at: null });
+        },
+        onPointerMove: (event) => {
+            if (!drag || drag.pointer !== event.pointerId) {
+                return;
+            }
+            const dx = (event.clientX - drag.start.x) / view.k;
+            const dy = (event.clientY - drag.start.y) / view.k;
+            if (!drag.at && Math.hypot(dx, dy) * view.k < DRAG_THRESHOLD) {
+                return;
+            }
+            touched.current = true;
+            setDrag({ ...drag, at: { x: Math.max(0, drag.origin.x + dx), y: Math.max(0, drag.origin.y + dy) } });
+        },
+        onPointerUp: (event) => {
+            if (!drag || drag.pointer !== event.pointerId) {
+                return;
+            }
+            if (drag.at) {
+                const next = { ...moved, [drag.id]: drag.at };
+                setMoved(next);
+                savePositions(projectId, next);
+                dragged.current = true;
+            }
+            setDrag(null);
+        },
+        onPointerCancel: () => setDrag(null),
+    });
+
+    const unlessDragged =
+        (run: () => void): (() => void) =>
+        () => {
+            if (dragged.current) {
+                dragged.current = false;
+                return;
+            }
+            run();
+        };
+
+    const reset = (): void => {
+        setMoved({});
+        savePositions(projectId, {});
+        touched.current = false;
+    };
 
     return (
-        <div className="flow" onClick={(event) => event.target === event.currentTarget && onSelect(null)}>
+        <div
+            ref={viewport}
+            className={`flow${pan?.moved ? ' is-panning' : ''}`}
+            style={{
+                backgroundSize: `${20 * view.k}px ${20 * view.k}px`,
+                backgroundPosition: `${view.x}px ${view.y}px`,
+            }}
+            onPointerDown={(event) => {
+                if (event.button !== 0) {
+                    return;
+                }
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setPan({
+                    pointer: event.pointerId,
+                    start: { x: event.clientX, y: event.clientY },
+                    origin: view,
+                    moved: false,
+                });
+            }}
+            onPointerMove={(event) => {
+                if (!pan || pan.pointer !== event.pointerId) {
+                    return;
+                }
+                const dx = event.clientX - pan.start.x;
+                const dy = event.clientY - pan.start.y;
+                if (!pan.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+                    return;
+                }
+                touched.current = true;
+                setPan({ ...pan, moved: true });
+                setView({ ...pan.origin, x: pan.origin.x + dx, y: pan.origin.y + dy });
+            }}
+            onPointerUp={(event) => {
+                if (pan && pan.pointer === event.pointerId && !pan.moved) {
+                    onSelect(null);
+                }
+                setPan(null);
+            }}
+            onPointerCancel={() => setPan(null)}
+        >
             <div
                 className="flow__canvas"
-                style={{ width: layout.width, height: layout.height }}
-                onClick={(event) => event.target === event.currentTarget && onSelect(null)}
+                style={{
+                    width: extent.width,
+                    height: extent.height,
+                    transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
+                }}
             >
-                <svg className="flow__edges" width={layout.width} height={layout.height} aria-hidden>
+                <svg className="flow__edges" width={extent.width} height={extent.height} aria-hidden>
                     {links.map((link) => {
-                        const from = layout.at.get(link.from);
-                        const to = layout.at.get(link.to);
+                        const from = place(link.from);
+                        const to = place(link.to);
                         if (!from || !to) {
                             return null;
                         }
-                        const tx = to.x + BOX.width / 2;
+                        const { path, end } = wire(from, to, BOX, link.kind);
                         const lit = selected !== null && (link.from === selected || link.to === selected);
                         return (
                             <g
@@ -257,17 +565,20 @@ function Flow({
                                 className={`flow-edge flow-edge--${link.kind} flow-edge--${link.status}${lit ? ' is-lit' : ''}`}
                             >
                                 <title>{link.titles.join('\n')}</title>
-                                <path d={elbow(from, to, BOX, link.kind === 'waits' ? 10 : 0)} />
-                                <path
-                                    className="flow-edge__head"
-                                    d={`M ${tx - 4} ${to.y - 6} L ${tx} ${to.y} L ${tx + 4} ${to.y - 6}`}
-                                />
+                                <path className="flow-edge__hit" d={path} />
+                                <path className="flow-edge__line" d={path} />
+                                {link.kind === 'runs' ? null : (
+                                    <path
+                                        className="flow-edge__head"
+                                        d={`M ${end.x - 7} ${end.y - 4} L ${end.x - 1} ${end.y} L ${end.x - 7} ${end.y + 4}`}
+                                    />
+                                )}
                             </g>
                         );
                     })}
                 </svg>
                 {infos.map((info) => {
-                    const at = layout.at.get(info.who.id);
+                    const at = place(info.who.id);
                     return at ? (
                         <AgentNode
                             key={info.who.id}
@@ -276,41 +587,127 @@ function Flow({
                             at={at}
                             now={now}
                             selected={selected === info.who.id}
-                            onSelect={() => onSelect(selected === info.who.id ? null : info.who.id)}
+                            dragging={drag?.id === info.who.id && drag.at !== null}
+                            drag={dragProps(info.who.id)}
+                            onSelect={unlessDragged(() => onSelect(selected === info.who.id ? null : info.who.id))}
                         />
                     ) : null;
                 })}
                 {subagents.map(({ id, agent }) => {
-                    const at = layout.at.get(id);
-                    return at ? <SubagentNode key={id} id={id} agent={agent} at={at} /> : null;
+                    const at = place(id);
+                    return at ? (
+                        <SubagentNode
+                            key={id}
+                            agent={agent}
+                            at={at}
+                            dragging={drag?.id === id && drag.at !== null}
+                            drag={dragProps(id)}
+                            onOpen={unlessDragged(() => openSubagent(id))}
+                        />
+                    ) : null;
                 })}
             </div>
-            <div className="flow__legend">
-                <span className="flow__key flow__key--delegates">delegates to</span>
+            <div className="flow__controls" onPointerDown={(event) => event.stopPropagation()}>
+                <button type="button" className="flow__control" title="Zoom in" onClick={() => zoomAt(1.2)}>
+                    +
+                </button>
+                <button type="button" className="flow__control" title="Zoom out" onClick={() => zoomAt(1 / 1.2)}>
+                    −
+                </button>
+                <button
+                    type="button"
+                    className="flow__control flow__control--wide"
+                    title="Fit the agents in view"
+                    onClick={() => {
+                        touched.current = false;
+                        fit();
+                    }}
+                >
+                    Fit
+                </button>
+                {Object.keys(moved).length > 0 ? (
+                    <button type="button" className="flow__control flow__control--wide" onClick={reset}>
+                        Reset layout
+                    </button>
+                ) : null}
+            </div>
+            <div className="flow__legend" aria-hidden>
+                <span className="flow__key flow__key--delegates">gives work</span>
                 <span className="flow__key flow__key--waits">waits for results</span>
-                <span className="flow__key flow__key--running">running</span>
-                <span className="flow__key flow__key--done">done</span>
-                <span className="flow__key flow__key--failed">failed</span>
+                <span className="flow__key flow__key--runs">runs a subagent</span>
             </div>
         </div>
     );
 }
 
-function SubagentNode({ id, agent, at }: { id: string; agent: SubagentView; at: { x: number; y: number } }) {
+const LIVE: PaneView['status'][] = ['starting', 'working', 'needs-input'];
+
+// A Claude pane's conversation, read the way the conversation view reads it: from where the last read
+// stopped, again every few seconds while the agent works and on each change of its status.
+function useConversation(pane: PaneView | null): ConversationEntry[] {
+    const paneId = pane?.adapter === 'claude' ? pane.id : null;
+    const status = pane?.status;
+    const [entries, setEntries] = useState<ConversationEntry[]>([]);
+    const cursor = useRef<{ source: string | null; next: number }>({ source: null, next: 0 });
+    const busy = useRef<string | null>(null);
+    const shown = useRef(paneId);
+    shown.current = paneId;
+
+    const load = useCallback(async (): Promise<void> => {
+        if (!paneId || busy.current === paneId) {
+            return;
+        }
+        busy.current = paneId;
+        try {
+            let more = true;
+            while (more) {
+                const chunk = await api.conversation(paneId, cursor.current.source, cursor.current.next);
+                if (shown.current !== paneId) {
+                    return;
+                }
+                const reset = chunk.source !== cursor.current.source;
+                cursor.current = { source: chunk.source, next: chunk.next };
+                if (reset) {
+                    setEntries(chunk.entries);
+                } else if (chunk.entries.length > 0) {
+                    setEntries((previous) => previous.concat(chunk.entries));
+                }
+                more = chunk.more;
+            }
+        } catch {
+        } finally {
+            if (busy.current === paneId) {
+                busy.current = null;
+            }
+        }
+    }, [paneId]);
+
+    useEffect(() => {
+        cursor.current = { source: null, next: 0 };
+        setEntries([]);
+    }, [paneId]);
+
+    useEffect(() => {
+        void load();
+        if (!status || !LIVE.includes(status)) {
+            return;
+        }
+        const timer = setInterval(() => void load(), ACTIVITY_POLL_MS);
+        return () => clearInterval(timer);
+    }, [load, status]);
+
+    return entries;
+}
+
+function ActivityLine({ activity }: { activity: Activity }) {
+    if (activity.kind === 'tool' || activity.kind === 'error') {
+        return <div className={`agents-tool agents-tool--${activity.kind}`}>{activity.text}</div>;
+    }
     return (
-        <button
-            type="button"
-            className="flow-node flow-node--sub"
-            style={{ left: at.x, top: at.y, width: BOX.width, height: SUB_HEIGHT }}
-            onClick={() => openSubagent(id)}
-            title="Open its transcript"
-        >
-            <span className="flow-node__head">
-                <span className="flow-node__kind">{agent.type}</span>
-                <span className="lamp lamp--working lamp--sm" aria-hidden />
-            </span>
-            <span className="flow-node__said">{agent.description || 'Subagent'}</span>
-        </button>
+        <div className={`agents-activity agents-activity--${activity.kind}`}>
+            {activity.kind === 'thinking' ? <span className="agents-activity__label">Thinking</span> : null}
+            <Folded text={activity.text} />
+        </div>
     );
 }
 
@@ -337,6 +734,16 @@ function Thread({
         [tasks, selected],
     );
     const who = selected ? people.get(selected) : undefined;
+    const conversation = useConversation(who?.pane ?? null);
+    const items = useMemo(() => {
+        if (!selected || conversation.length === 0) {
+            return mergeThread(lines, []);
+        }
+        const involved = tasks.filter((task) => task.paneId === selected || task.createdBy === selected);
+        const since = Math.min(...involved.map((task) => task.createdAt));
+        const replies = tasks.flatMap((task) => (task.paneId === selected && task.result ? [task.result] : []));
+        return mergeThread(lines, activityOf(conversation, since, replies));
+    }, [lines, conversation, selected, tasks]);
     const working = tasks.filter(
         (task) =>
             task.status === 'running' &&
@@ -373,9 +780,21 @@ function Thread({
                     pinned.current = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
                 }}
             >
-                {lines.map((line) => (
-                    <Line key={line.key} line={line} people={people} />
-                ))}
+                {who && who.pane?.adapter !== 'claude' && who.id !== YOU ? (
+                    <p className="agents-thread__hint">
+                        {who.name} does not share its thinking with Voltran, so only its messages show here.
+                    </p>
+                ) : null}
+                {!who ? (
+                    <p className="agents-thread__hint">Select an agent to see its thinking and tool calls.</p>
+                ) : null}
+                {items.map((item) =>
+                    item.type === 'line' ? (
+                        <Line key={item.line.key} line={item.line} people={people} />
+                    ) : (
+                        <ActivityLine key={`activity:${item.activity.key}`} activity={item.activity} />
+                    ),
+                )}
                 {working.map((task) => (
                     <div key={task.id} className="agents-working">
                         <span className="agents-working__dots" aria-hidden>
@@ -578,10 +997,43 @@ export function AgentsView() {
                 <Summary tasks={tasks} people={peopleById} byId={byId} now={now} />
             ) : (
                 <div className="agents__body">
-                    <Flow tasks={tasks} byId={byId} people={people} selected={shown} now={now} onSelect={setSelected} />
+                    <Flow
+                        key={exchange.projectId}
+                        projectId={exchange.projectId}
+                        tasks={tasks}
+                        byId={byId}
+                        people={people}
+                        selected={shown}
+                        now={now}
+                        onSelect={setSelected}
+                    />
                     <Thread tasks={tasks} people={peopleById} selected={shown} onClear={() => setSelected(null)} />
                 </div>
             )}
         </section>
+    );
+}
+
+// Opens the agents view of a project from the bar above the panes; its dot says agents are at work.
+export function AgentsButton({ projectId }: { projectId: string | null }) {
+    const openAgents = useUi((state) => state.openAgents);
+    const busy = useUi((state) =>
+        projectId
+            ? (state.app?.tasks.some((task) => task.projectId === projectId && task.status === 'running') ?? false)
+            : false,
+    );
+    if (!projectId) {
+        return null;
+    }
+    return (
+        <button
+            type="button"
+            className={`icon-button icon-button--bar agents-button${busy ? ' is-busy' : ''}`}
+            title={busy ? 'Show the agents (some are working)' : 'Show the agents'}
+            aria-label="Show the agents"
+            onClick={() => openAgents(projectId)}
+        >
+            <AgentsIcon size={16} />
+        </button>
     );
 }

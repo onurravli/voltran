@@ -355,15 +355,19 @@ as live subtasks; select one to open its transcript.
 **Open the agents view when agents delegate**), a window covers the panes as soon as an agent hands
 work to another agent, and again when the agents of an exchange you closed delegate more. While it
 shows an unfinished exchange, delegations in other projects do not take it over. It draws the
-exchange as a flowchart: you and each agent are a box with what it is doing and what it last said,
-solid arrows lead from whoever gave work to the agent that took it, dashed ones from a task's results
-to the agent that waits for them (unless a solid arrow already joins the two), and dotted ones to the
-subagents Claude runs, which hang below their agent. The panel beside it has the messages: each task
-out, and each reply, question or failure back; select an agent to see only its own, double-click it
-to open its pane. When every task of the exchange has finished it turns into a summary (outcomes,
+exchange on a canvas, left to right: you and each agent are a node with a badge for its state
+(working, waiting, asking you, done, failed) and what it is doing written under it. Solid wires lead
+from whoever gave work to the agent that took it, dashed ones from a task's results to the agent that
+waits for them (unless a solid wire already joins the two), and dotted ones to the subagents Claude
+runs, which hang below their agent as round nodes. Scroll or drag the background to pan, pinch or
+⌘-scroll to zoom, and **Fit** brings every node back into view. The panel beside it has the messages: each task
+out, and each reply, question or failure back. Select an agent to see only its own, and for Claude Code
+its thinking, what it writes along the way and its tool calls between them (Codex and OpenCode do not
+share theirs yet); double-click it to open its pane. Drag the nodes to arrange them; Voltran keeps
+where you put them per project until **Reset layout**. When every task of the exchange has finished it turns into a summary (outcomes,
 time per agent, each result), and with the setting on it opens again for it if you closed it; a retry
-turns it back into the flowchart. Esc closes it; ⌘K → **Show the agents talking** opens it for the
-session's project at any time, on the tasks still going on, or else on the last exchange.
+turns it back into the canvas. Esc closes it; the robot button above the panes (or ⌘K → **Show the agents
+talking**) opens it for the session's project at any time, on the tasks still going on, or else on the last exchange.
 
 ### Shortcuts
 

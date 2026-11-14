@@ -1,4 +1,4 @@
-import { type AdapterId, isFinished, type PaneView, type Task } from '@voltran/shared';
+import { type AdapterId, type ConversationEntry, isFinished, type PaneView, type Task } from '@voltran/shared';
 
 export interface AgentsExchange {
     projectId: string;
@@ -318,10 +318,12 @@ export function flowLinks(tasks: Task[], panes: Map<string, PaneView>): FlowLink
 }
 
 export interface FlowBox {
-    width: number;
-    height: number;
+    size: number;
+    subSize: number;
+    label: number;
     gapX: number;
     gapY: number;
+    subGap: number;
     pad: number;
 }
 
@@ -331,11 +333,21 @@ export interface FlowLayout {
     height: number;
 }
 
+// A left-to-right canvas: each agent sits one column right of everything that hands it work or results,
+// each column is ordered by where those sit (then by first appearance) and centred, and the subagents an
+// agent runs hang in a row under it. Positions are the nodes' top-left corners; labels go under them.
 export function layoutFlow(ids: string[], links: FlowLink[], box: FlowBox): FlowLayout {
     const known = new Set(ids);
-    const parents = new Map<string, string[]>(ids.map((id) => [id, []]));
+    const owner = new Map<string, string>();
     for (const link of links) {
-        if (known.has(link.from) && known.has(link.to)) {
+        if (link.kind === 'runs' && known.has(link.from) && known.has(link.to)) {
+            owner.set(link.to, link.from);
+        }
+    }
+    const main = ids.filter((id) => !owner.has(id));
+    const parents = new Map<string, string[]>(main.map((id) => [id, []]));
+    for (const link of links) {
+        if (link.kind !== 'runs' && parents.has(link.from) && parents.has(link.to)) {
             parents.get(link.to)!.push(link.from);
         }
     }
@@ -356,52 +368,82 @@ export function layoutFlow(ids: string[], links: FlowLink[], box: FlowBox): Flow
         return own;
     };
     const sparse: string[][] = [];
-    for (const id of ids) {
+    for (const id of main) {
         const level = levelOf(id);
         sparse[level] = [...(sparse[level] ?? []), id];
     }
-    const rows = Array.from(sparse, (row) => row ?? []).filter((row) => row.length > 0);
+    const columns = Array.from(sparse, (column) => column ?? []).filter((column) => column.length > 0);
+    const subRow = owner.size > 0 ? box.subGap + box.subSize + box.label : 0;
+    const rowHeight = box.size + box.label + subRow + box.gapY;
+    const tallest = Math.max(0, ...columns.map((column) => column.length));
+    const height = columns.length === 0 ? 0 : box.pad * 2 + tallest * rowHeight - box.gapY;
+    const width = columns.length === 0 ? 0 : box.pad * 2 + columns.length * (box.size + box.gapX) - box.gapX;
     const slot = new Map<string, number>();
     const at = new Map<string, { x: number; y: number; level: number }>();
-    const widest = Math.max(0, ...rows.map((row) => row.length));
-    const width = box.pad * 2 + widest * box.width + Math.max(0, widest - 1) * box.gapX;
-    rows.forEach((row, level) => {
+    columns.forEach((column, level) => {
         const centre = (id: string): number => {
             const placed = parents.get(id)!.filter((parent) => slot.has(parent));
             return placed.length === 0
                 ? Number.POSITIVE_INFINITY
                 : placed.reduce((sum, parent) => sum + slot.get(parent)!, 0) / placed.length;
         };
-        const ordered = row
+        const ordered = column
             .map((id, index) => ({ id, index, centre: centre(id) }))
             .sort((a, b) => a.centre - b.centre || a.index - b.index);
-        const span = ordered.length * box.width + Math.max(0, ordered.length - 1) * box.gapX;
-        const left = (width - span) / 2;
+        const top = (height - (ordered.length * rowHeight - box.gapY)) / 2;
         ordered.forEach(({ id }, index) => {
-            const x = left + index * (box.width + box.gapX);
-            slot.set(id, x + box.width / 2);
-            at.set(id, { x, y: box.pad + level * (box.height + box.gapY), level });
+            const y = top + index * rowHeight;
+            slot.set(id, y + box.size / 2);
+            at.set(id, { x: box.pad + level * (box.size + box.gapX), y, level });
         });
     });
-    const height = box.pad * 2 + rows.length * box.height + Math.max(0, rows.length - 1) * box.gapY;
-    return { at, width, height: rows.length === 0 ? 0 : height };
+    const children = new Map<string, string[]>();
+    for (const id of ids) {
+        const parent = owner.get(id);
+        if (parent) {
+            children.set(parent, [...(children.get(parent) ?? []), id]);
+        }
+    }
+    for (const [parent, subs] of children) {
+        const home = at.get(parent);
+        if (!home) {
+            continue;
+        }
+        const step = box.subSize + 24;
+        subs.forEach((id, index) => {
+            const centre = home.x + box.size / 2 + (index - (subs.length - 1) / 2) * step;
+            at.set(id, {
+                x: centre - box.subSize / 2,
+                y: home.y + box.size + box.label + box.subGap,
+                level: home.level,
+            });
+        });
+    }
+    return { at, width, height };
 }
 
-export function elbow(
+// A wire from one node's right handle to the next one's left handle, bending more the further it goes;
+// a subagent's wire leaves the bottom of its agent instead.
+export function wire(
     from: { x: number; y: number },
     to: { x: number; y: number },
-    box: Pick<FlowBox, 'width' | 'height' | 'gapY'>,
-    lane = 0,
-): string {
-    const sx = from.x + box.width / 2;
-    const sy = from.y + box.height;
-    const tx = to.x + box.width / 2;
-    const ty = to.y;
-    if (ty <= sy) {
-        return `M ${sx} ${sy} C ${sx} ${sy + 40}, ${tx} ${ty - 40}, ${tx} ${ty}`;
+    box: Pick<FlowBox, 'size' | 'subSize'>,
+    kind: FlowLinkKind,
+): { path: string; end: { x: number; y: number } } {
+    if (kind === 'runs') {
+        const sx = from.x + box.size / 2;
+        const sy = from.y + box.size;
+        const ex = to.x + box.subSize / 2;
+        const ey = to.y;
+        const bend = Math.max(20, (ey - sy) / 2);
+        return { path: `M ${sx} ${sy} C ${sx} ${sy + bend}, ${ex} ${ey - bend}, ${ex} ${ey}`, end: { x: ex, y: ey } };
     }
-    const mid = ty - box.gapY / 2 + lane;
-    return `M ${sx} ${sy} V ${mid} H ${tx} V ${ty}`;
+    const sx = from.x + box.size;
+    const sy = from.y + box.size / 2;
+    const ex = to.x;
+    const ey = to.y + box.size / 2;
+    const bend = Math.max(48, Math.abs(ex - sx) / 2);
+    return { path: `M ${sx} ${sy} C ${sx + bend} ${sy}, ${ex - bend} ${ey}, ${ex} ${ey}`, end: { x: ex, y: ey } };
 }
 
 export function excerpt(text: string, max = 160): string {
@@ -412,4 +454,61 @@ export function excerpt(text: string, max = 160): string {
         .replace(/\s+/g, ' ')
         .trim();
     return plain.length > max ? `${plain.slice(0, max - 1)}…` : plain;
+}
+
+export interface Activity {
+    key: string;
+    kind: 'thinking' | 'text' | 'tool' | 'error';
+    text: string;
+    at: number;
+}
+
+const MAX_ACTIVITY = 300;
+
+// What an agent thought and did since it joined the exchange, from its conversation: thinking, what it
+// wrote along the way (not the replies the exchange already shows), its tool calls and the ones that failed.
+// The prompts it was given are the exchange's messages already.
+export function activityOf(entries: ConversationEntry[], since: number, replies: string[]): Activity[] {
+    const kept = replies.map((reply) => reply.trim());
+    const isReply = (text: string): boolean =>
+        kept.some((reply) => reply === text || (reply.endsWith('…') && text.startsWith(reply.slice(0, -1))));
+    const start = entries.findIndex((entry) => entry.at !== null && entry.at >= since);
+    if (start < 0) {
+        return [];
+    }
+    const items: Activity[] = [];
+    let at = since;
+    entries.slice(start).forEach((entry, index) => {
+        at = entry.at ?? at;
+        const key = `${start + index}`;
+        if (entry.kind === 'thinking' && entry.text.trim()) {
+            items.push({ key, kind: 'thinking', text: entry.text.trim(), at });
+        } else if (entry.kind === 'text' && entry.text.trim() && !isReply(entry.text.trim())) {
+            items.push({ key, kind: 'text', text: entry.text.trim(), at });
+        } else if (entry.kind === 'tool') {
+            items.push({ key, kind: 'tool', text: entry.summary ? `${entry.name} ${entry.summary}` : entry.name, at });
+        } else if (entry.kind === 'result' && entry.error) {
+            items.push({ key, kind: 'error', text: entry.text.split('\n')[0].slice(0, 200), at });
+        } else if (entry.kind === 'notice' && entry.tone === 'error') {
+            items.push({ key, kind: 'error', text: entry.text, at });
+        }
+    });
+    return items.slice(-MAX_ACTIVITY);
+}
+
+export type ThreadItem = { type: 'line'; line: ExchangeLine } | { type: 'activity'; activity: Activity };
+
+// The exchange's messages with an agent's own activity between them, in time order; a message goes before
+// activity of the same moment.
+export function mergeThread(lines: ExchangeLine[], activity: Activity[]): ThreadItem[] {
+    const items: { item: ThreadItem; at: number; rank: number; index: number }[] = [
+        ...lines.map((line, index) => ({ item: { type: 'line', line } as ThreadItem, at: line.at, rank: 0, index })),
+        ...activity.map((entry, index) => ({
+            item: { type: 'activity', activity: entry } as ThreadItem,
+            at: entry.at,
+            rank: 1,
+            index,
+        })),
+    ];
+    return items.sort((a, b) => a.at - b.at || a.rank - b.rank || a.index - b.index).map(({ item }) => item);
 }

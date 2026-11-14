@@ -46,6 +46,7 @@ import {
     SplitRightIcon,
     StopIcon,
 } from './Icons.tsx';
+import { AgentsButton } from './AgentsView.tsx';
 import { ChangesView } from './ChangesView.tsx';
 import { EditorView } from './EditorView.tsx';
 import { TasksView } from './TasksView.tsx';
@@ -857,6 +858,7 @@ function SessionHeader({ session, project }: { session: Session; project: Projec
                 </a>
             ) : null}
             <div className="session-header__actions">
+                <AgentsButton projectId={session.projectId} />
                 <button
                     type="button"
                     className="button button--bar"

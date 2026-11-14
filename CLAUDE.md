@@ -200,8 +200,10 @@ write paths through `redactHome`.
 **Tasks.** `daemon/src/tasks.ts` (`TaskBoard`) keeps queued prompts in the `tasks` table, project-scoped
 and pointed at one agent pane each, and runs every pane's queue in `position` order: the first queued
 task whose `dependsOn` are all done is typed in with `PaneManager.submit` (a bracketed paste when the
-agent turned it on, then Enter on its own) once the pane is `idle` or `done`, and `wake` starts a pane
-no window has opened. `PaneManager`'s `onStatus` drives it: `working` after the submit, then `done`
+agent turned it on, then Enter on its own) once the pane is `idle` or `done` and its output has been
+quiet for a second (`settleMs`, at most `settleCapMs`): Claude reports `SessionStart` before its input
+box takes keys. A prompt the agent did not start on within `confirmMs` gets Enter again, then is typed
+once more, only while the pane still sits ready. `wake` starts a pane no window has opened. `PaneManager`'s `onStatus` drives it: `working` after the submit, then `done`
 finishes the task with the last reply the `Stop`/`TurnEnd` hook carried (`TaskBoard.reply`, read on the
 next tick because the hook reports it after the status change). A reply that ends with a question
 (`asksUser`) keeps the task running until the next turn ends, so dependents never start on a question;
@@ -216,8 +218,8 @@ the script needs no JSON; `tasks-guide.md` tells Claude (a `SessionStart` hook) 
 instruction) how, so keep it in step with the script. `shared/src/tasks.ts` holds the types and
 `layoutTasks`, the graph's columns; the web app's `TasksView` (a `tasks` page pane) draws it, with a
 running task's live subagents as synthetic subtasks (`withSubagents`), and `TaskDialog` composes tasks. The agents view
-(`components/AgentsView.tsx`, an overlay like the changes view) draws one exchange as a flowchart
-(`flowLinks`, `layoutFlow`) beside its messages, and then a summary; `web/src/agents.ts` holds its DOM-free parts. `followDelegations` runs on every
+(`components/AgentsView.tsx`, an overlay like the changes view) draws one exchange as a pannable,
+zoomable left-to-right canvas (`flowLinks`, `layoutFlow`, `wire`) beside its messages, and then a summary; `web/src/agents.ts` holds its DOM-free parts. `followDelegations` runs on every
 state in `setApp`: with `autoAgenticViewEnabled` on, a task with `createdBy` the window has not seen opens
 it (a new exchange, unless one with unfinished tasks is in that project or on screen), and the end of
 every task in the exchange opens it again for the summary; a retry makes it unfinished again. ⌘K opens it

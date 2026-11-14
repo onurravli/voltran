@@ -21,6 +21,12 @@ function Icon({ size = 16, children, ...props }: IconProps & { children: ReactNo
     );
 }
 
+export const AgentsIcon = (props: IconProps) => (
+    <Icon {...props}>
+        <rect x="3" y="5" width="10" height="8" rx="2.5" />
+        <path d="M8 5V2.75M6 9v.5M10 9v.5M1.5 8.25v2.5M14.5 8.25v2.5" />
+    </Icon>
+);
 export const PlusIcon = (props: IconProps) => (
     <Icon {...props}>
         <path d="M8 3.5v9M3.5 8h9" />

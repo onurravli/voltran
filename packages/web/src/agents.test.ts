@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { AdapterId, PaneView, Task } from '@voltran/shared';
+import type { AdapterId, ConversationEntry, PaneView, Task } from '@voltran/shared';
 import {
+    activityOf,
     conversationOf,
     exchangeSince,
     exchangeTasks,
     flowLinks,
     followDelegations,
     layoutFlow,
+    mergeThread,
     participantsOf,
     summarize,
+    wire,
 } from './agents.ts';
 
 let clock = 1000;
@@ -250,31 +253,94 @@ describe('flowLinks, more', () => {
 });
 
 describe('layoutFlow', () => {
-    it('puts each node a row below whatever points at it, centred under its parents', () => {
-        const box = { width: 100, height: 50, gapX: 10, gapY: 20, pad: 0 };
-        const links = [
-            { from: 'lead', to: 'a', kind: 'delegates' as const, status: 'done' as const, titles: [] },
-            { from: 'lead', to: 'b', kind: 'delegates' as const, status: 'done' as const, titles: [] },
-            { from: 'lead', to: 'c', kind: 'delegates' as const, status: 'queued' as const, titles: [] },
-            { from: 'a', to: 'c', kind: 'waits' as const, status: 'done' as const, titles: [] },
-        ];
-        const { at, width, height } = layoutFlow(['lead', 'a', 'b', 'c'], links, box);
-        expect([width, height]).toEqual([210, 190]);
-        expect(at.get('lead')).toEqual({ x: 55, y: 0, level: 0 });
-        expect(at.get('a')).toEqual({ x: 0, y: 70, level: 1 });
-        expect(at.get('b')).toEqual({ x: 110, y: 70, level: 1 });
-        expect(at.get('c')).toEqual({ x: 55, y: 140, level: 2 });
+    const box = { size: 100, subSize: 40, label: 30, gapX: 60, gapY: 20, subGap: 20, pad: 0 };
+    const link = (from: string, to: string, kind: 'delegates' | 'waits' | 'runs' = 'delegates') => ({
+        from,
+        to,
+        kind,
+        status: 'done' as const,
+        titles: [],
     });
 
-    it('leaves no empty row when nothing points at the first node of a cycle', () => {
-        const box = { width: 100, height: 50, gapX: 10, gapY: 20, pad: 0 };
-        const links = [
-            { from: 'a', to: 'b', kind: 'delegates' as const, status: 'done' as const, titles: [] },
-            { from: 'b', to: 'a', kind: 'delegates' as const, status: 'done' as const, titles: [] },
+    it('puts each agent a column right of whatever points at it, columns centred', () => {
+        const links = [link('lead', 'a'), link('lead', 'b'), link('lead', 'c'), link('a', 'c', 'waits')];
+        const { at, width, height } = layoutFlow(['lead', 'a', 'b', 'c'], links, box);
+        expect([width, height]).toEqual([420, 280]);
+        expect(at.get('lead')).toEqual({ x: 0, y: 75, level: 0 });
+        expect(at.get('a')).toEqual({ x: 160, y: 0, level: 1 });
+        expect(at.get('b')).toEqual({ x: 160, y: 150, level: 1 });
+        expect(at.get('c')).toEqual({ x: 320, y: 75, level: 2 });
+    });
+
+    it('hangs subagents in a row under their agent, outside the columns', () => {
+        const links = [link('lead', 'a'), link('a', 's1', 'runs'), link('a', 's2', 'runs')];
+        const { at, width } = layoutFlow(['lead', 'a', 's1', 's2'], links, box);
+        expect(width).toBe(260);
+        expect(at.get('a')).toEqual({ x: 160, y: 0, level: 1 });
+        expect(at.get('s1')).toEqual({ x: 158, y: 150, level: 1 });
+        expect(at.get('s2')).toEqual({ x: 222, y: 150, level: 1 });
+    });
+
+    it('leaves no empty column when nothing points at the first node of a cycle', () => {
+        const { at, width } = layoutFlow(['a', 'b'], [link('a', 'b'), link('b', 'a')], box);
+        expect(width).toBe(260);
+        expect(at.get('b')).toMatchObject({ x: 0, level: 0 });
+        expect(at.get('a')).toMatchObject({ x: 160, level: 1 });
+    });
+});
+
+describe('activityOf', () => {
+    it("keeps an agent's thinking, its own words and its tools since it joined, without the replies shown already", () => {
+        const entries: ConversationEntry[] = [
+            { kind: 'text', text: 'before the exchange', model: null, at: 10 },
+            { kind: 'prompt', text: 'the task', images: 0, at: 100 },
+            { kind: 'thinking', text: 'Let me look at the script.', at: 101 },
+            { kind: 'tool', id: 't1', name: 'Read', summary: 'task.sh', detail: null, at: 102 },
+            { kind: 'result', toolUseId: 't1', text: 'ok', error: false, at: null },
+            { kind: 'result', toolUseId: 't2', text: 'No such file\nmore', error: true, at: null },
+            { kind: 'thinking', text: '  ', at: 103 },
+            { kind: 'text', text: 'Checking the guide next.', model: null, at: 104 },
+            { kind: 'text', text: 'The final reply, in full.', model: null, at: 105 },
         ];
-        const { at, width, height } = layoutFlow(['a', 'b'], links, box);
-        expect([width, height]).toEqual([100, 120]);
-        expect(at.get('b')).toEqual({ x: 0, y: 0, level: 0 });
-        expect(at.get('a')).toEqual({ x: 0, y: 70, level: 1 });
+        const activity = activityOf(entries, 100, ['The final reply…']);
+        expect(activity.map((item) => `${item.kind}@${item.at}:${item.text}`)).toEqual([
+            'thinking@101:Let me look at the script.',
+            'tool@102:Read task.sh',
+            'error@102:No such file',
+            'text@104:Checking the guide next.',
+        ]);
+    });
+});
+
+describe('mergeThread', () => {
+    it('puts activity between the messages by time, a message first at the same moment', () => {
+        const ask = task({ id: 'm', paneId: 'b', createdBy: 'a', createdAt: 100 });
+        const lines = conversationOf([{ ...ask, status: 'done', startedAt: 100, finishedAt: 300, result: 'done' }]);
+        const merged = mergeThread(lines, [
+            { key: '1', kind: 'tool', text: 'Read x', at: 100 },
+            { key: '2', kind: 'thinking', text: 'hm', at: 200 },
+        ]);
+        expect(merged.map((item) => (item.type === 'line' ? item.line.type : item.activity.kind))).toEqual([
+            'message',
+            'started',
+            'tool',
+            'thinking',
+            'message',
+        ]);
+    });
+});
+
+describe('wire', () => {
+    const box = { size: 100, subSize: 40 };
+
+    it('runs from the right handle to the left one, and from the bottom to a subagent', () => {
+        expect(wire({ x: 0, y: 0 }, { x: 300, y: 100 }, box, 'delegates')).toEqual({
+            path: 'M 100 50 C 200 50, 200 150, 300 150',
+            end: { x: 300, y: 150 },
+        });
+        expect(wire({ x: 0, y: 0 }, { x: 30, y: 160 }, box, 'runs')).toEqual({
+            path: 'M 50 100 C 50 130, 50 130, 50 160',
+            end: { x: 50, y: 160 },
+        });
     });
 });
