@@ -249,6 +249,11 @@ export class PaneManager {
         }
     }
 
+    quietFor(id: string): number {
+        const runtime = this.runtimes.get(id);
+        return runtime?.pty ? Date.now() - runtime.lastOutputAt : 0;
+    }
+
     running(id: string): boolean {
         return Boolean(this.runtimes.get(id)?.pty);
     }

@@ -25,6 +25,8 @@ export interface TaskRunner {
     running(paneId: string): boolean;
     wake(paneId: string): void;
     submit(paneId: string, text: string): boolean;
+    enter(paneId: string): void;
+    quietFor(paneId: string): number;
 }
 
 export interface HandoffContext {
@@ -38,7 +40,19 @@ export interface TaskBoardOptions {
     runner: TaskRunner;
     onChange: () => void;
     handoff: (paneId: string) => HandoffContext | null;
+    timing?: Partial<Timing>;
 }
+
+// An agent reports itself ready (Claude's SessionStart) before its input box takes keys, so a prompt waits
+// until the pane's output has been quiet for `settleMs` (or `settleCapMs` for one that keeps drawing), and a
+// prompt the agent did not start on within `confirmMs` gets Enter again, then is typed once more.
+interface Timing {
+    settleMs: number;
+    settleCapMs: number;
+    confirmMs: number;
+}
+
+const TIMING: Timing = { settleMs: 1000, settleCapMs: 5000, confirmMs: 10_000 };
 
 export interface NewTask {
     projectId: string;
@@ -55,6 +69,7 @@ interface Run {
     worked: boolean;
     // The turn ended with a question to the user, so the task waits for the answer and the turn after it.
     asked: boolean;
+    retries: number;
 }
 
 const READY: PaneStatus[] = ['idle', 'done'];
@@ -102,10 +117,14 @@ export class TaskBoard {
     private readonly runs = new Map<string, Run>();
     private readonly replies = new Map<string, string>();
     private readonly woken = new Map<string, number>();
+    private readonly settling = new Map<string, number>();
+    private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+    private readonly timing: Timing;
     private tickTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(options: TaskBoardOptions) {
         this.options = options;
+        this.timing = { ...TIMING, ...options.timing };
         for (const task of options.store.listTasks()) {
             if (task.status === 'running') {
                 this.patch(task.id, {
@@ -383,6 +402,11 @@ export class TaskBoard {
             }
         }
         const { runner } = this.options;
+        for (const paneId of this.settling.keys()) {
+            if (!next.has(paneId)) {
+                this.settling.delete(paneId);
+            }
+        }
         for (const [paneId, task] of next) {
             if (!runner.running(paneId)) {
                 const at = this.woken.get(paneId);
@@ -399,15 +423,21 @@ export class TaskBoard {
             }
             this.woken.delete(paneId);
             if (!READY.includes(runner.status(paneId) ?? 'exited')) {
+                this.settling.delete(paneId);
+                continue;
+            }
+            if (!this.settled(paneId)) {
                 continue;
             }
             const handoff = task.handoffFrom ? this.options.handoff(task.handoffFrom) : null;
-            if (!runner.submit(paneId, composePrompt(task, byId, handoff))) {
+            const prompt = composePrompt(task, byId, handoff);
+            if (!runner.submit(paneId, prompt)) {
                 continue;
             }
             this.replies.delete(paneId);
-            this.runs.set(task.id, { worked: false, asked: false });
+            this.runs.set(task.id, { worked: false, asked: false, retries: 0 });
             this.patch(task.id, { status: 'running', startedAt: Date.now(), result: null });
+            this.confirm(task.id, paneId, prompt);
         }
     }
 
@@ -416,6 +446,55 @@ export class TaskBoard {
             clearTimeout(this.tickTimer);
             this.tickTimer = null;
         }
+        for (const timer of this.timers) {
+            clearTimeout(timer);
+        }
+        this.timers.clear();
+    }
+
+    private later(ms: number, run: () => void): void {
+        const timer = setTimeout(() => {
+            this.timers.delete(timer);
+            run();
+        }, ms);
+        this.timers.add(timer);
+    }
+
+    private settled(paneId: string): boolean {
+        const now = Date.now();
+        const since = this.settling.get(paneId) ?? now;
+        this.settling.set(paneId, since);
+        const quiet = this.options.runner.quietFor(paneId);
+        if (quiet >= this.timing.settleMs || now - since >= this.timing.settleCapMs) {
+            this.settling.delete(paneId);
+            return true;
+        }
+        const wait = Math.min(this.timing.settleMs - quiet, since + this.timing.settleCapMs - now);
+        this.later(Math.max(10, wait), () => this.schedule());
+        return false;
+    }
+
+    // Only a pane that sits ready gets the nudge: one showing a prompt of its own must not take Enter.
+    private confirm(id: string, paneId: string, prompt: string): void {
+        this.later(this.timing.confirmMs, () => {
+            const run = this.runs.get(id);
+            const { runner } = this.options;
+            if (!run || run.worked || run.asked || this.get(id)?.status !== 'running') {
+                return;
+            }
+            if (!READY.includes(runner.status(paneId) ?? 'exited')) {
+                return;
+            }
+            if (run.retries === 0) {
+                runner.enter(paneId);
+            } else if (run.retries === 1) {
+                runner.submit(paneId, prompt);
+            } else {
+                return;
+            }
+            run.retries += 1;
+            this.confirm(id, paneId, prompt);
+        });
     }
 
     private finish(task: Task, status: 'done' | 'failed' | 'cancelled', result: string | null): void {

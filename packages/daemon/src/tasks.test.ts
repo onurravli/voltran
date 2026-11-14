@@ -28,6 +28,17 @@ class FakeRunner {
         this.sent.push({ paneId, text });
         return true;
     }
+
+    entered: string[] = [];
+    quiet = new Map<string, number>();
+
+    enter(paneId: string): void {
+        this.entered.push(paneId);
+    }
+
+    quietFor(paneId: string): number {
+        return this.quiet.get(paneId) ?? Number.POSITIVE_INFINITY;
+    }
 }
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
@@ -100,6 +111,74 @@ describe('TaskBoard', () => {
         board.statusChanged('a', 'working', 'done', null);
         await flush();
         expect(runner.sent).toEqual([{ paneId: 'a', text: 'later' }]);
+    });
+
+    it('types a prompt only once the pane has gone quiet, or after a cap', async () => {
+        board.close();
+        board = new TaskBoard({
+            store,
+            runner,
+            onChange: () => undefined,
+            handoff: () => null,
+            timing: { settleMs: 30, settleCapMs: 150, confirmMs: 10_000 },
+        });
+        runner.quiet.set('a', 0);
+        runner.quiet.set('b', 0);
+        board.create({ projectId: 'p', paneId: 'a', prompt: 'quiet' });
+        board.create({ projectId: 'p', paneId: 'b', prompt: 'busy' });
+        await flush();
+        expect(runner.sent).toEqual([]);
+        runner.quiet.set('a', 40);
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        expect(runner.sent).toEqual([{ paneId: 'a', text: 'quiet' }]);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(runner.sent.map((entry) => entry.text)).toEqual(['quiet', 'busy']);
+    });
+
+    it('starts the settle wait over for a prompt queued after the last one was removed', async () => {
+        board.close();
+        board = new TaskBoard({
+            store,
+            runner,
+            onChange: () => undefined,
+            handoff: () => null,
+            timing: { settleMs: 30, settleCapMs: 60, confirmMs: 10_000 },
+        });
+        runner.quiet.set('a', 0);
+        const first = board.create({ projectId: 'p', paneId: 'a', prompt: 'first' });
+        await flush();
+        board.remove(first.id);
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        board.create({ projectId: 'p', paneId: 'a', prompt: 'second' });
+        await flush();
+        expect(runner.sent).toEqual([]);
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        expect(runner.sent).toEqual([{ paneId: 'a', text: 'second' }]);
+    });
+
+    it('presses Enter again, then types the prompt again, when the agent never starts on it', async () => {
+        board.close();
+        board = new TaskBoard({
+            store,
+            runner,
+            onChange: () => undefined,
+            handoff: () => null,
+            timing: { settleMs: 0, confirmMs: 20 },
+        });
+        const lost = board.create({ projectId: 'p', paneId: 'a', prompt: 'lost' });
+        const taken = board.create({ projectId: 'p', paneId: 'b', prompt: 'taken' });
+        await flush();
+        runner.statuses.set('b', 'working');
+        board.statusChanged('b', 'idle', 'working', null);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        expect(runner.entered).toEqual(['a']);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        expect(runner.sent.map((entry) => entry.text)).toEqual(['lost', 'taken', 'lost']);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(runner.entered).toEqual(['a']);
+        expect(runner.sent).toHaveLength(3);
+        expect(board.get(lost.id)?.status).toBe('running');
+        expect(board.get(taken.id)?.status).toBe('running');
     });
 
     it('starts a dependent task after the one it waits for, with that result in front', async () => {

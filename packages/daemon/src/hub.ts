@@ -301,6 +301,8 @@ export class Hub {
                     }
                 },
                 submit: (id, text) => this.panes.submit(id, text),
+                enter: (id) => this.panes.input(id, '\r'),
+                quietFor: (id) => this.panes.quietFor(id),
             },
         });
         this.notes.load(this.store.listPanes().map((pane) => pane.id));
