@@ -1,4 +1,7 @@
 import { defineConfig } from 'vitest/config';
+import { clearRepositoryEnv } from './vitest.git-env.ts';
+
+clearRepositoryEnv();
 
 export default defineConfig({
     test: {
