@@ -202,6 +202,7 @@ the terminal's until you give it one, and the changes view uses the same font.
 | --- | --- |
 | ⌘S / ⌥⌘S | Save the file / every file |
 | ⌘P | Open a file by name |
+| ⇧⌘F | Search in the files |
 | ⌘B | Show or hide the tree |
 | ⌃W | Close the tab (⌘W belongs to the browser) |
 | ⌥⌘← / ⌥⌘→ | Previous / next tab |
@@ -217,6 +218,13 @@ overwritten: the editor asks whether to take the version on disk or overwrite it
 saving checks again, so a save never replaces an edit it has not seen. Unsaved text stays while you
 switch sessions; closing the tab, the pane or the window asks first. Files that are not UTF-8 text or
 are over 4 MB open read-only as a note. Every path stays inside the session's folder, links included.
+
+⇧⌘F (Ctrl+Shift+F off a Mac), or the magnifier above the tree, searches the files of the folder,
+starting from the selected text. **Aa**, **ab** and **.\*** next to the field match case, match
+whole words and take a regular expression (JavaScript's, as in ⌘F). Results are grouped by file;
+click one to open the file with the match selected. The search skips the files git ignores (outside
+a repository, `.git` and `node_modules`) and files over 1 MB, and stops after 2,000 matches or when it
+has taken too long, saying so under the field.
 
 ### Worktrees
 
@@ -284,7 +292,9 @@ or a choice, the view says so, and you answer in the terminal.
 Every pane has notes of its own: ⌃⌥E or the note button in its title bar opens them in a drawer on
 the right of the terminal. They save as you type and stay until the pane is closed, across restarts.
 A dot on the button means the pane has notes; it turns blue when an agent changed them since you
-last looked.
+last looked. Drag the drawer's left edge to make it between 180 and 900 pixels wide, or nearly all
+the way to the right to close it; double-click the edge to go back to the default width. Every pane's
+drawer opens at the width you chose last.
 
 The agent in the pane shares them. Claude Code gets them when a session starts, resumes or compacts,
 and again on your next prompt after you change them, and it writes its decisions, progress and next
@@ -326,7 +336,12 @@ stopped is marked failed, and **Retry** queues it again.
 
 The Tasks pane shows the project's tasks as a graph, where solid arrows point from a task to the ones
 that wait for it and dashed lines to its subtasks, or as one queue per agent, where queued tasks can
-be reordered. Select a task for its prompt, its result and what it waits for.
+be reordered. Drag a task in the graph to move it; it keeps its place until **Reset layout**. Select a
+task for its prompt, its result and what it waits for.
+
+<p align="center">
+  <img src="docs/tasks.png" alt="The Tasks pane showing a dependency graph: Claude Code is running the lead task, two delegated tasks are done, OpenCode is running the replay command and two tasks wait for it, with the four agents' terminals below, split diagonally into the dark and light themes" width="1000">
+</p>
 
 Agents delegate too. Claude Code and OpenCode are told about `$VOLTRAN_TASK`, a script that every agent
 pane (Claude Code, Codex, OpenCode) can run with its pane's hook secret:
@@ -351,7 +366,9 @@ delegated task is a subtask of the task the delegating agent is running (`--pare
 so the graph shows who asked for what, and the subagents Claude Code runs during a task show under it
 as live subtasks; select one to open its transcript.
 
-**Agents view.** With `"autoAgenticViewEnabled": true` in the [settings file](#settings-file) (or ⌘K →
+### Agents view
+
+With `"autoAgenticViewEnabled": true` in the [settings file](#settings-file) (or ⌘K →
 **Open the agents view when agents delegate**), a window covers the panes as soon as an agent hands
 work to another agent, and again when the agents of an exchange you closed delegate more. While it
 shows an unfinished exchange, delegations in other projects do not take it over. It draws the
@@ -359,15 +376,19 @@ exchange on a canvas, left to right: you and each agent are a node with a badge 
 (working, waiting, asking you, done, failed) and what it is doing written under it. Solid wires lead
 from whoever gave work to the agent that took it, dashed ones from a task's results to the agent that
 waits for them (unless a solid wire already joins the two), and dotted ones to the subagents Claude
-runs, which hang below their agent as round nodes. Scroll or drag the background to pan, pinch or
-⌘-scroll to zoom, and **Fit** brings every node back into view. The panel beside it has the messages: each task
-out, and each reply, question or failure back. Select an agent to see only its own, and for Claude Code
+runs, which hang below their agent as round nodes. Scroll or drag the background to pan, pinch,
+⌘-scroll or the + and − buttons to zoom, and **Fit** brings every node back into view. The panel
+beside it has the messages: each task out, and each reply, question or failure back. Select an agent to see only its own, and for Claude Code
 its thinking, what it writes along the way and its tool calls between them (Codex and OpenCode do not
 share theirs yet); double-click it to open its pane. Drag the nodes to arrange them; Voltran keeps
 where you put them per project until **Reset layout**. When every task of the exchange has finished it turns into a summary (outcomes,
 time per agent, each result), and with the setting on it opens again for it if you closed it; a retry
 turns it back into the canvas. Esc closes it; the robot button above the panes (or ⌘K → **Show the agents
 talking**) opens it for the session's project at any time, on the tasks still going on, or else on the last exchange.
+
+<p align="center">
+  <img src="docs/agents.png" alt="The agents view mid-exchange: a canvas wiring You, Claude Code, Codex, OpenCode and a second Claude Code, beside a panel with the messages they sent each other, split diagonally into the dark and light themes" width="1000">
+</p>
 
 ### Shortcuts
 
