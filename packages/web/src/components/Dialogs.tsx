@@ -12,9 +12,10 @@ import { editorKeys } from '../editor.ts';
 import { FIND_KEYS, IS_MAC, SHORTCUTS, reportProblem } from '../shortcuts.ts';
 import { reportError, useUi, type Dialog } from '../store.ts';
 import { CommandPalette } from './CommandPalette.tsx';
+import { TaskDialog } from './TaskDialog.tsx';
 import { VoltranMark } from './Icons.tsx';
 
-function Modal({
+export function Modal({
     title,
     onClose,
     children,
@@ -550,6 +551,8 @@ export function Dialogs() {
             return <CommandPalette onClose={close} />;
         case 'about':
             return <AboutDialog onClose={close} />;
+        case 'task':
+            return <TaskDialog dialog={dialog} onClose={close} />;
     }
 }
 
@@ -642,6 +645,10 @@ export function PaneMenu() {
             <button type="button" role="menuitem" className="menu__item" onClick={() => create({ adapter: 'editor' })}>
                 <span>Editor</span>
                 <span className="menu__note">files</span>
+            </button>
+            <button type="button" role="menuitem" className="menu__item" onClick={() => create({ adapter: 'tasks' })}>
+                <span>Tasks</span>
+                <span className="menu__note">queue and graph</span>
             </button>
             <form
                 className="menu__command"

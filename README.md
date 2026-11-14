@@ -303,6 +303,54 @@ such as conventions and decisions. Claude Code and OpenCode in any pane of the p
 same way as the pane's own, and Claude sees them again on its next prompt after you or another agent
 change them. Every pane has their path in `$VOLTRAN_PROJECT_NOTES`. They are deleted with the project.
 
+### Tasks
+
+Voltran can type prompts into agents for you. **Queue a task…** in an agent pane's menu, **New task…**
+in ⌘K, or a **Tasks** pane (from **Add pane**) opens the composer:
+
+- **Queue.** Each agent pane runs its tasks one after another: Voltran types the next prompt once the
+  agent has finished its turn, and keeps the agent's last reply as the task's result. A pane that is
+  asleep or has exited is started for its task. Its title bar shows how many tasks wait for it.
+- **Broadcast.** Pick several agents and each gets the same prompt as a task of its own.
+- **New pane.** Pick **+ Claude Code**, **+ Codex** or **+ OpenCode** to open a pane for the task.
+- **Dependencies.** **Start after** makes a task wait until the chosen tasks are done, and puts their
+  results in front of its prompt. If one of them fails or is cancelled, the task fails too.
+- **Handoff.** **Hand off context from** (or **Hand off to another agent…** in a pane's menu) puts that
+  pane's last reply, its notes and its latest finished tasks in front of the prompt.
+- **Subtasks.** **Subtask of** files a task under another one.
+
+A turn that ends with a question does not finish the task: it stays **Asking you** until you answer
+and the agent finishes the turn after that, so nothing that waits for it starts early. **Mark done**
+finishes it by hand. Interrupting the agent cancels its task; a task that was running when the daemon
+stopped is marked failed, and **Retry** queues it again.
+
+The Tasks pane shows the project's tasks as a graph, where solid arrows point from a task to the ones
+that wait for it and dashed lines to its subtasks, or as one queue per agent, where queued tasks can
+be reordered. Select a task for its prompt, its result and what it waits for.
+
+Agents delegate too. Claude Code and OpenCode are told about `$VOLTRAN_TASK`, a script that every agent
+pane (Claude Code, Codex, OpenCode) can run with its pane's hook secret:
+
+```bash
+"$VOLTRAN_TASK" delegate --agent codex --handoff "Port the lexer to Rust"   # prints the task id
+"$VOLTRAN_TASK" delegate --to <pane> --after <task> "Benchmark it"           # an existing pane, after a task
+"$VOLTRAN_TASK" wait <task>                                                  # its status and last reply
+"$VOLTRAN_TASK" list                                                         # the project's agent panes and tasks
+"$VOLTRAN_TASK" link <task> --after <task> --parent <task>                   # rewire a queued task
+"$VOLTRAN_TASK" move <task> --before <task>                                  # reorder a pane's queue
+"$VOLTRAN_TASK" cancel|retry|done <task>                                     # as the task's buttons do
+"$VOLTRAN_TASK" edit <task> --title "…" --prompt "…"                         # rename, or rewrite a queued prompt
+"$VOLTRAN_TASK" remove <task>|finished                                       # drop a task, or every finished one
+"$VOLTRAN_TASK" spawn --agent claude --title Reviewer                        # an agent pane with no task yet
+"$VOLTRAN_TASK" board                                                        # open the Tasks pane next to the agent
+```
+
+So an agent can lay out a whole plan, with steps that wait for each other running in parallel panes,
+and adjust it as it learns more, while you watch it in the graph and step in from the same buttons. A
+delegated task is a subtask of the task the delegating agent is running (`--parent` files it elsewhere),
+so the graph shows who asked for what, and the subagents Claude Code runs during a task show under it
+as live subtasks; select one to open its transcript.
+
 ### Shortcuts
 
 Shortcuts use ⌃⌥ (Control + Option) so they never collide with the terminal. The exceptions are ⌘K
@@ -504,6 +552,8 @@ A local server that can start processes is reachable from every web page you ope
 - rejects any `Host` header other than its own, which blocks DNS rebinding;
 - rejects any `Origin` other than its own, on HTTP and WebSocket alike;
 - accepts agent hooks only with the per-pane secret, never the main token;
+- lets an agent, with that secret, queue, change and remove tasks and open agent panes and the Tasks
+  pane only in its own project, and read only that project's tasks;
 - reads a subagent transcript only at the path derived from Claude's own hook data, never from a
   path a client sends, refuses one reached through a symlink, and drops control characters from it
   before the viewer writes it to a terminal;
@@ -556,7 +606,7 @@ experiments away from your real sessions.
 ## Roadmap
 
 - Session templates
-- Sending a prompt to one or many agents, and headless `claude -p` runs streamed into panes
+- Headless `claude -p` runs streamed into panes
 - An agent-to-agent message bus exposed as an MCP server
 - A native window (Tauri) with a dock badge and global shortcuts
 - Project providers that discover work automatically, for example task folders in a repository

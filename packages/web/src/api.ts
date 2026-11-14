@@ -3,6 +3,7 @@ import type {
     CreatePaneBody,
     CreateProjectBody,
     CreateSessionBody,
+    CreateTaskBody,
     CreateWorkspaceBody,
     Diagnostics,
     EditSettingsBody,
@@ -29,9 +30,11 @@ import type {
     SettingsPatch,
     SettingsState,
     SlashCommand,
+    Task,
     UpdatePaneBody,
     UpdateProjectBody,
     UpdateSessionBody,
+    UpdateTaskBody,
     UpdateWorkspaceBody,
     Workspace,
     WorktreeChoice,
@@ -229,6 +232,12 @@ export const api = {
             'GET',
             `/api/panes/${encodeURIComponent(paneId)}/conversation?${new URLSearchParams({ source: source ?? '', from: String(from) })}`,
         ),
+    createTasks: (body: CreateTaskBody) => request<Task[]>('POST', '/api/tasks', body),
+    updateTask: (id: string, body: UpdateTaskBody) =>
+        request<Task>('PATCH', `/api/tasks/${encodeURIComponent(id)}`, body),
+    deleteTask: (id: string) => request<void>('DELETE', `/api/tasks/${encodeURIComponent(id)}`),
+    clearTasks: (projectId: string) =>
+        request<void>('POST', `/api/projects/${encodeURIComponent(projectId)}/tasks/clear`),
     viewSubagent: (paneId: string, agentId: string) =>
         request<Pane>('POST', `/api/panes/${encodeURIComponent(paneId)}/subagents/${encodeURIComponent(agentId)}/view`),
 };

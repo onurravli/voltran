@@ -74,6 +74,7 @@ function addPaneItems(sessionId: string): MenuItem[] {
             onSelect: () => create({ adapter: 'changes' }),
         },
         { label: 'Editor', note: 'files', onSelect: () => create({ adapter: 'editor' }) },
+        { label: 'Tasks', note: 'queue and graph', onSelect: () => create({ adapter: 'tasks' }) },
     ];
 }
 
@@ -408,10 +409,36 @@ export function paneMenu(pane: PaneView): MenuItem[] {
                   },
               ]
             : []),
+        ...(adapter?.kind === 'agent' && !session.archived
+            ? [
+                  {
+                      label: 'Queue a task…',
+                      separated: true,
+                      onSelect: () =>
+                          ui.openDialog({
+                              kind: 'task',
+                              projectId: session.projectId,
+                              sessionId: session.id,
+                              paneIds: [pane.id],
+                          }),
+                  },
+                  {
+                      label: 'Hand off to another agent…',
+                      onSelect: () =>
+                          ui.openDialog({
+                              kind: 'task',
+                              projectId: session.projectId,
+                              sessionId: session.id,
+                              handoffFrom: pane.id,
+                          }),
+                  },
+              ]
+            : []),
         ...(pane.adapter === 'subagent' ||
         pane.adapter === 'preview' ||
         pane.adapter === 'changes' ||
-        pane.adapter === 'editor'
+        pane.adapter === 'editor' ||
+        pane.adapter === 'tasks'
             ? []
             : [
                   { label: notesOpen ? 'Hide notes' : 'Show notes', onSelect: () => showNotes(pane, !notesOpen) },

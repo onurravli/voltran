@@ -28,6 +28,15 @@ export type Dialog =
     | { kind: 'palette' }
     | { kind: 'about' }
     | {
+          kind: 'task';
+          projectId: string;
+          sessionId?: string;
+          paneIds?: string[];
+          handoffFrom?: string;
+          dependsOn?: string[];
+          parentId?: string;
+      }
+    | {
           kind: 'confirm';
           title: string;
           body: string;

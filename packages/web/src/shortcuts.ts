@@ -219,7 +219,7 @@ export function toggleZen(): void {
 // An exited pane has no process left to stop, so closing it does not ask first.
 export function closePane(pane: PaneView): void {
     const unsaved = pane.adapter === 'editor' ? unsavedIn(pane.id) : 0;
-    if (pane.status === 'exited' || (pane.adapter === 'editor' && unsaved === 0)) {
+    if (pane.status === 'exited' || pane.adapter === 'tasks' || (pane.adapter === 'editor' && unsaved === 0)) {
         api.deletePane(pane.id).catch(reportError);
         return;
     }
@@ -233,10 +233,13 @@ export function closePane(pane: PaneView): void {
         });
         return;
     }
+    const queued = (useUi.getState().app?.tasks ?? []).filter(
+        (task) => task.paneId === pane.id && (task.status === 'queued' || task.status === 'running'),
+    ).length;
     useUi.getState().openDialog({
         kind: 'confirm',
         title: `Close ${pane.title}?`,
-        body: 'The process in this pane stops and its scrollback is deleted.',
+        body: `The process in this pane stops and its scrollback is deleted.${queued > 0 ? ` ${queued === 1 ? 'Its task is' : `Its ${queued} tasks are`} cancelled.` : ''}`,
         action: 'Close pane',
         onConfirm: () => api.deletePane(pane.id),
     });
@@ -278,7 +281,8 @@ function toggleFocusedNotes(): void {
         pane.adapter === 'subagent' ||
         pane.adapter === 'preview' ||
         pane.adapter === 'changes' ||
-        pane.adapter === 'editor'
+        pane.adapter === 'editor' ||
+        pane.adapter === 'tasks'
     ) {
         state.showToast('Focus a terminal pane to see its notes');
         return;

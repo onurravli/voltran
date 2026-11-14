@@ -102,7 +102,7 @@ once the user trusts it, and keeps that trust by the command's hash, so the comm
 same for every pane. A Codex pane uses `ActivityTracker` until its first hook arrives and
 `codexTransition` after that. Other agents use `ActivityTracker` (output streaming / quiet / bell
 heuristics). Adapters (`claude`, `opencode`, `codex`, `antigravity`, `shell`, `command`, `subagent`,
-and the processless `preview`, `changes` and `editor`)
+and the processless `preview`, `changes`, `editor` and `tasks`)
 are defined in `adapters.ts`.
 
 **Session titles.** A session created without a title is `titleSource: 'pending'` and needs a pane
@@ -196,6 +196,26 @@ URL, whose query keys are the field ids in `.github/ISSUE_TEMPLATE/bug_report.ym
 the checks itself so they work while the daemon is down, and never creates the home or the token.
 The results go into a public issue: keep secrets, file contents and pane output out of them, and
 write paths through `redactHome`.
+
+**Tasks.** `daemon/src/tasks.ts` (`TaskBoard`) keeps queued prompts in the `tasks` table, project-scoped
+and pointed at one agent pane each, and runs every pane's queue in `position` order: the first queued
+task whose `dependsOn` are all done is typed in with `PaneManager.submit` (a bracketed paste when the
+agent turned it on, then Enter on its own) once the pane is `idle` or `done`, and `wake` starts a pane
+no window has opened. `PaneManager`'s `onStatus` drives it: `working` after the submit, then `done`
+finishes the task with the last reply the `Stop`/`TurnEnd` hook carried (`TaskBoard.reply`, read on the
+next tick because the hook reports it after the status change). A reply that ends with a question
+(`asksUser`) keeps the task running until the next turn ends, so dependents never start on a question;
+`exited` fails it, a plain `idle` after work cancels it, but the 90 s silence `idle` does not. A failed
+or cancelled dependency fails what waits for it, a closed pane cancels its queue, and tasks running at
+a daemon start are failed. `composePrompt` puts dependency results and a `handoffFrom` pane's last reply
+and notes in front of the prompt. Agents delegate through `task.sh` (`$VOLTRAN_TASK`), which sends the
+pane's hook secret to `/api/hooks/:pane/tasks` (POST creates, PATCH/DELETE `/tasks/:id` steer the graph
+like the tasks view's buttons, `none` clearing a link) and `/api/hooks/:pane/panes` (an agent pane with no
+task, or the session's tasks view), the options as `X-Voltran-*` headers and the prompt as the body, so
+the script needs no JSON; `tasks-guide.md` tells Claude (a `SessionStart` hook) and OpenCode (an
+instruction) how, so keep it in step with the script. `shared/src/tasks.ts` holds the types and
+`layoutTasks`, the graph's columns; the web app's `TasksView` (a `tasks` page pane) draws it, with a
+running task's live subagents as synthetic subtasks (`withSubagents`), and `TaskDialog` composes tasks.
 
 **Layout** is a tree in `shared/src/layout.ts` (`insertPane`, `removePane`, `movePane`). The web app
 edits it locally and sends the whole tree with `PATCH /api/sessions/:id`; the hub rejects a layout

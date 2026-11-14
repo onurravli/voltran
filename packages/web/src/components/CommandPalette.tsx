@@ -247,10 +247,28 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               }))
             : [];
         const findIn = visibleFocusedPane();
+        const taskProject = app?.sessions.find(
+            (session) => session.id === useUi.getState().selectedSessionId && !session.archived,
+        );
         items = filterItems<Item>(
             [
                 ...places,
                 ...(findIn ? [{ id: 'find', ...FIND_SHORTCUT, run: () => useUi.getState().openFind(findIn) }] : []),
+                ...(taskProject
+                    ? [
+                          {
+                              id: 'new-task',
+                              label: 'New task…',
+                              keywords: 'queue broadcast delegate handoff agent prompt orchestrate',
+                              run: () =>
+                                  useUi.getState().openDialog({
+                                      kind: 'task',
+                                      projectId: taskProject.projectId,
+                                      sessionId: taskProject.id,
+                                  }),
+                          },
+                      ]
+                    : []),
                 {
                     id: 'appearance',
                     label: 'Appearance…',

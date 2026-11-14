@@ -48,6 +48,7 @@ import {
 } from './Icons.tsx';
 import { ChangesView } from './ChangesView.tsx';
 import { EditorView } from './EditorView.tsx';
+import { TasksView } from './TasksView.tsx';
 import { ConversationView } from './ConversationView.tsx';
 import { InlineEdit, MoreMenu } from './Controls.tsx';
 import { NotesDrawer } from './NotesDrawer.tsx';
@@ -240,8 +241,19 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
     const preview = pane.adapter === 'preview' ? pane.command : null;
     const changes = pane.adapter === 'changes';
     const editing = pane.adapter === 'editor';
+    const tasksPage = pane.adapter === 'tasks';
+    const queued = useUi((state) =>
+        adapter?.kind === 'agent'
+            ? (state.app?.tasks ?? []).filter((task) => task.paneId === pane.id && task.status === 'queued').length
+            : 0,
+    );
+    const taskRunning = useUi(
+        (state) =>
+            adapter?.kind === 'agent' &&
+            (state.app?.tasks ?? []).some((task) => task.paneId === pane.id && task.status === 'running'),
+    );
     const git = useUi((state) => (changes && session ? state.app?.git[session.cwd] : undefined));
-    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes && !editing;
+    const hasNotes = pane.adapter !== 'subagent' && preview === null && !changes && !editing && !tasksPage;
     const notesOpen = useUi((state) => state.notesOpen[pane.id] === true) && hasNotes;
     const archived = session?.archived ?? false;
     const hasConversation = pane.adapter === 'claude';
@@ -409,6 +421,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     />
                 ) : changes ? (
                     <span className="pane__summary">{changesSummary(git)}</span>
+                ) : tasksPage ? (
+                    <span className="pane__summary">{project ? project.name : ''}</span>
                 ) : editing ? (
                     <span className="pane__summary" title={session?.cwd}>
                         {session ? shortPath(session.cwd) : ''}
@@ -418,6 +432,24 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                         {paneSummary(pane, adapter?.kind)}
                     </span>
                 )}
+                {queued > 0 || taskRunning ? (
+                    <button
+                        type="button"
+                        className="pane__queue"
+                        title={`${taskRunning ? 'A task is running' : 'Nothing running'}, ${queued} queued for this agent. Queue another`}
+                        onClick={() =>
+                            session &&
+                            useUi.getState().openDialog({
+                                kind: 'task',
+                                projectId: session.projectId,
+                                sessionId: session.id,
+                                paneIds: [pane.id],
+                            })
+                        }
+                    >
+                        {taskRunning ? (queued > 0 ? `task · ${queued} queued` : 'task running') : `${queued} queued`}
+                    </button>
+                ) : null}
                 {hasConversation ? (
                     <button
                         type="button"
@@ -479,7 +511,7 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                             <StopIcon size={14} />
                         </button>
                     ) : null}
-                    {editing ? null : preview !== null || changes ? (
+                    {editing || tasksPage ? null : preview !== null || changes ? (
                         <>
                             <button
                                 type="button"
@@ -530,6 +562,8 @@ export function PaneBox({ pane, host }: { pane: PaneView; host: PaneHost }) {
                     <ChangesView key={loads} sessionId={pane.sessionId} pane focusToken={focusToken} />
                 ) : editing ? (
                     <EditorView pane={pane} focusToken={focusToken} />
+                ) : tasksPage ? (
+                    <TasksView pane={pane} />
                 ) : preview !== null ? (
                     sameOrigin(preview) ? (
                         <div className="pane__placeholder">Voltran does not preview itself.</div>
